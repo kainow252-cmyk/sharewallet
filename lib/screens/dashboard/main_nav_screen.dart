@@ -5,6 +5,7 @@ import '../products/products_screen.dart';
 import '../wallet/carteira_screen.dart';
 import '../indicacoes/indicacoes_screen.dart';
 import '../ranking/ranking_screen.dart';
+import '../profile/profile_screen.dart';
 
 // ── Controlador global de navegação ──────────────────────────────────────────
 class MainNavController extends ChangeNotifier {
@@ -27,7 +28,7 @@ class MainNavController extends ChangeNotifier {
   void goCarteira() => goTo(2);
   void goIndicacoes() => goTo(3);
   void goRanking() => goTo(4);
-  void goProfile() => goTo(4); // alias → perfil está no menu superior
+  void goProfile() => goTo(5); // Perfil é o índice 5
 }
 
 class MainNavScreen extends StatefulWidget {
@@ -46,6 +47,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
     CarteiraScreen(),
     IndicacoesScreen(),
     RankingScreen(),
+    ProfileScreen(),
   ];
 
   final List<_NavItem> _navItems = const [
@@ -73,6 +75,11 @@ class _MainNavScreenState extends State<MainNavScreen> {
       icon: Icons.emoji_events_outlined,
       activeIcon: Icons.emoji_events_rounded,
       label: 'Ranking',
+    ),
+    _NavItem(
+      icon: Icons.person_outline_rounded,
+      activeIcon: Icons.person_rounded,
+      label: 'Perfil',
     ),
   ];
 
@@ -224,7 +231,9 @@ class _BottomNav extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: i == 4
                                   ? const Color(0xFFFFD740)
-                                  : AppColors.primary,
+                                  : i == 5
+                                      ? AppColors.primary
+                                      : AppColors.primary,
                               shape: BoxShape.circle,
                             ),
                           )

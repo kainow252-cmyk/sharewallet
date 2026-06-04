@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../services/product_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/mercadopago_service.dart';
 import '../../models/product_model.dart';
 import '../../theme/app_theme.dart';
 import 'subscription_screen.dart';
+import '../payment/mp_checkout_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -456,17 +458,139 @@ class _ProductCardState extends State<_ProductCard> {
     );
   }
 
-  // ── Abre tela de assinatura ────────────────────────────────────────────────
+  // ── Abre tela de checkout Mercado Pago ──────────────────────────────────────
   void _assinar(BuildContext context, ProductModel product) {
     final auth = context.read<AuthService>();
     final affiliateCode = auth.currentUser?.affiliateCode ?? 'ABC123';
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SubscriptionScreen(
-          product: product,
-          affiliateCode: affiliateCode,
+    // Abre modal para escolher fluxo: MP Checkout ou Pix Automático legado
+    _showCheckoutOptions(context, product, affiliateCode);
+  }
+
+  void _showCheckoutOptions(
+      BuildContext context, ProductModel product, String affiliateCode) {
+    final comissao = MercadoPagoService.calcularComissao(product.valor);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Cabeçalho produto
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.inventory_2_rounded,
+                      color: AppColors.primary, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.nome,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: AppColors.textPrimary),
+                      ),
+                      Text(
+                        'Sua comissão: R\$ ${comissao.toStringAsFixed(2)}/mês',
+                        style: const TextStyle(
+                            color: AppColors.success,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  product.valorFormatado,
+                  style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Opção 1: Mercado Pago (recomendado)
+            _CheckoutOption(
+              icon: Icons.payment_rounded,
+              iconColor: const Color(0xFF009EE3),
+              badge: 'RECOMENDADO',
+              badgeColor: AppColors.success,
+              title: 'Pagar com Mercado Pago',
+              subtitle: 'Checkout seguro • Pix, cartão ou boleto',
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MpCheckoutScreen(
+                      product: product,
+                      affiliateCode: affiliateCode,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // Opção 2: Pix Automático legado
+            _CheckoutOption(
+              icon: Icons.autorenew_rounded,
+              iconColor: const Color(0xFF32BCAD),
+              title: 'Autorizar Pix Automático',
+              subtitle: 'Débito automático mensal no banco',
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SubscriptionScreen(
+                      product: product,
+                      affiliateCode: affiliateCode,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Cancelar
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar',
+                  style:
+                      TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+            ),
+          ],
         ),
       ),
     );
@@ -578,6 +702,106 @@ class _ProductCardState extends State<_ProductCard> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Widget: Opção de checkout ─────────────────────────────────────────────────
+
+class _CheckoutOption extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final String? badge;
+  final Color? badgeColor;
+  final VoidCallback onTap;
+
+  const _CheckoutOption({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    this.badge,
+    this.badgeColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: iconColor.withValues(alpha: 0.2), width: 1.5),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: AppColors.textPrimary),
+                        ),
+                        if (badge != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: (badgeColor ?? AppColors.success)
+                                  .withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              badge!,
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: badgeColor ?? AppColors.success),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: AppColors.textHint),
+            ],
+          ),
         ),
       ),
     );

@@ -279,20 +279,20 @@ class AdminService extends ChangeNotifier {
       debugPrint('[AdminService] Erro ao carregar métricas: $e');
     }
 
-    // Fallback para mock
+    // Fallback para mock — valores do modelo financeiro ShareWallet
     _metrics = const AdminMetrics(
-      receitaTotal: 12450.00,
-      receitaMes: 3280.00,
-      comissoesTotal: 2490.00,
-      comissoesMes: 656.00,
-      totalAfiliados: 47,
-      afiliadosAtivos: 38,
-      totalAssinaturas: 183,
-      assinaturasAtivas: 161,
-      assinaturasPendentes: 12,
-      mrr: 1610.00,
-      saquesPendentes: 5,
-      valorSaquesPendentes: 742.50,
+      receitaTotal: 450000.00,    // Receita acumulada
+      receitaMes: 75000.00,       // 5.000 usuários × R$15 ticket médio
+      comissoesTotal: 90000.00,   // 20% acumulado
+      comissoesMes: 15000.00,     // 20% de R$75K mensal
+      totalAfiliados: 1250,       // Total de afiliados cadastrados
+      afiliadosAtivos: 980,       // Afiliados com assinaturas ativas
+      totalAssinaturas: 5320,     // Total histórico de assinaturas
+      assinaturasAtivas: 5000,    // 5.000 assinantes ativos
+      assinaturasPendentes: 87,   // Aguardando pagamento
+      mrr: 75000.00,              // Monthly Recurring Revenue
+      saquesPendentes: 28,        // Solicitações de saque pendentes
+      valorSaquesPendentes: 3200.00, // R$3.200 em saques pendentes
     );
     notifyListeners();
   }
