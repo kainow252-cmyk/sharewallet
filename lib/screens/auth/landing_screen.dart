@@ -356,12 +356,14 @@ class _FeatureCards extends StatelessWidget {
       ),
     ];
 
-    // Grid 3 colunas — cada card é vertical e centralizado
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: features
-          .map((f) => Expanded(child: _FeatureCard(feature: f)))
-          .toList(),
+    // Grid 3 colunas — IntrinsicHeight força todos os cards à mesma altura
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: features
+            .map((f) => Expanded(child: _FeatureCard(feature: f)))
+            .toList(),
+      ),
     );
   }
 }
@@ -399,6 +401,7 @@ class _FeatureCard extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.max, // ocupa toda a altura dada pelo IntrinsicHeight
         children: [
           // Ícone no topo centralizado
           Container(
