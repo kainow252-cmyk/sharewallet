@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 // ignore: unused_import
 import '../../widgets/app_widgets.dart';
+import 'subscription_detail_screen.dart';
 
 class MySubscriptionsScreen extends StatefulWidget {
   const MySubscriptionsScreen({super.key});
@@ -526,6 +527,36 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
                 ),
               ),
           ],
+
+          // ── Botão Ver Detalhes Completos ─────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          SubscriptionDetailScreen(subscription: sub),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.receipt_long_rounded, size: 16),
+                label: const Text('Ver Histórico de Cobranças',
+                    style: TextStyle(fontSize: 13)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.4)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ),
 
           const SizedBox(height: 8),
         ],

@@ -32,103 +32,311 @@ class _ProductsScreenState extends State<ProductsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Produtos'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search_rounded),
-            onPressed: () {},
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // ── Filtro categorias ──────────────────────────────────────────────
-          if (!ps.isLoading)
-            Container(
-              height: 50,
-              color: AppColors.surface,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
+        title: Row(
+          children: [
+            const Text('Produtos'),
+            const SizedBox(width: 8),
+            if (!ps.isLoading && ps.products.isNotEmpty)
+              Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                itemCount: ps.categories.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (ctx, i) {
-                  final cat = ps.categories[i];
-                  final isSelected = cat == ps.selectedCategory;
-                  final label = ProductService.categoryLabels[cat] ?? cat;
-                  return GestureDetector(
-                    onTap: () => ps.setCategory(cat),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.primary
-                            : AppColors.surfaceVariant,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.cardBorder,
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${ps.products.length}',
+                  style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+          ],
+        ),
+      ),
+      body: ps.isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
+          : CustomScrollView(
+              slivers: [
+                // ── Filtro chips ─────────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      Container(
+                        height: 50,
+                        color: AppColors.surface,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          itemCount: ps.categories.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 8),
+                          itemBuilder: (ctx, i) {
+                            final cat = ps.categories[i];
+                            final isSelected = cat == ps.selectedCategory;
+                            final label =
+                                ProductService.categoryLabels[cat] ?? cat;
+                            final icon = _catIcon(cat);
+                            return GestureDetector(
+                              onTap: () => ps.setCategory(cat),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : AppColors.cardBorder,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(icon,
+                                        style:
+                                            const TextStyle(fontSize: 13)),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      label,
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? Colors.white
+                                            : AppColors.textSecondary,
+                                        fontWeight: isSelected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : AppColors.textSecondary,
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          fontSize: 13,
+                      const Divider(height: 1),
+                    ],
+                  ),
+                ),
+
+                // ── Banner info ──────────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF083D29), Color(0xFF0D5C3D)],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.autorenew_rounded,
+                            color: Colors.white70, size: 18),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Pix Automático — cliente autoriza uma vez '
+                            'e paga todo mês automaticamente!',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                height: 1.4),
+                          ),
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ── Lista por categoria ou filtrada ──────────────────────
+                if (ps.selectedCategory == 'todos')
+                  // Modo "Todos": agrupa por categoria com cabeçalhos
+                  ..._buildCategorySections(ps)
+                else
+                  // Modo filtrado: lista simples
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (ctx, i) =>
+                            _ProductCard(product: ps.filteredProducts[i]),
+                        childCount: ps.filteredProducts.length,
                       ),
                     ),
-                  );
-                },
-              ),
+                  ),
+              ],
             ),
-          const Divider(height: 1),
+    );
+  }
 
-          // ── Banner info ────────────────────────────────────────────────────
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF083D29), Color(0xFF0D5C3D)],
-              ),
-              borderRadius: BorderRadius.circular(14),
+  // ── Seções por categoria ──────────────────────────────────────────────────
+  List<Widget> _buildCategorySections(ProductService ps) {
+    final Map<String, List<ProductModel>> grouped = {};
+    for (final p in ps.products) {
+      grouped.putIfAbsent(p.categoria, () => []).add(p);
+    }
+
+    final widgets = <Widget>[];
+    final catOrder = ['seguros', 'capitalizacao', 'assistencia', 'beneficios', 'cursos'];
+    final orderedKeys = [
+      ...catOrder.where((k) => grouped.containsKey(k)),
+      ...grouped.keys.where((k) => !catOrder.contains(k)),
+    ];
+
+    for (final cat in orderedKeys) {
+      final products = grouped[cat]!;
+      final label = ProductService.categoryLabels[cat] ?? cat;
+      final icon = _catIcon(cat);
+      final color = _catColor(cat);
+
+      widgets.add(
+        SliverToBoxAdapter(
+          child: _CategoryHeader(
+            icon: icon,
+            label: label,
+            color: color,
+            count: products.length,
+          ),
+        ),
+      );
+      widgets.add(
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (ctx, i) => _ProductCard(product: products[i]),
+              childCount: products.length,
             ),
-            child: const Row(
+          ),
+        ),
+      );
+    }
+
+    // Espaço no final
+    widgets.add(const SliverToBoxAdapter(child: SizedBox(height: 80)));
+    return widgets;
+  }
+
+  String _catIcon(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'seguros': return '🛡️';
+      case 'capitalizacao': return '💰';
+      case 'assistencia': return '🔧';
+      case 'beneficios': return '🎁';
+      case 'cursos': return '📚';
+      case 'entretenimento': return '🎯';
+      case 'garantias': return '✅';
+      case 'todos': return '🏷️';
+      default: return '📦';
+    }
+  }
+
+  Color _catColor(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'seguros': return const Color(0xFF1565C0);
+      case 'capitalizacao': return const Color(0xFF6A1B9A);
+      case 'assistencia': return const Color(0xFF00695C);
+      case 'beneficios': return const Color(0xFFE65100);
+      case 'cursos': return const Color(0xFF2E7D32);
+      default: return AppColors.primary;
+    }
+  }
+}
+
+// ── Cabeçalho de categoria ────────────────────────────────────────────────────
+
+class _CategoryHeader extends StatelessWidget {
+  final String icon;
+  final String label;
+  final Color color;
+  final int count;
+
+  const _CategoryHeader({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          // Ícone categoria
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Center(
+              child: Text(icon, style: const TextStyle(fontSize: 20)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Label + contagem
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.autorenew_rounded, color: Colors.white70, size: 18),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Assinatura via Pix Automático — o cliente autoriza uma vez e paga todo mês sem abrir o app!',
-                    style: TextStyle(
-                        color: Colors.white, fontSize: 12, height: 1.4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                Text(
+                  '$count produto${count > 1 ? 's' : ''} disponíve${count > 1 ? 'is' : 'l'}',
+                  style: TextStyle(
+                    color: color.withValues(alpha: 0.7),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
           ),
-
-          // ── Lista de produtos ──────────────────────────────────────────────
-          Expanded(
-            child: ps.isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary))
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-                    itemCount: ps.filteredProducts.length,
-                    itemBuilder: (ctx, i) =>
-                        _ProductCard(product: ps.filteredProducts[i]),
-                  ),
+          // Badge comissão
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: AppColors.success.withValues(alpha: 0.3)),
+            ),
+            child: const Text(
+              '20% comissão',
+              style: TextStyle(
+                color: AppColors.success,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),

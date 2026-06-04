@@ -658,7 +658,7 @@ class _SaqueModalState extends State<_SaqueModal> {
                   fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
-            value: _pixType,
+            initialValue: _pixType,
             decoration: const InputDecoration(),
             items: const [
               DropdownMenuItem(value: 'EMAIL', child: Text('E-mail')),

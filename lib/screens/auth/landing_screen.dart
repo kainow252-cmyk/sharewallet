@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 /// Landing Page — Pitch de Cadastro da ShareWallet
-/// Exibida após a splash, antes do login, para usuários não autenticados.
+/// Layout totalmente centralizado, feature cards em coluna vertical com ícone
+/// acima do texto, pitch centralizado e textos com textAlign.center.
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
 
@@ -11,9 +12,9 @@ class LandingScreen extends StatefulWidget {
 
 class _LandingScreenState extends State<LandingScreen>
     with TickerProviderStateMixin {
-  late AnimationController _heroController;
-  late AnimationController _cardsController;
-  late AnimationController _ctaController;
+  late AnimationController _heroCtrl;
+  late AnimationController _cardsCtrl;
+  late AnimationController _ctaCtrl;
 
   late Animation<double> _heroFade;
   late Animation<Offset> _heroSlide;
@@ -25,53 +26,44 @@ class _LandingScreenState extends State<LandingScreen>
   void initState() {
     super.initState();
 
-    _heroController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _heroFade =
-        CurvedAnimation(parent: _heroController, curve: Curves.easeOut);
+    _heroCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 800));
+    _heroFade = CurvedAnimation(parent: _heroCtrl, curve: Curves.easeOut);
     _heroSlide = Tween<Offset>(
       begin: const Offset(0, -0.15),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _heroController, curve: Curves.easeOut));
+    ).animate(CurvedAnimation(parent: _heroCtrl, curve: Curves.easeOut));
 
-    _cardsController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _cardsFade =
-        CurvedAnimation(parent: _cardsController, curve: Curves.easeOut);
+    _cardsCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 600));
+    _cardsFade = CurvedAnimation(parent: _cardsCtrl, curve: Curves.easeOut);
     _cardsSlide = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
-    ).animate(
-        CurvedAnimation(parent: _cardsController, curve: Curves.easeOut));
+    ).animate(CurvedAnimation(parent: _cardsCtrl, curve: Curves.easeOut));
 
-    _ctaController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
+    _ctaCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500));
     _ctaScale = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(parent: _ctaController, curve: Curves.elasticOut),
+      CurvedAnimation(parent: _ctaCtrl, curve: Curves.elasticOut),
     );
 
     _runSequence();
   }
 
   Future<void> _runSequence() async {
-    await _heroController.forward();
+    await _heroCtrl.forward();
     await Future.delayed(const Duration(milliseconds: 100));
-    _cardsController.forward();
+    _cardsCtrl.forward();
     await Future.delayed(const Duration(milliseconds: 200));
-    _ctaController.forward();
+    _ctaCtrl.forward();
   }
 
   @override
   void dispose() {
-    _heroController.dispose();
-    _cardsController.dispose();
-    _ctaController.dispose();
+    _heroCtrl.dispose();
+    _cardsCtrl.dispose();
+    _ctaCtrl.dispose();
     super.dispose();
   }
 
@@ -87,67 +79,67 @@ class _LandingScreenState extends State<LandingScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF0A1628),
-              Color(0xFF0D3B2E),
-            ],
+            colors: [Color(0xFF0A1628), Color(0xFF0D3B2E)],
           ),
         ),
         child: SafeArea(
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: size.height - 100),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // ── Hero Section ──────────────────────────────────────
-                  SlideTransition(
-                    position: _heroSlide,
-                    child: FadeTransition(
-                      opacity: _heroFade,
-                      child: _HeroSection(),
+              constraints: BoxConstraints(minHeight: size.height - 80),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // ── Hero ─────────────────────────────────────────────
+                    SlideTransition(
+                      position: _heroSlide,
+                      child: FadeTransition(
+                        opacity: _heroFade,
+                        child: const _HeroSection(),
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 20),
 
-                  // ── Pitch text ────────────────────────────────────────
-                  FadeTransition(
-                    opacity: _cardsFade,
-                    child: _PitchSection(),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // ── Feature Cards ─────────────────────────────────────
-                  SlideTransition(
-                    position: _cardsSlide,
-                    child: FadeTransition(
+                    // ── Pitch centralizado ────────────────────────────────
+                    FadeTransition(
                       opacity: _cardsFade,
-                      child: _FeatureCards(),
+                      child: const _PitchSection(),
                     ),
-                  ),
 
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 28),
 
-                  // ── CTA Buttons ───────────────────────────────────────
-                  ScaleTransition(
-                    scale: _ctaScale,
-                    child: _CtaSection(
-                      onCadastro: () =>
-                          Navigator.pushNamed(context, '/register'),
-                      onLogin: () => Navigator.pushNamed(context, '/login'),
+                    // ── Feature Cards (vertical centrado) ─────────────────
+                    SlideTransition(
+                      position: _cardsSlide,
+                      child: FadeTransition(
+                        opacity: _cardsFade,
+                        child: const _FeatureCards(),
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 36),
 
-                  // ── Footer ────────────────────────────────────────────
-                  _FooterSection(),
+                    // ── CTA Buttons ───────────────────────────────────────
+                    ScaleTransition(
+                      scale: _ctaScale,
+                      child: _CtaSection(
+                        onCadastro: () =>
+                            Navigator.pushNamed(context, '/register'),
+                        onLogin: () => Navigator.pushNamed(context, '/login'),
+                      ),
+                    ),
 
-                  const SizedBox(height: 24),
-                ],
+                    const SizedBox(height: 32),
+
+                    // ── Footer ────────────────────────────────────────────
+                    const _FooterSection(),
+
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
           ),
@@ -158,152 +150,173 @@ class _LandingScreenState extends State<LandingScreen>
 }
 
 // ── Hero Section ──────────────────────────────────────────────────────────────
+
 class _HeroSection extends StatelessWidget {
+  const _HeroSection();
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 8),
-      child: Column(
-        children: [
-          // Logo
-          Container(
-            width: 90,
-            height: 90,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF00E5B4).withValues(alpha: 0.25),
-                  blurRadius: 30,
-                  spreadRadius: 4,
-                  offset: const Offset(0, 8),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const SizedBox(height: 32),
+
+        // Logo com glow
+        Container(
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF00E5B4).withValues(alpha: 0.3),
+                blurRadius: 32,
+                spreadRadius: 4,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(26),
+            child: Image.asset(
+              'assets/images/sharewallet_logo.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF1A237E), Color(0xFF00BCD4)],
+                  ),
                 ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Image.asset(
-                'assets/images/sharewallet_logo.png',
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF1A237E), Color(0xFF00BCD4)],
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.account_balance_wallet_rounded,
-                    color: Colors.white,
-                    size: 48,
-                  ),
+                child: const Icon(
+                  Icons.account_balance_wallet_rounded,
+                  color: Colors.white,
+                  size: 52,
                 ),
               ),
             ),
           ),
+        ),
 
-          const SizedBox(height: 20),
+        const SizedBox(height: 22),
 
-          // Nome da plataforma
-          RichText(
-            textAlign: TextAlign.center,
-            text: const TextSpan(
-              children: [
-                TextSpan(
-                  text: 'Share',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 34,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                  ),
+        // Nome da plataforma
+        RichText(
+          textAlign: TextAlign.center,
+          text: const TextSpan(
+            children: [
+              TextSpan(
+                text: 'Share',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 36,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
                 ),
-                TextSpan(
-                  text: 'Wallet',
-                  style: TextStyle(
-                    color: Color(0xFF00E5B4),
-                    fontSize: 34,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                  ),
+              ),
+              TextSpan(
+                text: 'Wallet',
+                style: TextStyle(
+                  color: Color(0xFF00E5B4),
+                  fontSize: 36,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+        ),
 
-          const SizedBox(height: 10),
+        const SizedBox(height: 10),
 
-          // Subtítulo
-          const Text(
-            'Transforme suas conexões estratégicas\nem receita recorrente.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 15,
-              fontWeight: FontWeight.w400,
-              height: 1.6,
-            ),
+        // Subtítulo — centralizado
+        const Text(
+          'Transforme suas conexões estratégicas\nem receita recorrente.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+            height: 1.6,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-// ── Pitch Section ─────────────────────────────────────────────────────────────
+// ── Pitch Section — totalmente centralizado ───────────────────────────────────
+
 class _PitchSection extends StatelessWidget {
+  const _PitchSection();
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(20),
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         border: Border.all(
           color: const Color(0xFF00E5B4).withValues(alpha: 0.2),
           width: 1,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         color: const Color(0xFF00E5B4).withValues(alpha: 0.04),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Ícone decorativo
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00E5B4).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.hub_rounded,
-                  color: Color(0xFF00E5B4),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Bem-vindo à ShareWallet',
-                  style: TextStyle(
-                    color: Color(0xFF00E5B4),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-            ],
+          // Ícone centralizado
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00E5B4).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.hub_rounded,
+              color: Color(0xFF00E5B4),
+              size: 24,
+            ),
           ),
+
           const SizedBox(height: 14),
+
+          // Título centralizado
           const Text(
-            'Sua rede de contatos é o seu maior ativo.\n\n'
-            'Nós fornecemos a infraestrutura tecnológica para você '
-            'gerenciar, rastrear e expandir seus ganhos digitais. '
-            'Transforme suas conexões estratégicas em receita recorrente '
-            'e assuma o controle da sua performance financeira.',
+            'Bem-vindo à ShareWallet',
+            textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white60,
+              color: Color(0xFF00E5B4),
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Destaque centralizado
+          const Text(
+            'Sua rede de contatos é o seu maior ativo.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              height: 1.5,
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Corpo — centralizado
+          Text(
+            'Gerencie, rastreie e expanda seus ganhos digitais. '
+            'Transforme conexões estratégicas em receita recorrente '
+            'e assuma o controle da sua performance financeira.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.55),
               fontSize: 13,
               height: 1.7,
               fontWeight: FontWeight.w400,
@@ -315,39 +328,40 @@ class _PitchSection extends StatelessWidget {
   }
 }
 
-// ── Feature Cards ─────────────────────────────────────────────────────────────
+// ── Feature Cards — ícone acima, texto centralizado ──────────────────────────
+
 class _FeatureCards extends StatelessWidget {
+  const _FeatureCards();
+
   @override
   Widget build(BuildContext context) {
-    final features = [
+    const features = [
       _FeatureData(
         icon: Icons.track_changes_rounded,
-        color: const Color(0xFF00E5B4),
+        color: Color(0xFF00E5B4),
         title: 'Rastreamento em tempo real',
-        desc: 'Monitore cliques, conversões e comissões instantaneamente.',
+        desc: 'Monitore cliques, conversões e\ncomissões instantaneamente.',
       ),
-
       _FeatureData(
         icon: Icons.pix_rounded,
-        color: const Color(0xFF00BCD4),
+        color: Color(0xFF00BCD4),
         title: 'Saque via PIX',
-        desc: 'Receba seus ganhos direto na sua conta em segundos.',
+        desc: 'Receba seus ganhos direto\nna sua conta em segundos.',
       ),
       _FeatureData(
         icon: Icons.bar_chart_rounded,
-        color: const Color(0xFFFFD740),
+        color: Color(0xFFFFD740),
         title: 'Dashboard completo',
-        desc: 'Visualize sua performance com gráficos e métricas detalhadas.',
+        desc: 'Visualize sua performance\ncom métricas detalhadas.',
       ),
     ];
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: features
-            .map((f) => _FeatureCard(feature: f))
-            .toList(),
-      ),
+    // Grid 3 colunas — cada card é vertical e centralizado
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: features
+          .map((f) => Expanded(child: _FeatureCard(feature: f)))
+          .toList(),
     );
   }
 }
@@ -372,50 +386,55 @@ class _FeatureCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 5),
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: feature.color.withValues(alpha: 0.15),
+          color: feature.color.withValues(alpha: 0.18),
           width: 1,
         ),
       ),
-      child: Row(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Ícone no topo centralizado
           Container(
-            width: 44,
-            height: 44,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: feature.color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(feature.icon, color: feature.color, size: 22),
+            child: Icon(feature.icon, color: feature.color, size: 24),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  feature.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  feature.desc,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontSize: 12,
-                    height: 1.4,
-                  ),
-                ),
-              ],
+
+          const SizedBox(height: 12),
+
+          // Título centralizado
+          Text(
+            feature.title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              height: 1.3,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          // Descrição centralizada
+          Text(
+            feature.desc,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.45),
+              fontSize: 11,
+              height: 1.45,
             ),
           ),
         ],
@@ -425,6 +444,7 @@ class _FeatureCard extends StatelessWidget {
 }
 
 // ── CTA Section ───────────────────────────────────────────────────────────────
+
 class _CtaSection extends StatelessWidget {
   final VoidCallback onCadastro;
   final VoidCallback onLogin;
@@ -433,111 +453,107 @@ class _CtaSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        children: [
-          // Botão primário: Cadastrar
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: onCadastro,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00E5B4),
-                foregroundColor: const Color(0xFF0A1628),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: 0,
-                shadowColor: const Color(0xFF00E5B4).withValues(alpha: 0.4),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Botão primário
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: onCadastro,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00E5B4),
+              foregroundColor: const Color(0xFF0A1628),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.rocket_launch_rounded, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Começar agora — é grátis',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
-                    ),
+              elevation: 0,
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.rocket_launch_rounded, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Começar agora — é grátis',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.3,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
+        ),
 
-          const SizedBox(height: 12),
+        const SizedBox(height: 12),
 
-          // Botão secundário: Já tenho conta
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: onLogin,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white70,
-                side: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  width: 1,
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+        // Botão secundário
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: onLogin,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white70,
+              side: BorderSide(
+                color: Colors.white.withValues(alpha: 0.2),
+                width: 1,
               ),
-              child: const Text(
-                'Já tenho uma conta',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                ),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Nota de privacidade
-          Text(
-            'Ao criar sua conta você concorda com nossos\nTermos de Uso e Política de Privacidade.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.3),
-              fontSize: 11,
-              height: 1.5,
+            child: const Text(
+              'Já tenho uma conta',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
             ),
           ),
-        ],
-      ),
+        ),
+
+        const SizedBox(height: 14),
+
+        Text(
+          'Ao criar sua conta você concorda com nossos\nTermos de Uso e Política de Privacidade.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.3),
+            fontSize: 11,
+            height: 1.5,
+          ),
+        ),
+      ],
     );
   }
 }
 
 // ── Footer Section ────────────────────────────────────────────────────────────
+
 class _FooterSection extends StatelessWidget {
+  const _FooterSection();
+
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Divisor
         Divider(
           color: Colors.white.withValues(alpha: 0.08),
-          indent: 40,
-          endIndent: 40,
+          indent: 32,
+          endIndent: 32,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
 
-        // Estatísticas / Social Proof
+        // Social proof row — centralizado
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+          children: const [
             _StatChip(value: '10K+', label: 'Afiliados'),
-            const SizedBox(width: 24),
+            SizedBox(width: 28),
             _StatChip(value: 'R\$ 2M+', label: 'Pagos'),
-            const SizedBox(width: 24),
+            SizedBox(width: 28),
             _StatChip(value: '99.9%', label: 'Uptime'),
           ],
         ),
@@ -546,6 +562,7 @@ class _FooterSection extends StatelessWidget {
 
         Text(
           '© 2025 ShareWallet • Todos os direitos reservados',
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.2),
             fontSize: 10,
@@ -564,9 +581,11 @@ class _StatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           value,
+          textAlign: TextAlign.center,
           style: const TextStyle(
             color: Color(0xFF00E5B4),
             fontSize: 16,
@@ -575,6 +594,7 @@ class _StatChip extends StatelessWidget {
         ),
         Text(
           label,
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.4),
             fontSize: 11,
