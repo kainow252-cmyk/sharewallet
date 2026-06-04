@@ -142,7 +142,7 @@ class _BottomNav extends StatelessWidget {
       ),
       child: SafeArea(
         child: SizedBox(
-          height: 60,
+          height: 56,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: items.asMap().entries.map((entry) {
@@ -150,65 +150,35 @@ class _BottomNav extends StatelessWidget {
               final item = entry.value;
               final isActive = currentIndex == i;
 
-              // Cor do item ativo
-              final Color activeColor = i == 2
-                  ? const Color(0xFF00E5B4)
-                  : i == 4
-                      ? const Color(0xFFFFD740)
-                      : AppColors.primary;
+              final Color activeColor = i == 4
+                  ? const Color(0xFFFFD740)
+                  : AppColors.primary;
 
               return Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => onTap(i),
-                  child: SizedBox(
-                    height: 60,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // ── Ícone (com destaque especial para Carteira) ──
-                        i == 2
-                            ? Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color: isActive
-                                      ? const Color(0xFF00E5B4).withValues(alpha: 0.15)
-                                      : AppColors.textHint.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: isActive
-                                      ? Border.all(
-                                          color: const Color(0xFF00E5B4).withValues(alpha: 0.4),
-                                          width: 1,
-                                        )
-                                      : null,
-                                ),
-                                child: Icon(
-                                  isActive ? item.activeIcon : item.icon,
-                                  color: isActive ? activeColor : AppColors.textHint,
-                                  size: 20,
-                                ),
-                              )
-                            : Icon(
-                                isActive ? item.activeIcon : item.icon,
-                                color: isActive ? activeColor : AppColors.textHint,
-                                size: 22,
-                              ),
-                        const SizedBox(height: 3),
-                        // ── Label ──
-                        Text(
-                          item.label,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                            color: isActive ? activeColor : AppColors.textHint,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isActive ? item.activeIcon : item.icon,
+                        color: isActive ? activeColor : AppColors.textHint,
+                        size: 22,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        item.label,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                          color: isActive ? activeColor : AppColors.textHint,
                         ),
-                      ],
-                    ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ],
                   ),
                 ),
               );
