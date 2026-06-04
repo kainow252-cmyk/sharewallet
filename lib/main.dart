@@ -12,6 +12,7 @@ import 'services/product_service.dart';
 import 'services/subscription_service.dart';
 import 'services/admin_service.dart';
 import 'screens/auth/splash_screen.dart';
+import 'screens/auth/landing_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/dashboard/main_nav_screen.dart';
@@ -53,11 +54,11 @@ void main() async {
     ]);
   }
 
-  runApp(const AffiliateWalletApp());
+  runApp(const ShareWalletApp());
 }
 
-class AffiliateWalletApp extends StatelessWidget {
-  const AffiliateWalletApp({super.key});
+class ShareWalletApp extends StatelessWidget {
+  const ShareWalletApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -70,12 +71,13 @@ class AffiliateWalletApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AdminService()),
       ],
       child: MaterialApp(
-        title: 'Affiliate Wallet',
+        title: 'ShareWallet',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.theme,
         initialRoute: '/',
         routes: {
           '/': (_) => const SplashScreen(),
+          '/landing': (_) => const LandingScreen(),
           '/login': (_) => const LoginScreen(),
           '/register': (_) => const RegisterScreen(),
           '/home': (_) => const MainNavScreen(),

@@ -3,7 +3,7 @@ import 'package:affiliate_wallet/main.dart';
 
 void main() {
   testWidgets('App loads', (WidgetTester tester) async {
-    await tester.pumpWidget(const AffiliateWalletApp());
-    expect(find.byType(AffiliateWalletApp), findsOneWidget);
+    await tester.pumpWidget(const ShareWalletApp());
+    expect(find.byType(ShareWalletApp), findsOneWidget);
   });
 }
