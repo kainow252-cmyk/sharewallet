@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "470218127330",
+    "project_id": "affiliate-wallet-75853",
+    "storage_bucket": "affiliate-wallet-75853.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:470218127330:android:d3af2223eaf22d2d4aabbb",
+        "android_client_info": {
+          "package_name": "com.affiliatewallet.wallet"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "470218127330-d1tr5j60i6db3ui56jgdqhar039dilvh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCN639SuHRlNzGZUa9rW7cgrNUN5lZ-wpA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "470218127330-d1tr5j60i6db3ui56jgdqhar039dilvh.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
