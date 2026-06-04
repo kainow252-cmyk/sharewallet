@@ -35,7 +35,7 @@ class AppLogo extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Affiliate',
+                'Share',
                 style: TextStyle(
                   color: color ?? Colors.white,
                   fontSize: size * 0.4,
