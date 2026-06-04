@@ -3,6 +3,7 @@ import '../models/sale_model.dart';
 import '../models/withdraw_model.dart';
 import 'api_service.dart';
 import 'woovi_service.dart';
+import 'firestore_service.dart';
 
 class WalletService extends ChangeNotifier {
   List<SaleModel> _sales = [];
@@ -32,23 +33,29 @@ class WalletService extends ChangeNotifier {
 
   // ── Carregar dados ────────────────────────────────────────────────────────
 
-  Future<void> loadData() async {
+  Future<void> loadData({String? userId}) async {
     _isLoading = true;
     notifyListeners();
 
     try {
       if (ApiService.hasToken) {
-        // Modo real: carrega do backend
+        // Modo real via API NestJS
         await Future.wait([_loadSales(), _loadWithdrawals(), _loadDashboard()]);
+      } else if (userId != null && FirestoreService.isAvailable) {
+        // Modo Firestore direto — busca vendas e saques do usuário
+        await Future.wait([
+          _loadSalesFromFirestore(userId),
+          _loadWithdrawalsFromFirestore(userId),
+          _loadAffiliateDataFromFirestore(userId),
+        ]);
       } else {
-        // Modo demo: usa dados mock
+        // Modo demo
         await Future.delayed(const Duration(milliseconds: 800));
         _sales = SaleModel.mockSales;
         _withdraws = WithdrawModel.mockWithdraws;
         _totalIndicados = 53;
       }
     } catch (e) {
-      // Fallback para mock em caso de erro
       _sales = SaleModel.mockSales;
       _withdraws = WithdrawModel.mockWithdraws;
       _totalIndicados = 53;
@@ -57,6 +64,58 @@ class WalletService extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> _loadSalesFromFirestore(String userId) async {
+    try {
+      final col = FirestoreService.collection('sales');
+      if (col == null) return;
+      final snap = await col.where('user_id', isEqualTo: userId).get();
+      final all = snap.docs.map((d) {
+        final data = Map<String, dynamic>.from(d.data());
+        data['id'] = d.id;
+        return SaleModel.fromJson(data);
+      }).toList();
+      // Ordenar por data em memória
+      all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _sales = all;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[WalletService] Erro sales Firestore: $e');
+    }
+  }
+
+  Future<void> _loadWithdrawalsFromFirestore(String userId) async {
+    try {
+      final col = FirestoreService.withdrawals;
+      if (col == null) return;
+      final snap = await col.where('user_id', isEqualTo: userId).get();
+      final all = snap.docs.map((d) {
+        final data = Map<String, dynamic>.from(d.data());
+        data['id'] = d.id;
+        return WithdrawModel.fromJson(data);
+      }).toList();
+      all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _withdraws = all;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[WalletService] Erro withdrawals Firestore: $e');
+    }
+  }
+
+  Future<void> _loadAffiliateDataFromFirestore(String userId) async {
+    try {
+      final col = FirestoreService.affiliates;
+      if (col == null) return;
+      final snap = await col
+          .where('firebase_uid', isEqualTo: userId)
+          .limit(1)
+          .get();
+      if (snap.docs.isNotEmpty) {
+        final data = snap.docs.first.data();
+        _totalIndicados = FirestoreService.toInt(data['total_referrals']);
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[WalletService] Erro affiliate Firestore: $e');
+    }
   }
 
   Future<void> _loadSales() async {

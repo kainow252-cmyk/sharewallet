@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/wallet_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
@@ -21,7 +22,8 @@ class _ExtratoScreenState extends State<ExtratoScreen>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<WalletService>().loadData();
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      context.read<WalletService>().loadData(userId: uid);
     });
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 import '../../services/wallet_service.dart';
 import '../../services/product_service.dart';
@@ -23,7 +24,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<WalletService>().loadData();
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      context.read<WalletService>().loadData(userId: uid);
       context.read<ProductService>().loadProducts();
     });
   }
@@ -38,7 +40,8 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
         onRefresh: () async {
-          await context.read<WalletService>().loadData();
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          await context.read<WalletService>().loadData(userId: uid);
         },
         color: AppColors.primary,
         child: CustomScrollView(
