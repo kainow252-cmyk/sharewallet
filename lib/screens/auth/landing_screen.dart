@@ -326,12 +326,7 @@ class _FeatureCards extends StatelessWidget {
         title: 'Rastreamento em tempo real',
         desc: 'Monitore cliques, conversões e comissões instantaneamente.',
       ),
-      _FeatureData(
-        icon: Icons.account_tree_rounded,
-        color: const Color(0xFF7C4DFF),
-        title: 'Rede multinível',
-        desc: 'Ganhe por toda a sua rede de indicações em múltiplos níveis.',
-      ),
+
       _FeatureData(
         icon: Icons.pix_rounded,
         color: const Color(0xFF00BCD4),

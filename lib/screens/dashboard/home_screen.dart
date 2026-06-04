@@ -113,12 +113,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const SizedBox(height: 16),
 
-                  // Card de Saldo
-                  BalanceCard(
-                    saldo: user?.saldo ?? 0,
+                  // ── Card Minha Carteira ─────────────────────────────
+                  _WalletSummaryCard(
+                    saldo: user?.saldo ?? wallet.totalComissoes,
                     isVisible: _saldoVisible,
                     onToggleVisibility: () =>
                         setState(() => _saldoVisible = !_saldoVisible),
+                    onTapCarteira: () => MainNavController().goCarteira(),
                   ),
 
                   const SizedBox(height: 16),
@@ -148,8 +149,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Últimas Comissões
                   SectionTitle(
                     title: 'Últimas Comissões',
-                    actionLabel: 'Ver extrato',
-                    onAction: () => MainNavController().goExtrato(),
+                    actionLabel: 'Ver carteira',
+                    onAction: () => MainNavController().goCarteira(),
                   ),
                   const SizedBox(height: 10),
 
@@ -183,28 +184,28 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icons.store_rounded,
             label: 'Produtos',
             color: AppColors.primary,
-            onTap: () => nav.goProducts(),   // troca aba — sem nova aba
+            onTap: () => nav.goProducts(),
           ),
           const SizedBox(width: 10),
           _QuickAction(
-            icon: Icons.pix_rounded,
-            label: 'Sacar PIX',
-            color: AppColors.gold,
-            onTap: () => nav.goSaque(),      // troca aba — sem nova aba
+            icon: Icons.account_balance_wallet_rounded,
+            label: 'Carteira',
+            color: const Color(0xFF00E5B4),
+            onTap: () => nav.goCarteira(),
           ),
           const SizedBox(width: 10),
           _QuickAction(
-            icon: Icons.receipt_long_rounded,
-            label: 'Extrato',
+            icon: Icons.people_alt_rounded,
+            label: 'Indicações',
             color: AppColors.info,
-            onTap: () => nav.goExtrato(),    // troca aba — sem nova aba
+            onTap: () => nav.goIndicacoes(),
           ),
           const SizedBox(width: 10),
           _QuickAction(
-            icon: Icons.share_rounded,
-            label: 'Indicar',
-            color: AppColors.success,
-            onTap: () => nav.goProducts(),   // vai para produtos para compartilhar
+            icon: Icons.emoji_events_rounded,
+            label: 'Ranking',
+            color: const Color(0xFFFFD740),
+            onTap: () => nav.goRanking(),
           ),
         ],
       ),
@@ -361,6 +362,151 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: AppColors.goldDark,
                   fontSize: 12,
                   fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WalletSummaryCard extends StatelessWidget {
+  final double saldo;
+  final bool isVisible;
+  final VoidCallback onToggleVisibility;
+  final VoidCallback onTapCarteira;
+
+  const _WalletSummaryCard({
+    required this.saldo,
+    required this.isVisible,
+    required this.onToggleVisibility,
+    required this.onTapCarteira,
+  });
+
+  static const double _saqueMinimo = 100.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (saldo / _saqueMinimo).clamp(0.0, 1.0);
+    final faltam = (_saqueMinimo - saldo).clamp(0.0, _saqueMinimo);
+    final podesSacar = saldo >= _saqueMinimo;
+
+    return GestureDetector(
+      onTap: onTapCarteira,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0A1628), Color(0xFF0D3B2E)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF00E5B4).withValues(alpha: 0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.account_balance_wallet_rounded,
+                    color: Color(0xFF00E5B4), size: 20),
+                const SizedBox(width: 8),
+                const Text('💰 Minha Carteira',
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: onToggleVisibility,
+                  child: Icon(
+                    isVisible
+                        ? Icons.visibility_rounded
+                        : Icons.visibility_off_rounded,
+                    color: Colors.white38,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right_rounded,
+                    color: Colors.white38, size: 18),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isVisible
+                  ? 'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}'
+                  : 'R\$ ••••••',
+              style: const TextStyle(
+                color: Color(0xFF00E5B4),
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Saldo disponível',
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.4), fontSize: 12),
+            ),
+            const SizedBox(height: 14),
+            // Barra de progresso
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Meta para saque',
+                              style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  fontSize: 11)),
+                          Text('R\$ ${_saqueMinimo.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                  color: Colors.white54, fontSize: 11)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: pct,
+                          backgroundColor:
+                              Colors.white.withValues(alpha: 0.1),
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFF00E5B4)),
+                          minHeight: 8,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        podesSacar
+                            ? '✅ Pronto para sacar!'
+                            : 'Faltam R\$ ${faltam.toStringAsFixed(2).replaceAll('.', ',')} — ${(pct * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          color: podesSacar
+                              ? const Color(0xFF00E5B4)
+                              : Colors.white.withValues(alpha: 0.4),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
