@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // ── Card Minha Carteira ─────────────────────────────
                   _WalletSummaryCard(
-                    saldo: user?.saldo ?? wallet.totalComissoes,
+                    saldo: user?.saldo ?? wallet.saldoCarteira,
                     isVisible: _saldoVisible,
                     onToggleVisibility: () =>
                         setState(() => _saldoVisible = !_saldoVisible),

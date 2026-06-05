@@ -76,7 +76,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (!mounted) return;
     if (result.success) {
-      _showSuccessDialog(result.wooviSubaccountCreated);
+      _showSuccessDialog(result.walletCreated);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

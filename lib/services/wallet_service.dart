@@ -4,6 +4,7 @@ import '../models/withdraw_model.dart';
 import 'api_service.dart';
 import 'woovi_service.dart';
 import 'firestore_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class WalletService extends ChangeNotifier {
   List<SaleModel> _sales = [];
@@ -12,12 +13,24 @@ class WalletService extends ChangeNotifier {
   int _totalIndicados = 0;
   double _balanceFromServer = 0; // ignore: unused_field
 
+  // Saldo real da carteira Firestore
+  double _saldoCarteira = 0.0;
+  double _saldoPendente = 0.0;
+  double _totalRecebido = 0.0;
+
   List<SaleModel> get sales => _sales;
   List<SaleModel> get salesCompleted => _sales.where((s) => s.isCompleted).toList();
   List<WithdrawModel> get withdraws => _withdraws;
   bool get isLoading => _isLoading;
   int get totalIndicados => _totalIndicados;
   int get totalVendas => salesCompleted.length;
+
+  // Saldo real da carteira (wallets/{uid} no Firestore)
+  double get saldoCarteira => _saldoCarteira > 0
+      ? _saldoCarteira
+      : totalComissoes; // fallback para soma de comissões
+  double get saldoPendente => _saldoPendente;
+  double get totalRecebido => _totalRecebido;
 
   double get totalComissoes =>
       salesCompleted.fold(0.0, (sum, s) => sum + s.comissao);
@@ -41,13 +54,16 @@ class WalletService extends ChangeNotifier {
       if (ApiService.hasToken) {
         // Modo real via API NestJS
         await Future.wait([_loadSales(), _loadWithdrawals(), _loadDashboard()]);
-      } else if (userId != null && FirestoreService.isAvailable) {
-        // Modo Firestore direto — busca vendas e saques do usuário
-        await Future.wait([
-          _loadSalesFromFirestore(userId),
-          _loadWithdrawalsFromFirestore(userId),
-          _loadAffiliateDataFromFirestore(userId),
-        ]);
+      } else if (FirestoreService.isAvailable) {
+        // Modo Firestore direto — usa UID do Firebase Auth ou userId passado
+        final uid = userId ?? FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          await Future.wait([
+            _loadSalesFromFirestore(uid),
+            _loadWithdrawalsFromFirestore(uid),
+            _loadAffiliateDataFromFirestore(uid),
+          ]);
+        }
       } else {
         // Modo demo
         await Future.delayed(const Duration(milliseconds: 800));
@@ -103,6 +119,36 @@ class WalletService extends ChangeNotifier {
 
   Future<void> _loadAffiliateDataFromFirestore(String userId) async {
     try {
+      final db = FirestoreService.db;
+      if (db == null) return;
+
+      // 1. Buscar dados da carteira em wallets/{uid}
+      final walletDoc = await db.collection('wallets').doc(userId).get();
+      if (walletDoc.exists) {
+        final data = walletDoc.data()!;
+        _totalIndicados = FirestoreService.toInt(data['total_referrals']);
+        _saldoCarteira = FirestoreService.toDouble(data['saldo_disponivel']);
+        _saldoPendente = FirestoreService.toDouble(data['saldo_pendente']);
+        _totalRecebido = FirestoreService.toDouble(data['total_recebido']);
+        if (kDebugMode) {
+          debugPrint('[WalletService] Carteira carregada: '
+              'disponível=R\$$_saldoCarteira '
+              'pendente=R\$$_saldoPendente');
+        }
+        return;
+      }
+
+      // 2. Fallback: buscar em affiliates/{uid} (campo uid direto)
+      final affiliateDoc =
+          await db.collection('affiliates').doc(userId).get();
+      if (affiliateDoc.exists) {
+        final data = affiliateDoc.data()!;
+        _totalIndicados = FirestoreService.toInt(data['total_referrals']);
+        _saldoCarteira = FirestoreService.toDouble(data['saldo_disponivel']);
+        return;
+      }
+
+      // 3. Fallback 2: buscar por firebase_uid (estrutura antiga)
       final col = FirestoreService.affiliates;
       if (col == null) return;
       final snap = await col

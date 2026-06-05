@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -367,35 +368,50 @@ class MercadoPagoService extends ChangeNotifier {
         'status': 'ativo',
         'payment_method': 'pix',
         'transaction_id': transactionId,
-        'created_at': DateTime.now().toIso8601String(),
-        'next_charge':
-            DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+        'created_at': FieldValue.serverTimestamp(),
+        'next_charge': Timestamp.fromDate(
+            DateTime.now().add(const Duration(days: 30))),
       });
 
-      // 2. Creditar comissão na carteira do afiliado
+      // 2. Creditar comissão na carteira wallets/{affiliateId}
       final walletRef = db.collection('wallets').doc(affiliateId);
       final walletSnap = await walletRef.get();
 
       if (walletSnap.exists) {
-        final current =
-            (walletSnap.data()?['saldo_pendente'] ?? 0.0) as num;
+        // Carteira existe — incrementar saldo_pendente e total_recebido
         await walletRef.update({
-          'saldo_pendente': current.toDouble() + comissao,
-          'updated_at': DateTime.now().toIso8601String(),
+          'saldo_pendente': FieldValue.increment(comissao),
+          'total_recebido': FieldValue.increment(comissao),
+          'total_vendas': FieldValue.increment(1),
+          'updated_at': FieldValue.serverTimestamp(),
         });
       } else {
+        // Carteira não existe — criar automaticamente
         await walletRef.set({
+          'uid': affiliateId,
           'affiliate_id': affiliateId,
+          'affiliate_code': affiliateCode,
           'saldo_disponivel': 0.0,
           'saldo_pendente': comissao,
-          'total_recebido': 0.0,
+          'total_recebido': comissao,
           'total_sacado': 0.0,
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
+          'total_comissoes': comissao,
+          'total_vendas': 1,
+          'status': 'ativo',
+          'created_at': FieldValue.serverTimestamp(),
+          'updated_at': FieldValue.serverTimestamp(),
         });
       }
 
-      // 3. Registrar transação na carteira
+      // 3. Atualizar também o campo saldo no affiliates/{affiliateId}
+      await db.collection('affiliates').doc(affiliateId).update({
+        'saldo_pendente': FieldValue.increment(comissao),
+        'total_recebido': FieldValue.increment(comissao),
+        'total_sales': FieldValue.increment(1),
+        'updated_at': FieldValue.serverTimestamp(),
+      }).catchError((_) {}); // ignora se documento não existir
+
+      // 4. Registrar transação na carteira
       await db.collection('wallet_transactions').add({
         'wallet_id': affiliateId,
         'affiliate_id': affiliateId,
@@ -405,10 +421,10 @@ class MercadoPagoService extends ChangeNotifier {
         'status': 'pendente',
         'transaction_id': transactionId,
         'product_id': produtoId,
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': FieldValue.serverTimestamp(),
       });
 
-      // 4. Registrar referral
+      // 5. Registrar referral
       await db.collection('referrals').add({
         'affiliate_id': affiliateId,
         'affiliate_code': affiliateCode,
@@ -417,7 +433,7 @@ class MercadoPagoService extends ChangeNotifier {
         'produto_nome': produtoNome,
         'comissao_mensal': comissao,
         'status': 'ativo',
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': FieldValue.serverTimestamp(),
       });
 
       return true;
@@ -448,7 +464,7 @@ class MercadoPagoService extends ChangeNotifier {
         'valor': valor,
         'comissao': comissao,
         'status': 'pending',
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': FieldValue.serverTimestamp(),
         'is_sandbox': _isSandbox,
       });
     } catch (e) {
