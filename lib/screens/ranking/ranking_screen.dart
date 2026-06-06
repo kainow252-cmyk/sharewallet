@@ -24,8 +24,8 @@ class _RankingScreenState extends State<RankingScreen> {
   Future<void> _loadRanking() async {
     setState(() => _loading = true);
     try {
-      final snap =
-          await FirestoreService.collection('ranking')?.get();
+      final snap = await FirestoreService.getWithTimeout(
+          FirestoreService.collection('ranking'));
       if (snap != null && snap.docs.isNotEmpty) {
         final list = snap.docs.map((d) {
           final data = Map<String, dynamic>.from(d.data());

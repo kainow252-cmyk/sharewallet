@@ -42,12 +42,14 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
       if (uid == null) return;
 
       // Queries paralelas com tipos corretos
-      final walletFuture = FirestoreService.collection('wallets')?.doc(uid).get();
-      final txFuture = FirestoreService.collection('wallet_transactions')
-          ?.where('user_id', isEqualTo: uid).get();
+      final walletFuture = FirestoreService.docGetWithTimeout(
+          FirestoreService.collection('wallets')?.doc(uid));
+      final txFuture = FirestoreService.getWithTimeout(
+          FirestoreService.collection('wallet_transactions')
+              ?.where('user_id', isEqualTo: uid));
 
-      final walletDoc = walletFuture != null ? await walletFuture : null;
-      final txSnap    = txFuture    != null ? await txFuture    : null;
+      final walletDoc = await walletFuture;
+      final txSnap    = await txFuture;
 
       // Wallet
       if (walletDoc != null && walletDoc.exists) {

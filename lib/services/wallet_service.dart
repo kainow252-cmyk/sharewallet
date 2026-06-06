@@ -84,13 +84,13 @@ class WalletService extends ChangeNotifier {
     try {
       final col = FirestoreService.collection('sales');
       if (col == null) return;
-      final snap = await col.where('user_id', isEqualTo: userId).get();
+      final snap = await FirestoreService.getWithTimeout(col.where('user_id', isEqualTo: userId));
+      if (snap == null) return;
       final all = snap.docs.map((d) {
         final data = Map<String, dynamic>.from(d.data());
         data['id'] = d.id;
         return SaleModel.fromJson(data);
       }).toList();
-      // Ordenar por data em memória
       all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       _sales = all;
     } catch (e) {
@@ -102,7 +102,8 @@ class WalletService extends ChangeNotifier {
     try {
       final col = FirestoreService.withdrawals;
       if (col == null) return;
-      final snap = await col.where('user_id', isEqualTo: userId).get();
+      final snap = await FirestoreService.getWithTimeout(col.where('user_id', isEqualTo: userId));
+      if (snap == null) return;
       final all = snap.docs.map((d) {
         final data = Map<String, dynamic>.from(d.data());
         data['id'] = d.id;
@@ -121,7 +122,8 @@ class WalletService extends ChangeNotifier {
       if (db == null) return;
 
       // 1. Buscar dados da carteira em wallets/{uid}
-      final walletDoc = await db.collection('wallets').doc(userId).get();
+      final walletDoc = await FirestoreService.docGetWithTimeout(db.collection('wallets').doc(userId));
+      if (walletDoc == null) return;
       if (walletDoc.exists) {
         final data = walletDoc.data()!;
         _totalIndicados = FirestoreService.toInt(data['total_referrals']);
@@ -136,9 +138,9 @@ class WalletService extends ChangeNotifier {
         return;
       }
 
-      // 2. Fallback: buscar em affiliates/{uid} (campo uid direto)
-      final affiliateDoc =
-          await db.collection('affiliates').doc(userId).get();
+      // 2. Fallback: buscar em affiliates/{uid}
+      final affiliateDoc = await FirestoreService.docGetWithTimeout(db.collection('affiliates').doc(userId));
+      if (affiliateDoc == null) return;
       if (affiliateDoc.exists) {
         final data = affiliateDoc.data()!;
         _totalIndicados = FirestoreService.toInt(data['total_referrals']);
@@ -149,11 +151,9 @@ class WalletService extends ChangeNotifier {
       // 3. Fallback 2: buscar por firebase_uid (estrutura antiga)
       final col = FirestoreService.affiliates;
       if (col == null) return;
-      final snap = await col
-          .where('firebase_uid', isEqualTo: userId)
-          .limit(1)
-          .get();
-      if (snap.docs.isNotEmpty) {
+      final snap = await FirestoreService.getWithTimeout(
+          col.where('firebase_uid', isEqualTo: userId).limit(1));
+      if (snap != null && snap.docs.isNotEmpty) {
         final data = snap.docs.first.data();
         _totalIndicados = FirestoreService.toInt(data['total_referrals']);
       }

@@ -267,7 +267,7 @@ class AdminService extends ChangeNotifier {
   Future<void> loadMetrics() async {
     try {
       if (_useFirestore) {
-        final snap = await FirestoreService.metrics?.doc('global').get();
+        final snap = await FirestoreService.docGetWithTimeout(FirestoreService.metrics?.doc('global'));
         if (snap != null && snap.exists) {
           final data = snap.data()!;
           _metrics = AdminMetrics.fromJson(data);
@@ -302,7 +302,7 @@ class AdminService extends ChangeNotifier {
   Future<void> loadAffiliates() async {
     try {
       if (_useFirestore) {
-        final snap = await FirestoreService.affiliates?.get();
+        final snap = await FirestoreService.getWithTimeout(FirestoreService.affiliates);
         if (snap != null && snap.docs.isNotEmpty) {
           _affiliates = snap.docs.map((doc) {
             final data = doc.data();
@@ -363,7 +363,7 @@ class AdminService extends ChangeNotifier {
   Future<void> loadSubscriptions() async {
     try {
       if (_useFirestore) {
-        final snap = await FirestoreService.subscriptions?.get();
+        final snap = await FirestoreService.getWithTimeout(FirestoreService.subscriptions);
         if (snap != null && snap.docs.isNotEmpty) {
           _subscriptions = snap.docs.map((doc) {
             final data = doc.data();
@@ -428,7 +428,7 @@ class AdminService extends ChangeNotifier {
   Future<void> loadWithdrawals() async {
     try {
       if (_useFirestore) {
-        final snap = await FirestoreService.withdrawals?.get();
+        final snap = await FirestoreService.getWithTimeout(FirestoreService.withdrawals);
         if (snap != null && snap.docs.isNotEmpty) {
           _withdrawals = snap.docs.map((doc) {
             final data = doc.data();
@@ -515,7 +515,7 @@ class AdminService extends ChangeNotifier {
 
     try {
       if (_useFirestore) {
-        final snap = await FirestoreService.products?.get();
+        final snap = await FirestoreService.getWithTimeout(FirestoreService.products);
         if (snap != null && snap.docs.isNotEmpty) {
           _products = snap.docs.map((doc) {
             final data = doc.data();

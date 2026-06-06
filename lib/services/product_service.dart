@@ -59,18 +59,15 @@ class ProductService extends ChangeNotifier {
         _products = ProductModel.mockProducts;
         if (kDebugMode) debugPrint('[ProductService] Modo demo');
       } else {
-        final snapshot = await col.get();
-        final all = snapshot.docs.map((doc) {
-          final data = doc.data();
-          data['id'] = doc.id;
-          return ProductModel.fromJson(data);
-        }).toList();
-
-        // Filtrar ativos em memória
-        _products = all.where((p) => p.ativo).toList();
-
-        if (kDebugMode) {
-          debugPrint('[ProductService] ${_products.length} produtos carregados do Firestore');
+        final snapshot = await FirestoreService.getWithTimeout(col);
+        if (snapshot != null) {
+          final all = snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return ProductModel.fromJson(data);
+          }).toList();
+          _products = all.where((p) => p.ativo).toList();
+          if (kDebugMode) debugPrint('[ProductService] ${_products.length} produtos');
         }
       }
     } catch (e) {

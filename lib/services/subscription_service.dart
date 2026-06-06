@@ -81,9 +81,9 @@ class SubscriptionService extends ChangeNotifier {
     try {
       if (_useFirestore) {
         // Query simples por affiliateCode (sem orderBy para evitar composite index)
-        final snap = await FirestoreService.subscriptions
-            ?.where('affiliateCode', isEqualTo: affiliateCode)
-            .get();
+        final snap = await FirestoreService.getWithTimeout(
+          FirestoreService.subscriptions
+              ?.where('affiliateCode', isEqualTo: affiliateCode));
 
         if (snap != null) {
           final all = snap.docs.map((doc) {

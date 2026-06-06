@@ -47,9 +47,9 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
       }
 
       // Uma única query — sem fallback demo
-      final snap = await FirestoreService.collection('referrals')
-          ?.where('referrer_id', isEqualTo: uid)
-          .get();
+      final snap = await FirestoreService.getWithTimeout(
+          FirestoreService.collection('referrals')
+              ?.where('referrer_id', isEqualTo: uid));
 
       if (snap != null && snap.docs.isNotEmpty) {
         final list = snap.docs.map((d) {
