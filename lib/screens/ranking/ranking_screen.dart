@@ -35,24 +35,13 @@ class _RankingScreenState extends State<RankingScreen> {
         list.sort((a, b) => FirestoreService.toInt(a['position'])
             .compareTo(FirestoreService.toInt(b['position'])));
         setState(() => _ranking = list);
+      } else {
+        // Firestore disponível mas ranking ainda vazio
+        setState(() => _ranking = []);
       }
     } catch (e) {
       debugPrint('[RankingScreen] Erro: $e');
-      // Dados demo
-      setState(() {
-        _ranking = [
-          {'nome': 'João Silva', 'assinaturas': 145, 'comissao_total': 1740.0, 'nivel': 'Diamante', 'position': 1},
-          {'nome': 'Carlos Melo', 'assinaturas': 120, 'comissao_total': 1440.0, 'nivel': 'Ouro', 'position': 2},
-          {'nome': 'Pedro Costa', 'assinaturas': 98, 'comissao_total': 1176.0, 'nivel': 'Ouro', 'position': 3},
-          {'nome': 'Ana Lima', 'assinaturas': 87, 'comissao_total': 1044.0, 'nivel': 'Ouro', 'position': 4},
-          {'nome': 'Lucas Souza', 'assinaturas': 72, 'comissao_total': 864.0, 'nivel': 'Prata', 'position': 5},
-          {'nome': 'Mariana Reis', 'assinaturas': 65, 'comissao_total': 780.0, 'nivel': 'Prata', 'position': 6},
-          {'nome': 'Felipe Nunes', 'assinaturas': 54, 'comissao_total': 648.0, 'nivel': 'Prata', 'position': 7},
-          {'nome': 'Juliana Pinto', 'assinaturas': 41, 'comissao_total': 492.0, 'nivel': 'Prata', 'position': 8},
-          {'nome': 'Roberto Alves', 'assinaturas': 33, 'comissao_total': 396.0, 'nivel': 'Prata', 'position': 9},
-          {'nome': 'Camila Borges', 'assinaturas': 27, 'comissao_total': 324.0, 'nivel': 'Bronze', 'position': 10},
-        ];
-      });
+      setState(() => _ranking = []);
     } finally {
       setState(() => _loading = false);
     }
@@ -141,21 +130,46 @@ class _RankingScreenState extends State<RankingScreen> {
                       padding: EdgeInsets.all(60),
                       child: Center(child: CircularProgressIndicator()),
                     )
-                  : Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 8),
+                  : _ranking.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 80, horizontal: 32),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                Icon(Icons.emoji_events_outlined,
+                                    size: 64, color: Color(0xFFBDBDBD)),
+                                SizedBox(height: 16),
+                                Text('Ranking em breve',
+                                    style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF333333))),
+                                SizedBox(height: 8),
+                                Text(
+                                  'O ranking será formado conforme\nos afiliados realizarem vendas.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      fontSize: 14, color: Color(0xFF888888)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 8),
 
-                          // ── Pódio Top 3 ─────────────────────────────
-                          if (top3.length >= 3) _Podium(top3: top3, fmt: _fmt),
+                              // ── Pódio Top 3 ─────────────────────────────
+                              if (top3.length >= 3) _Podium(top3: top3, fmt: _fmt),
 
-                          const SizedBox(height: 24),
+                              const SizedBox(height: 24),
 
-                          // ── Posições 4–10 ───────────────────────────
-                          ...resto.asMap().entries.map((entry) {
-                            final pos = entry.key + 4;
-                            final item = entry.value;
+                              // ── Posições 4–10 ───────────────────────────
+                              ...resto.asMap().entries.map((entry) {
+                                final pos = entry.key + 4;
+                                final item = entry.value;
                             return _RankingTile(
                               position: pos,
                               nome: FirestoreService.toStr(item['nome']),

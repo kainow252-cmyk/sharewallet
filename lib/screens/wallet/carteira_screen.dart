@@ -50,18 +50,12 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
           _totalRecebido = FirestoreService.toDouble(data['total_recebido']);
         });
       } else {
-        // Usar carteira demo se não tiver dados reais
-        final demoDoc = await FirestoreService.collection('wallets')
-            ?.doc('demo_user_1')
-            .get();
-        if (demoDoc != null && demoDoc.exists) {
-          final data = demoDoc.data()!;
-          setState(() {
-            _saldoDisponivel = FirestoreService.toDouble(data['saldo_disponivel']);
-            _saldoPendente = FirestoreService.toDouble(data['saldo_pendente']);
-            _totalRecebido = FirestoreService.toDouble(data['total_recebido']);
-          });
-        }
+        // Carteira ainda não existe — saldo zero (novo afiliado)
+        setState(() {
+          _saldoDisponivel = 0.0;
+          _saldoPendente = 0.0;
+          _totalRecebido = 0.0;
+        });
       }
 
       // Carregar transações
@@ -90,11 +84,11 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
       }
     } catch (e) {
       debugPrint('[CarteiraScreen] Erro: $e');
-      // Dados demo locais
+      // Erro ao carregar — zera para não exibir valores falsos
       setState(() {
-        _saldoDisponivel = 84.00;
-        _saldoPendente = 12.00;
-        _totalRecebido = 1350.00;
+        _saldoDisponivel = 0.0;
+        _saldoPendente = 0.0;
+        _totalRecebido = 0.0;
       });
     } finally {
       setState(() => _loadingWallet = false);

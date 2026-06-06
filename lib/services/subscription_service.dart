@@ -106,21 +106,31 @@ class SubscriptionService extends ChangeNotifier {
         }
       }
 
-      // Fallback para mock em modo demo
-      await Future.delayed(const Duration(milliseconds: 800));
-      _subscriptions = SubscriptionModel.mockSubscriptions
-          .where((s) => s.affiliateCode == affiliateCode)
-          .toList();
-      _calcularSaldo();
+      // Fallback para mock APENAS em modo demo (sem Firebase)
+      if (!_useFirestore) {
+        await Future.delayed(const Duration(milliseconds: 800));
+        _subscriptions = SubscriptionModel.mockSubscriptions
+            .where((s) => s.affiliateCode == affiliateCode)
+            .toList();
+        _calcularSaldo();
+      } else {
+        // Firestore disponivel mas sem assinaturas: lista vazia é o correto
+        _subscriptions = [];
+        _calcularSaldo();
+      }
     } catch (e) {
       debugPrint('[SubscriptionService] Erro ao carregar assinaturas: $e');
       _error = 'Erro ao carregar assinaturas. Tente novamente.';
-
-      // Fallback para mock em caso de erro
-      _subscriptions = SubscriptionModel.mockSubscriptions
-          .where((s) => s.affiliateCode == affiliateCode)
-          .toList();
-      _calcularSaldo();
+      // Fallback para mock APENAS em modo demo
+      if (!_useFirestore) {
+        _subscriptions = SubscriptionModel.mockSubscriptions
+            .where((s) => s.affiliateCode == affiliateCode)
+            .toList();
+        _calcularSaldo();
+      } else {
+        _subscriptions = [];
+        _calcularSaldo();
+      }
     }
 
     _isLoading = false;

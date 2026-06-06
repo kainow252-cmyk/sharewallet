@@ -322,8 +322,12 @@ class AdminService extends ChangeNotifier {
       debugPrint('[AdminService] Erro ao carregar afiliados: $e');
     }
 
-    // Fallback para mock
-    _affiliates = _mockAffiliates;
+    // Fallback para mock APENAS em modo demo (sem Firebase)
+    if (!_useFirestore) {
+      _affiliates = _mockAffiliates;
+    } else {
+      _affiliates = []; // Firestore disponível mas vazio — lista real vazia
+    }
     notifyListeners();
   }
 
@@ -379,8 +383,12 @@ class AdminService extends ChangeNotifier {
       debugPrint('[AdminService] Erro ao carregar assinaturas: $e');
     }
 
-    // Fallback para mock
-    _subscriptions = _mockAllSubscriptions;
+    // Fallback APENAS em modo demo
+    if (!_useFirestore) {
+      _subscriptions = _mockAllSubscriptions;
+    } else {
+      _subscriptions = []; // Firestore disponível mas vazio
+    }
     notifyListeners();
   }
 
@@ -440,8 +448,12 @@ class AdminService extends ChangeNotifier {
       debugPrint('[AdminService] Erro ao carregar saques: $e');
     }
 
-    // Fallback para mock
-    _withdrawals = _mockWithdrawals;
+    // Fallback APENAS em modo demo
+    if (!_useFirestore) {
+      _withdrawals = _mockWithdrawals;
+    } else {
+      _withdrawals = []; // Firestore disponível mas vazio
+    }
     notifyListeners();
   }
 
