@@ -40,34 +40,12 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Produtos'),
-        actions: [
-          // Botão de refresh manual
-          if (svc.isLoading)
-            const Padding(
-              padding: EdgeInsets.all(14),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              ),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded),
-              tooltip: 'Recarregar produtos',
-              onPressed: () => svc.loadProducts(),
-            ),
-          IconButton(
-            icon: const Icon(Icons.add_rounded),
-            tooltip: 'Novo produto',
-            onPressed: () => _openForm(context, null),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openForm(context, null),
+        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        label: const Text('Novo Produto',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ),
       body: Column(
         children: [

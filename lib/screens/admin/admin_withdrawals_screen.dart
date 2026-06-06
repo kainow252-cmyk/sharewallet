@@ -46,54 +46,49 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Saques'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => svc.loadWithdrawals(),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: AppColors.gold,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: AppColors.gold,
-          indicatorSize: TabBarIndicatorSize.label,
-          labelStyle:
-              const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          tabs: [
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Pendentes'),
-                  if (pendentes.isNotEmpty) ...[
-                    const SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text('${pendentes.length}',
-                          style: const TextStyle(
-                              fontSize: 10,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Tab(text: 'Aprovados (${aprovados.length})'),
-            Tab(text: 'Recusados (${recusados.length})'),
-          ],
-        ),
-      ),
       body: Column(
         children: [
+          // TabBar integrada ao body
+          Container(
+            color: const Color(0xFF071A10),
+            child: TabBar(
+              controller: _tabController,
+              labelColor: AppColors.gold,
+              unselectedLabelColor: Colors.white70,
+              indicatorColor: AppColors.gold,
+              indicatorSize: TabBarIndicatorSize.label,
+              labelStyle:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              tabs: [
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Pendentes'),
+                      if (pendentes.isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppColors.error,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text('${pendentes.length}',
+                              style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Tab(text: 'Aprovados (${aprovados.length})'),
+                Tab(text: 'Recusados (${recusados.length})'),
+              ],
+            ),
+          ),
           // Banner de saques pendentes
           if (pendentes.isNotEmpty)
             Container(

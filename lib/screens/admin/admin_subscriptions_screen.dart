@@ -55,32 +55,27 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Assinaturas'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => svc.loadSubscriptions(),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: AppColors.gold,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: AppColors.gold,
-          indicatorSize: TabBarIndicatorSize.label,
-          labelStyle: const TextStyle(
-              fontSize: 12, fontWeight: FontWeight.w700),
-          tabs: [
-            Tab(text: 'Todas (${todas.length})'),
-            Tab(text: 'Ativas (${ativas.length})'),
-            Tab(text: 'Pendentes (${pendentes.length})'),
-            Tab(text: 'Canceladas (${canceladas.length})'),
-          ],
-        ),
-      ),
       body: Column(
         children: [
+          // TabBar integrada ao body
+          Container(
+            color: const Color(0xFF071A10),
+            child: TabBar(
+              controller: _tabController,
+              labelColor: AppColors.gold,
+              unselectedLabelColor: Colors.white70,
+              indicatorColor: AppColors.gold,
+              indicatorSize: TabBarIndicatorSize.label,
+              labelStyle: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700),
+              tabs: [
+                Tab(text: 'Todas (${todas.length})'),
+                Tab(text: 'Ativas (${ativas.length})'),
+                Tab(text: 'Pendentes (${pendentes.length})'),
+                Tab(text: 'Canceladas (${canceladas.length})'),
+              ],
+            ),
+          ),
           // Busca
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),

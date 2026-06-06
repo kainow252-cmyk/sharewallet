@@ -177,6 +177,21 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
+            tooltip: 'Atualizar',
+            onPressed: () {
+              final svc = context.read<AdminService>();
+              switch (_selectedIndex) {
+                case 0: svc.loadAll(); break;
+                case 1: svc.loadProducts(); break;
+                case 2: svc.loadAffiliates(); break;
+                case 3: svc.loadSubscriptions(); break;
+                case 4: svc.loadWithdrawals(); break;
+                default: svc.loadAll(); break;
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.white70),
             tooltip: 'Sair',
             onPressed: () => _logout(context),

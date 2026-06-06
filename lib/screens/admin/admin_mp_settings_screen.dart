@@ -38,43 +38,36 @@ class _AdminMpSettingsScreenState extends State<AdminMpSettingsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: _mpBlue,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Text('MP',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13)),
-            ),
-            const SizedBox(width: 10),
-            const Text('Mercado Pago'),
-          ],
-        ),
-        bottom: TabBar(
-          controller: _tab,
-          tabs: const [
-            Tab(icon: Icon(Icons.tune_rounded), text: 'Modo & Credenciais'),
-            Tab(icon: Icon(Icons.settings_rounded), text: 'Configurações'),
-          ],
-        ),
-      ),
       body: Consumer<MercadoPagoService>(
         builder: (_, svc, __) {
           if (!svc.isConfigLoaded) {
             return const Center(child: CircularProgressIndicator());
           }
-          return TabBarView(
-            controller: _tab,
+          return Column(
             children: [
-              _ModeTab(svc: svc),
-              _SettingsTab(svc: svc),
+              // TabBar integrada ao body
+              Container(
+                color: const Color(0xFF071A10),
+                child: TabBar(
+                  controller: _tab,
+                  labelColor: AppColors.gold,
+                  unselectedLabelColor: Colors.white70,
+                  indicatorColor: AppColors.gold,
+                  tabs: const [
+                    Tab(icon: Icon(Icons.tune_rounded), text: 'Modo & Credenciais'),
+                    Tab(icon: Icon(Icons.settings_rounded), text: 'Configurações'),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: TabBarView(
+                  controller: _tab,
+                  children: [
+                    _ModeTab(svc: svc),
+                    _SettingsTab(svc: svc),
+                  ],
+                ),
+              ),
             ],
           );
         },

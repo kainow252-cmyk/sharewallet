@@ -29,15 +29,6 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Afiliados'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => svc.loadAffiliates(),
-          ),
-        ],
-      ),
       body: Column(
         children: [
           // Busca + filtro
