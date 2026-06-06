@@ -86,10 +86,11 @@ class MpConfig {
           'verified':     true,
         }),
         comissaoPercent: 0.20,
-        notificationUrl: 'https://sharewallet.com.br/api/webhook/mp',
-        backUrlSuccess:  'https://sharewallet.com.br/checkout/success',
-        backUrlFailure:  'https://sharewallet.com.br/checkout/failure',
-        backUrlPending:  'https://sharewallet.com.br/checkout/pending',
+        // Worker direto — sharewallet.com.br/api/* redireciona 302 para /app (não chega no MP)
+        notificationUrl: 'https://sharewallet-api.kainow252.workers.dev/api/webhook/mp',
+        backUrlSuccess:  'https://sharewallet.com.br/app/#/checkout/success',
+        backUrlFailure:  'https://sharewallet.com.br/app/#/checkout/failure',
+        backUrlPending:  'https://sharewallet.com.br/app/#/checkout/pending',
       );
 
   factory MpConfig.fromFirestore(Map<String, dynamic> d) {
