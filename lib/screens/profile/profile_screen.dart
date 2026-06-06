@@ -69,7 +69,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final auth = context.read<AuthService>();
       final uid = auth.currentUser?.id ?? '';
 
-      // Salva no Firestore
+      // Salva no Firestore (set+merge — funciona mesmo sem doc existir)
       await FirebaseUserService.atualizarPerfil(
         uid: uid,
         nome: _nomeCtrl.text.trim(),
@@ -78,13 +78,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         pixKey: _pixCtrl.text.trim(),
       );
 
-      // Sincroniza no D1 (Worker)
-      await CfApiService.updateAffiliate(uid, {
+      // Sincroniza no D1 (Worker) — erro não bloqueia o save
+      // ignore: unawaited_futures
+      CfApiService.updateAffiliate(uid, {
         'nome': _nomeCtrl.text.trim(),
         'telefone': _telefoneCtrl.text.trim(),
         'cpf': _cpfCtrl.text.trim(),
         'pix_key': _pixCtrl.text.trim(),
-      });
+      }).catchError((_) => null);
 
       await auth.refreshProfile();
 

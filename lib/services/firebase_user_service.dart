@@ -279,13 +279,14 @@ class FirebaseUserService {
       final db = _getDb();
       if (db == null) return;
 
-      await db.collection('affiliates').doc(uid).update({
+      // set+merge: cria o documento se não existir, atualiza se já existir
+      await db.collection('affiliates').doc(uid).set({
         'nome': nome,
         'telefone': telefone,
         'cpf': cpf,
         'pix_key': pixKey,
         'updated_at': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
 
       if (kDebugMode) debugPrint('[FirebaseUserService] ✅ Perfil atualizado: $uid');
     } catch (e) {
@@ -301,14 +302,14 @@ class FirebaseUserService {
       if (db == null) return;
 
       await Future.wait([
-        db.collection('wallets').doc(uid).update({
+        db.collection('wallets').doc(uid).set({
           'saldo_disponivel': novoSaldo,
           'updated_at': FieldValue.serverTimestamp(),
-        }),
-        db.collection('affiliates').doc(uid).update({
+        }, SetOptions(merge: true)),
+        db.collection('affiliates').doc(uid).set({
           'saldo': novoSaldo,
           'updated_at': FieldValue.serverTimestamp(),
-        }),
+        }, SetOptions(merge: true)),
       ]);
     } catch (e) {
       if (kDebugMode) debugPrint('[FirebaseUserService] Erro atualizarSaldo: $e');
@@ -390,11 +391,11 @@ class FirebaseUserService {
           ? _toDouble(walletDoc.data()?['saldo_disponivel'])
           : _toDouble(aData['saldo']);
 
-      // Atualizar last_login
-      db.collection('affiliates').doc(uid).update({
+      // Atualizar last_login (set+merge: não falha se doc não existir)
+      db.collection('affiliates').doc(uid).set({
         'last_login': FieldValue.serverTimestamp(),
         'updated_at': FieldValue.serverTimestamp(),
-      }).catchError((_) {});
+      }, SetOptions(merge: true)).catchError((_) {});
 
       final affiliateCode = _toStr(aData['affiliate_code'], fallback: _gerarCodigo(uid));
 
@@ -491,10 +492,10 @@ class FirebaseUserService {
   static Future<void> _incrementarReferral(
       FirebaseFirestore db, String sponsorId) async {
     try {
-      await db.collection('affiliates').doc(sponsorId).update({
+      await db.collection('affiliates').doc(sponsorId).set({
         'total_referrals': FieldValue.increment(1),
         'updated_at': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
     } catch (_) {}
   }
 
