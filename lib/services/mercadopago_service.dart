@@ -48,6 +48,9 @@ class MpConfig {
   final String backUrlSuccess;
   final String backUrlFailure;
   final String backUrlPending;
+  // Credenciais OAuth para renovação automática do token (expira 6h)
+  final String clientId;
+  final String clientSecret;
 
   const MpConfig({
     required this.mode,
@@ -58,6 +61,8 @@ class MpConfig {
     required this.backUrlSuccess,
     required this.backUrlFailure,
     required this.backUrlPending,
+    this.clientId     = '',
+    this.clientSecret = '',
   });
 
   bool get isSandbox => mode == 'sandbox';
@@ -65,14 +70,18 @@ class MpConfig {
   MpCredentials get active => isSandbox ? sandbox : production;
 
   factory MpConfig.defaultConfig() => MpConfig(
-        mode: 'sandbox',
-        sandbox: MpCredentials.fromMap({
-          'access_token': 'APP_USR-4599294977346145-060413-d1b12f00605ec44ea2c3cd82e7aeb717-3450457834',
-          'public_key':   'APP_USR-5ea28427-e012-4efb-8757-2df410cdebe9',
-          'user_id':      '3450457834',
+        // Modo produção com credenciais da conta real (client_credentials OAuth)
+        // Token expira a cada 6h — renovado automaticamente via clientId+clientSecret
+        mode: 'production',
+        clientId:     '4493562791162337',
+        clientSecret: 'NiedJYvJnAX6G7JLPIzIfF3xSybXoyS5',
+        sandbox: MpCredentials.empty(),
+        production: MpCredentials.fromMap({
+          'access_token': 'APP_USR-4493562791162337-060618-dbba35b7784dc2366844eaae4bbdc03e-3235638414',
+          'public_key':   '',
+          'user_id':      '3235638414',
           'verified':     true,
         }),
-        production: MpCredentials.empty(),
         comissaoPercent: 0.20,
         notificationUrl: 'https://sharewallet.com.br/api/webhook/mp',
         backUrlSuccess:  'https://sharewallet.com.br/checkout/success',
@@ -82,6 +91,8 @@ class MpConfig {
 
   factory MpConfig.fromFirestore(Map<String, dynamic> d) => MpConfig(
         mode: d['mode'] as String? ?? 'sandbox',
+        clientId:     d['client_id']     as String? ?? '',
+        clientSecret: d['client_secret'] as String? ?? '',
         sandbox:    MpCredentials.fromMap(
             (d['sandbox']    as Map<String, dynamic>?) ?? {}),
         production: MpCredentials.fromMap(
@@ -237,8 +248,69 @@ class MercadoPagoService extends ChangeNotifier {
       'back_url_success':  cfg.backUrlSuccess,
       'back_url_failure':  cfg.backUrlFailure,
       'back_url_pending':  cfg.backUrlPending,
+      if (cfg.clientId.isNotEmpty)     'client_id':     cfg.clientId,
+      if (cfg.clientSecret.isNotEmpty) 'client_secret': cfg.clientSecret,
       'updated_at': FieldValue.serverTimestamp(),
     });
+  }
+
+  // ── Renovar token via OAuth client_credentials (token expira em 6h) ─────────
+
+  Future<bool> _renovarToken() async {
+    final cid = _config.clientId;
+    final sec = _config.clientSecret;
+    if (cid.isEmpty || sec.isEmpty) return false;
+
+    try {
+      final resp = await http.post(
+        Uri.parse('$_baseUrl/oauth/token'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'client_id':     cid,
+          'client_secret': sec,
+          'grant_type':    'client_credentials',
+        }),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final newToken  = data['access_token'] as String? ?? '';
+        final newUserId = data['user_id']?.toString() ?? _config.production.userId;
+        if (newToken.isEmpty) return false;
+
+        // Atualizar config em memória
+        final newProd = MpCredentials(
+          accessToken: newToken,
+          publicKey:   _config.production.publicKey,
+          userId:      newUserId,
+          verified:    true,
+        );
+        _config = MpConfig(
+          mode:            _config.mode,
+          sandbox:         _config.sandbox,
+          production:      newProd,
+          comissaoPercent: _config.comissaoPercent,
+          notificationUrl: _config.notificationUrl,
+          backUrlSuccess:  _config.backUrlSuccess,
+          backUrlFailure:  _config.backUrlFailure,
+          backUrlPending:  _config.backUrlPending,
+          clientId:        cid,
+          clientSecret:    sec,
+        );
+
+        // Persistir novo token no Firestore (em background)
+        _cfgCollection?.doc('mercadopago').set({
+          'production': newProd.toMap(),
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true)).catchError((_) {});
+
+        notifyListeners();
+        if (kDebugMode) debugPrint('[MP] ✅ Token renovado: ${newToken.substring(0, 25)}...');
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MP] Erro ao renovar token: $e');
+    }
+    return false;
   }
 
   // ── Trocar modo (sandbox ↔ produção) ──────────────────────────────────────
@@ -492,6 +564,45 @@ class MercadoPagoService extends ChangeNotifier {
         },
         body: jsonEncode(body),
       );
+
+      // Token expirado (6h) → renovar via client_credentials e tentar de novo
+      if (response.statusCode == 401) {
+        if (kDebugMode) debugPrint('[MP] 401 — tentando renovar token...');
+        final renovado = await _renovarToken();
+        if (renovado) {
+          final newCreds = _config.active;
+          final retryResp = await http.post(
+            Uri.parse('$_baseUrl/v1/payments'),
+            headers: {
+              'Authorization':     'Bearer ${newCreds.accessToken}',
+              'Content-Type':      'application/json',
+              'X-Idempotency-Key': '${externalRef}_retry',
+            },
+            body: jsonEncode(body),
+          );
+          if (retryResp.statusCode == 201 || retryResp.statusCode == 200) {
+            final json    = jsonDecode(retryResp.body) as Map<String, dynamic>;
+            final txData  = json['point_of_interaction']?['transaction_data'];
+            _isLoading    = false;
+            notifyListeners();
+            return MpCheckoutResult(
+              success:      true,
+              preferenceId: json['id']?.toString(),
+              pixCode:      txData?['qr_code']        as String?,
+              pixQrBase64:  txData?['qr_code_base64'] as String?,
+            );
+          }
+          final errBody2 = jsonDecode(retryResp.body);
+          _lastError  = errBody2['message'] ?? 'Token inválido após renovação';
+          _isLoading  = false;
+          notifyListeners();
+          return MpCheckoutResult.error(_lastError!);
+        }
+        _lastError = 'Token expirado. Acesse Admin → Pagamentos e salve as credenciais novamente.';
+        _isLoading = false;
+        notifyListeners();
+        return MpCheckoutResult.error(_lastError!);
+      }
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final json     = jsonDecode(response.body) as Map<String, dynamic>;
