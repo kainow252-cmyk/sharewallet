@@ -5,8 +5,9 @@
 //
 // Fluxo de REGISTRO:
 //   1. Cria conta no Firebase Auth (email + senha)
-//   2. Cria documento em affiliates/{uid}    ← perfil do afiliado
+//   2. Cria documento em affiliates/{uid}    ← perfil no Firestore
 //   3. Cria documento em wallets/{uid}       ← carteira zerada automática
+//   4. Cria registro no D1 (Worker)          ← visível no painel Admin
 //
 // Fluxo de LOGIN:
 //   1. Autentica no Firebase Auth
@@ -19,6 +20,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import 'firebase_auth_service.dart';
+import 'cf_api_service.dart';
 
 // ── Resultado de operações do serviço ────────────────────────────────────────
 
@@ -133,6 +135,19 @@ class FirebaseUserService {
       if (sponsorId != null) {
         await _incrementarReferral(db, sponsorId);
       }
+
+      // 6. Sincronizar no D1 (Cloudflare Worker) — necessário para o painel Admin
+      await _sincronizarD1(
+        uid: uid,
+        nome: nome,
+        email: email,
+        cpf: cpf,
+        telefone: telefone,
+        affiliateCode: affiliateCode,
+        sponsorCode: sponsorCode,
+        pixKey: pixFinal,
+        pixKeyType: pixKeyType,
+      );
 
       if (kDebugMode) {
         debugPrint('[FirebaseUserService] ✅ Registro completo:');
@@ -354,6 +369,22 @@ class FirebaseUserService {
         'updated_at': FieldValue.serverTimestamp(),
       }).catchError((_) {});
 
+      final affiliateCode = _toStr(aData['affiliate_code'], fallback: _gerarCodigo(uid));
+
+      // Sincronizar com D1 em background (sem bloquear o login)
+      // Garante que afiliados antigos também apareçam no Admin
+      _sincronizarD1(
+        uid: uid,
+        nome: _toStr(aData['nome'], fallback: displayName ?? email.split('@').first),
+        email: email,
+        cpf: _toStr(aData['cpf']),
+        telefone: _toStr(aData['telefone']),
+        affiliateCode: affiliateCode,
+        sponsorCode: aData['sponsor_code']?.toString(),
+        pixKey: _toStr(aData['pix_key'], fallback: email),
+        pixKeyType: _toStr(aData['pix_key_type'], fallback: 'EMAIL'),
+      ).catchError((_) {});
+
       return UserModel(
         id: uid,
         nome: _toStr(aData['nome'],
@@ -361,8 +392,7 @@ class FirebaseUserService {
         cpf: _toStr(aData['cpf']),
         email: email,
         telefone: _toStr(aData['telefone']),
-        affiliateCode: _toStr(aData['affiliate_code'],
-            fallback: _gerarCodigo(uid)),
+        affiliateCode: affiliateCode,
         sponsorId: aData['sponsor_id']?.toString(),
         saldo: saldoDisponivel,
         status: _toStr(aData['status'], fallback: 'ativo'),
@@ -439,6 +469,60 @@ class FirebaseUserService {
         'updated_at': FieldValue.serverTimestamp(),
       });
     } catch (_) {}
+  }
+
+  /// Sincroniza o afiliado no banco D1 do Cloudflare Worker.
+  /// Isso torna o usuário visível no painel Admin (que lê do D1).
+  static Future<void> _sincronizarD1({
+    required String uid,
+    required String nome,
+    required String email,
+    required String cpf,
+    required String telefone,
+    required String affiliateCode,
+    String? sponsorCode,
+    String pixKey = '',
+    String pixKeyType = 'EMAIL',
+  }) async {
+    try {
+      // Verifica se já existe no D1 pelo email
+      final existing = await CfApiService.getAffiliateByEmail(email);
+      if (existing != null) {
+        if (kDebugMode) debugPrint('[FirebaseUserService] D1: afiliado já existe ($email)');
+        return;
+      }
+
+      // Cria no D1
+      final result = await CfApiService.createAffiliate({
+        'id': uid,
+        'nome': nome,
+        'email': email,
+        'cpf': cpf,
+        'telefone': telefone,
+        'affiliate_code': affiliateCode,
+        'sponsor_code': sponsorCode,
+        'pix_key': pixKey.isNotEmpty ? pixKey : email,
+        'pix_key_type': pixKeyType,
+        'status': 'ativo',
+        'saldo_disponivel': 0.0,
+        'saldo_pendente': 0.0,
+        'total_comissoes': 0.0,
+        'total_sacado': 0.0,
+        'total_indicados': 0,
+        'total_assinaturas': 0,
+      });
+
+      if (kDebugMode) {
+        if (result != null) {
+          debugPrint('[FirebaseUserService] ✅ D1 sincronizado: $affiliateCode');
+        } else {
+          debugPrint('[FirebaseUserService] ⚠️ D1 falhou (será reprocessado no login)');
+        }
+      }
+    } catch (e) {
+      // Não bloqueia o cadastro se o D1 falhar
+      if (kDebugMode) debugPrint('[FirebaseUserService] Erro D1: $e');
+    }
   }
 
   /// Gera código de 6 caracteres baseado no nome/uid.
