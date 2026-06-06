@@ -111,38 +111,6 @@ class _MpCheckoutScreenState extends State<MpCheckoutScreen>
     }
   }
 
-  Future<void> _simularPagamento() async {
-    setState(() => _isLoading = true);
-
-    final mpSvc = context.read<MercadoPagoService>();
-    final auth = context.read<AuthService>();
-    final user = auth.currentUser;
-
-    final ok = await mpSvc.simularPagamentoAprovado(
-      userId: user?.id ?? 'demo_user_1',
-      produtoId: widget.product.id,
-      produtoNome: widget.product.nome,
-      valor: widget.product.valor,
-      affiliateId: user?.id ?? 'demo_user_1',
-      affiliateCode: widget.affiliateCode,
-    );
-
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      if (ok) _step = _CheckoutStep.success;
-    });
-
-    if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erro ao simular pagamento. Tente novamente.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -205,7 +173,6 @@ class _MpCheckoutScreenState extends State<MpCheckoutScreen>
           checkoutUrl: _checkoutResult?.checkoutUrl ?? '',
           preferenceId: _checkoutResult?.preferenceId ?? '',
           onAbrirMP: _abrirMercadoPago,
-          onSimular: _simularPagamento,
           isLoading: _isLoading,
         );
       case _CheckoutStep.success:
@@ -264,32 +231,7 @@ class _FormStep extends StatelessWidget {
             _ProductCard(product: product),
             const SizedBox(height: 24),
 
-            // ── Badge sandbox ──────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3CD),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFFE083)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.science_rounded,
-                      color: Color(0xFFE65100), size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Modo Sandbox — Pagamentos de teste. Use o usuário TESTUSER319132183442306970',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF7B3F00),
-                          fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 4),
 
             const _SectionHeader(icon: Icons.person_rounded, title: 'Seus Dados'),
             const SizedBox(height: 12),
@@ -422,7 +364,6 @@ class _CheckoutLinkStep extends StatelessWidget {
   final String checkoutUrl;
   final String preferenceId;
   final VoidCallback onAbrirMP;
-  final VoidCallback onSimular;
   final bool isLoading;
 
   const _CheckoutLinkStep({
@@ -431,7 +372,6 @@ class _CheckoutLinkStep extends StatelessWidget {
     required this.checkoutUrl,
     required this.preferenceId,
     required this.onAbrirMP,
-    required this.onSimular,
     required this.isLoading,
   });
 
@@ -614,52 +554,6 @@ class _CheckoutLinkStep extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // ── Botão: Simular pagamento aprovado ────────────────────────────
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: isLoading ? null : onSimular,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.success.withValues(alpha: 0.12),
-                foregroundColor: AppColors.success,
-                elevation: 0,
-                side: const BorderSide(color: AppColors.success, width: 1.5),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-              ),
-              child: isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppColors.success),
-                    )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.check_circle_rounded, size: 20),
-                        SizedBox(width: 8),
-                        Text('Simular Pagamento Aprovado',
-                            style: TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w700)),
-                      ],
-                    ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Center(
-            child: Text(
-              'Simula aprovação → credita comissão na sua carteira',
-              style: TextStyle(
-                  fontSize: 10,
-                  color: AppColors.textHint.withValues(alpha: 0.8)),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Dados de teste sandbox ───────────────────────────────────────
-          _SandboxInfo(),
           const SizedBox(height: 20),
         ],
       ),
@@ -1093,77 +987,6 @@ class _ResumoRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SandboxInfo extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3E5F5),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFCE93D8)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.info_outline_rounded,
-                  color: Color(0xFF7B1FA2), size: 16),
-              SizedBox(width: 8),
-              Text(
-                'Dados de Teste Sandbox',
-                style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF7B1FA2),
-                    fontSize: 13),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _InfoRow(label: 'Usuário:', value: 'TESTUSER319132183442306970'),
-          _InfoRow(label: 'Senha:', value: 'O3gLaNsAT6'),
-          _InfoRow(label: 'Ambiente:', value: 'Mercado Pago Sandbox'),
-          _InfoRow(
-              label: 'Cartão teste:',
-              value: '5031 4332 1540 6351 • CVV 123'),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _InfoRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF7B1FA2))),
-          ),
-          Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 11, color: Color(0xFF4A148C))),
-          ),
-        ],
-      ),
     );
   }
 }
