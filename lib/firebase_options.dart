@@ -37,7 +37,7 @@ class DefaultFirebaseOptions {
     appId: '1:470218127330:web:310f8672bbdefe2f4aabbb',
     messagingSenderId: '470218127330',
     projectId: 'affiliate-wallet-75853',
-    authDomain: 'sharewallet.com.br',
+    authDomain: 'affiliate-wallet-75853.firebaseapp.com',
     storageBucket: 'affiliate-wallet-75853.firebasestorage.app',
   );
 
