@@ -42,12 +42,21 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted || result == null) return;
     if (result.success) {
       final auth = context.read<AuthService>();
+      final providerName = result.provider == FirebaseAuthProvider.facebook
+          ? 'facebook'
+          : 'google';
+
+      // Facebook em modo dev pode não ter email
+      final email = (result.email?.isNotEmpty == true)
+          ? result.email!
+          : '${result.uid}@${providerName}-login.com';
+
       final ok = await auth.loginWithFirebase(
         uid: result.uid!,
-        email: result.email ?? '',
+        email: email,
         displayName: result.displayName,
         idToken: result.idToken,
-        provider: 'google',
+        provider: providerName,
       );
       if (!mounted) return;
       if (ok) Navigator.pushReplacementNamed(context, '/home');
@@ -96,10 +105,19 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       final err = result.error ?? '';
-      if (err == 'UNAUTHORIZED_DOMAIN') {
+      if (err == 'REDIRECT_INITIATED') {
+        // Redirect iniciado — página vai recarregar, não mostrar erro
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Redirecionando para o Google...'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else if (err == 'UNAUTHORIZED_DOMAIN') {
         _showDomainError();
       } else if (err.startsWith('FIREBASE_ERR:') || err.startsWith('ERR:')) {
-        // Mostra erro real para diagnóstico
         _showError(err);
       } else if (err.isNotEmpty && err != 'Login com Google cancelado.') {
         _showError(err);
@@ -137,7 +155,16 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       final err = result.error ?? '';
-      if (err == 'FACEBOOK_NOT_CONFIGURED') {
+      if (err == 'REDIRECT_INITIATED') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Redirecionando para o Facebook...'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else if (err == 'FACEBOOK_NOT_CONFIGURED') {
         _showFacebookConfigError();
       } else if (err == 'FACEBOOK_DOMAIN_ERROR') {
         _showFacebookDomainError();

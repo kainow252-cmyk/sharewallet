@@ -215,6 +215,7 @@ class FirebaseAuthService {
     googleProvider.addScope('profile');
 
     try {
+      // Tenta popup primeiro; se bloqueado/falhar, cai no redirect
       final userCredential = await _auth.signInWithPopup(googleProvider);
       final idToken = await userCredential.user?.getIdToken();
       return FirebaseAuthResult(
@@ -237,13 +238,17 @@ class FirebaseAuthService {
         );
       }
 
-      if (code == 'unauthorized-domain' ||
-          code == 'popup-blocked' ||
+      // Se popup bloqueado ou domínio com problema → tenta redirect
+      if (code == 'popup-blocked' ||
+          code == 'unauthorized-domain' ||
           msg.contains('domain') ||
           msg.contains('not authorized') ||
-          msg.contains('origin')) {
+          msg.contains('origin') ||
+          msg.contains('popup')) {
+        // Redireciona para auth do Google — resultado capturado no getRedirectResult()
+        await _auth.signInWithRedirect(googleProvider);
         return FirebaseAuthResult.failure(
-          'UNAUTHORIZED_DOMAIN',
+          'REDIRECT_INITIATED',
           provider: FirebaseAuthProvider.google,
         );
       }
@@ -254,12 +259,11 @@ class FirebaseAuthService {
       );
     } catch (e) {
       final s = e.toString().toLowerCase();
-      if (s.contains('domain') ||
-          s.contains('unauthorized') ||
-          s.contains('origin') ||
-          s.contains('not authorized')) {
+      if (s.contains('popup') || s.contains('blocked')) {
+        final GoogleAuthProvider gp2 = GoogleAuthProvider();
+        await _auth.signInWithRedirect(gp2);
         return FirebaseAuthResult.failure(
-          'UNAUTHORIZED_DOMAIN',
+          'REDIRECT_INITIATED',
           provider: FirebaseAuthProvider.google,
         );
       }
@@ -276,6 +280,14 @@ class FirebaseAuthService {
       final result = await _auth.getRedirectResult();
       if (result.user == null) return null;
       final idToken = await result.user?.getIdToken();
+
+      // Detectar provider pelo providerId
+      FirebaseAuthProvider prov = FirebaseAuthProvider.google;
+      final providerId = result.credential?.providerId ?? '';
+      if (providerId.contains('facebook')) {
+        prov = FirebaseAuthProvider.facebook;
+      }
+
       return FirebaseAuthResult(
         success: true,
         uid: result.user?.uid,
@@ -283,7 +295,7 @@ class FirebaseAuthService {
         displayName: result.user?.displayName,
         photoUrl: result.user?.photoURL,
         idToken: idToken,
-        provider: FirebaseAuthProvider.google,
+        provider: prov,
       );
     } catch (_) {
       return null;
@@ -358,13 +370,7 @@ class FirebaseAuthService {
   }
 
   static Future<FirebaseAuthResult> _signInWithFacebookWeb() async {
-    // Usa signInWithPopup SEM nenhum scope adicional.
-    // O Firebase Auth web chama o endpoint OAuth do Facebook diretamente
-    // sem depender do FB JS SDK (que exige "Login com SDK do JavaScript" ativo).
-    // O Facebook entrega public_profile por padrão; email chega quando
-    // o app estiver em modo Live no Meta.
     final provider = FacebookAuthProvider();
-    // NÃO adicionar nenhum scope — evita error_code=100 e independe do JS SDK
 
     try {
       final userCredential = await _auth.signInWithPopup(provider);
@@ -394,10 +400,13 @@ class FirebaseAuthService {
           provider: FirebaseAuthProvider.facebook,
         );
       }
-      if (code == 'unauthorized-domain' ||
+      // popup bloqueado → redirect
+      if (code == 'popup-blocked' ||
+          code == 'unauthorized-domain' ||
           (e.message?.toLowerCase().contains('domain') == true)) {
+        await _auth.signInWithRedirect(FacebookAuthProvider());
         return FirebaseAuthResult.failure(
-          'FACEBOOK_DOMAIN_ERROR',
+          'REDIRECT_INITIATED',
           provider: FirebaseAuthProvider.facebook,
         );
       }
@@ -410,6 +419,13 @@ class FirebaseAuthService {
       if (s.contains('popup') && s.contains('close')) {
         return FirebaseAuthResult.failure(
           'Login com Facebook cancelado.',
+          provider: FirebaseAuthProvider.facebook,
+        );
+      }
+      if (s.contains('popup') || s.contains('blocked')) {
+        await _auth.signInWithRedirect(FacebookAuthProvider());
+        return FirebaseAuthResult.failure(
+          'REDIRECT_INITIATED',
           provider: FirebaseAuthProvider.facebook,
         );
       }
