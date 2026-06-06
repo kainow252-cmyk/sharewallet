@@ -33,30 +33,32 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
   }
 
   Future<void> _loadReferrals() async {
+    // Cache: não recarrega se já tem dados
+    if (_referrals.isNotEmpty) {
+      setState(() => _loading = false);
+      return;
+    }
     setState(() => _loading = true);
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        setState(() { _referrals = []; _totalAssinaturas = 0; _comissaoMensal = 0; });
+        return;
+      }
 
-      // Tentar carregar referrals reais, senão usar demo
-      var snap = await FirestoreService.collection('referrals')
+      // Uma única query — sem fallback demo
+      final snap = await FirestoreService.collection('referrals')
           ?.where('referrer_id', isEqualTo: uid)
           .get();
 
-      if (snap == null || snap.docs.isEmpty) {
-        snap = await FirestoreService.collection('referrals')
-            ?.where('referrer_id', isEqualTo: 'demo_user_1')
-            .get();
-      }
-
-      if (snap != null) {
+      if (snap != null && snap.docs.isNotEmpty) {
         final list = snap.docs.map((d) {
           final data = Map<String, dynamic>.from(d.data());
           data['id'] = d.id;
           return data;
         }).toList();
 
-        final ativos =
-            list.where((r) => r['status'] == 'ATIVO').toList();
+        final ativos = list.where((r) => r['status'] == 'ATIVO').toList();
         final comissao = ativos.fold<double>(
             0, (s, r) => s + FirestoreService.toDouble(r['comissao_mensal']));
 
@@ -65,13 +67,13 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
           _totalAssinaturas = ativos.length;
           _comissaoMensal = comissao;
         });
+      } else {
+        // Sem dados reais — zera (não injeta mock)
+        setState(() { _referrals = []; _totalAssinaturas = 0; _comissaoMensal = 0; });
       }
     } catch (e) {
       debugPrint('[IndicacoesScreen] Erro: $e');
-      setState(() {
-        _totalAssinaturas = 15;
-        _comissaoMensal = 42.80;
-      });
+      setState(() { _referrals = []; _totalAssinaturas = 0; _comissaoMensal = 0; });
     } finally {
       setState(() => _loading = false);
     }

@@ -18,6 +18,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
   final _fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
   bool _saldoVisible = true;
   bool _loadingWallet = false;
+  bool _jaCarregou = false; // cache: evita reload ao voltar para aba
 
   // Dados da carteira do Firestore
   double _saldoDisponivel = 0;
@@ -32,44 +33,41 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadWallet());
   }
 
-  Future<void> _loadWallet() async {
+  Future<void> _loadWallet({bool forceRefresh = false}) async {
+    // Cache: não recarrega se já carregou (exceto pull-to-refresh)
+    if (_jaCarregou && !forceRefresh) return;
     setState(() => _loadingWallet = true);
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
 
-      // Carregar carteira do Firestore
-      final walletDoc =
-          await FirestoreService.collection('wallets')?.doc(uid).get();
+      // Queries paralelas com tipos corretos
+      final walletFuture = FirestoreService.collection('wallets')?.doc(uid).get();
+      final txFuture = FirestoreService.collection('wallet_transactions')
+          ?.where('user_id', isEqualTo: uid).get();
 
+      final walletDoc = walletFuture != null ? await walletFuture : null;
+      final txSnap    = txFuture    != null ? await txFuture    : null;
+
+      // Wallet
       if (walletDoc != null && walletDoc.exists) {
         final data = walletDoc.data()!;
         setState(() {
           _saldoDisponivel = FirestoreService.toDouble(data['saldo_disponivel']);
-          _saldoPendente = FirestoreService.toDouble(data['saldo_pendente']);
-          _totalRecebido = FirestoreService.toDouble(data['total_recebido']);
+          _saldoPendente   = FirestoreService.toDouble(data['saldo_pendente']);
+          _totalRecebido   = FirestoreService.toDouble(data['total_recebido']);
         });
       } else {
-        // Carteira ainda não existe — saldo zero (novo afiliado)
         setState(() {
           _saldoDisponivel = 0.0;
-          _saldoPendente = 0.0;
-          _totalRecebido = 0.0;
+          _saldoPendente   = 0.0;
+          _totalRecebido   = 0.0;
         });
       }
 
-      // Carregar transações
-      final txSnap = await FirestoreService.collection('wallet_transactions')
-          ?.where('user_id', isEqualTo: uid)
-          .get();
-      final demoTxSnap = txSnap?.docs.isEmpty == true
-          ? await FirestoreService.collection('wallet_transactions')
-              ?.where('user_id', isEqualTo: 'demo_user_1')
-              .get()
-          : txSnap;
-
-      if (demoTxSnap != null) {
-        final txList = demoTxSnap.docs.map((d) {
+      // Transações
+      if (txSnap != null && txSnap.docs.isNotEmpty) {
+        final txList = txSnap.docs.map((d) {
           final data = Map<String, dynamic>.from(d.data());
           data['id'] = d.id;
           return data;
@@ -81,16 +79,18 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
           return bDate.compareTo(aDate);
         });
         setState(() => _transacoes = txList);
+      } else {
+        setState(() => _transacoes = []);
       }
     } catch (e) {
       debugPrint('[CarteiraScreen] Erro: $e');
-      // Erro ao carregar — zera para não exibir valores falsos
       setState(() {
         _saldoDisponivel = 0.0;
-        _saldoPendente = 0.0;
-        _totalRecebido = 0.0;
+        _saldoPendente   = 0.0;
+        _totalRecebido   = 0.0;
       });
     } finally {
+      _jaCarregou = true;
       setState(() => _loadingWallet = false);
     }
   }
@@ -128,7 +128,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
               backgroundColor: AppColors.success,
             ),
           );
-          await _loadWallet();
+          await _loadWallet(forceRefresh: true);
         },
       ),
     );
@@ -143,7 +143,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
-        onRefresh: _loadWallet,
+        onRefresh: () => _loadWallet(forceRefresh: true),
         color: const Color(0xFF00E5B4),
         child: CustomScrollView(
           slivers: [
