@@ -541,29 +541,16 @@ class _CredentialsCardState extends State<_CredentialsCard> {
             if (_editing) ...[
               const SizedBox(height: 16),
 
-              // Aviso sandbox
-              if (widget.isSandbox)
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3CD),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFFE083)),
-                  ),
-                  child: const Text(
-                    '🧪 Use credenciais de TESTE do Mercado Pago.\n'
-                    'Acesse: mercadopago.com.br → Suas integrações → Credenciais de teste',
-                    style: TextStyle(
-                        fontSize: 11, color: Color(0xFF7B3F00)),
-                  ),
-                ),
+              // Guia de onde encontrar as credenciais
+              widget.isSandbox
+                  ? _GuiaCredenciais.sandbox()
+                  : _GuiaCredenciais.producao(),
 
               // Access Token
               _EditField(
                 controller: _tokenCtrl,
-                label: 'Access Token',
-                hint: 'APP_USR-...',
+                label: widget.isSandbox ? 'Access Token (TEST-...)' : 'Access Token (APP_USR-...)',
+                hint: widget.isSandbox ? 'TEST-...' : 'APP_USR-...',
                 icon: Icons.key_rounded,
                 obscure: true,
               ),
@@ -1179,6 +1166,187 @@ class _EditFieldState extends State<_EditField> {
               )
             : null,
         isDense: true,
+      ),
+    );
+  }
+}
+
+// ── Guia visual de onde encontrar as credenciais MP ───────────────────────────
+class _GuiaCredenciais extends StatelessWidget {
+  final bool isSandbox;
+  const _GuiaCredenciais({required this.isSandbox});
+
+  factory _GuiaCredenciais.sandbox() =>
+      const _GuiaCredenciais(isSandbox: true);
+  factory _GuiaCredenciais.producao() =>
+      const _GuiaCredenciais(isSandbox: false);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: isSandbox
+            ? const Color(0xFFFFF8E1)
+            : const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isSandbox
+              ? const Color(0xFFFFCC02)
+              : const Color(0xFF4CAF50),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Título
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSandbox
+                  ? const Color(0xFFFFCC02).withValues(alpha: 0.3)
+                  : const Color(0xFF4CAF50).withValues(alpha: 0.2),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(10)),
+            ),
+            child: Row(
+              children: [
+                Text(isSandbox ? '🧪' : '🔑',
+                    style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 6),
+                Text(
+                  isSandbox
+                      ? 'Onde encontrar as credenciais TESTE'
+                      : 'Onde encontrar as credenciais de PRODUÇÃO',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: isSandbox
+                        ? const Color(0xFF7B3F00)
+                        : const Color(0xFF1B5E20),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Passos
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: isSandbox
+                  ? _passosSandbox()
+                  : _passosProducao(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _passosSandbox() => [
+        _Passo(n: '1', texto: 'Acesse mercadopago.com.br e faça login'),
+        _Passo(
+            n: '2',
+            texto: 'Vá em: Seu perfil → Seu negócio → Configurações → Gestão e administração → Credenciais'),
+        _Passo(
+            n: '3',
+            texto: 'Clique na aba "Credenciais de teste"'),
+        _Passo(
+            n: '4',
+            texto: 'Copie o Access Token (começa com TEST-...)'),
+        _Passo(
+            n: '5',
+            texto: 'Copie a Public Key (começa com TEST-...)'),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF6900).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Text(
+            '⚠️ Token sandbox começa com TEST-...\n'
+            'Token APP_USR-... é de PRODUÇÃO e não funciona em modo sandbox!',
+            style: TextStyle(
+                fontSize: 10,
+                color: Color(0xFF7B3F00),
+                fontWeight: FontWeight.w600),
+          ),
+        ),
+      ];
+
+  List<Widget> _passosProducao() => [
+        _Passo(n: '1', texto: 'Acesse mercadopago.com.br e faça login'),
+        _Passo(
+            n: '2',
+            texto: 'Vá em: Seu perfil → Seu negócio → Configurações → Gestão e administração → Credenciais'),
+        _Passo(
+            n: '3',
+            texto: 'Clique na aba "Credenciais de produção"'),
+        _Passo(
+            n: '4',
+            texto: 'Copie o Access Token (começa com APP_USR-...)'),
+        _Passo(
+            n: '5',
+            texto: 'Copie a Public Key (começa com APP_USR-...)'),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Text(
+            '💡 Atenção: a "Chave secreta" e o "ID do aplicativo" visíveis\n'
+            'no painel de Desenvolvedores NÃO são o Access Token!\n'
+            'O Access Token fica em: Configurações → Credenciais de produção.',
+            style: TextStyle(
+                fontSize: 10,
+                color: Color(0xFF1B5E20),
+                fontWeight: FontWeight.w600),
+          ),
+        ),
+      ];
+}
+
+class _Passo extends StatelessWidget {
+  final String n;
+  final String texto;
+  const _Passo({required this.n, required this.texto});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 18,
+            height: 18,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: Color(0xFF009EE3),
+              shape: BoxShape.circle,
+            ),
+            child: Text(n,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              texto,
+              style: const TextStyle(
+                  fontSize: 11, color: AppColors.textSecondary),
+            ),
+          ),
+        ],
       ),
     );
   }
