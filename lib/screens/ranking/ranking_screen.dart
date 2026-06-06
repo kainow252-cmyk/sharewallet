@@ -61,7 +61,7 @@ class _RankingScreenState extends State<RankingScreen> {
           slivers: [
             // ── AppBar ─────────────────────────────────────────────────
             SliverAppBar(
-              expandedHeight: 120,
+              expandedHeight: 140,
               pinned: true,
               automaticallyImplyLeading: false,
               backgroundColor: const Color(0xFF0A1628),
@@ -76,7 +76,7 @@ class _RankingScreenState extends State<RankingScreen> {
                   ),
                   child: SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 44),
                       child: Row(
                         children: [
                           const Icon(Icons.emoji_events_rounded,

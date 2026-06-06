@@ -144,7 +144,7 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
           slivers: [
             // ── AppBar ───────────────────────────────────────────────────
             SliverAppBar(
-              expandedHeight: 180,
+              expandedHeight: 200,
               pinned: true,
               automaticallyImplyLeading: false,
               backgroundColor: AppColors.primary,
@@ -155,7 +155,7 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
                   ),
                   child: SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 44),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

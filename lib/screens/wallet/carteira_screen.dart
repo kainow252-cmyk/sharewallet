@@ -103,7 +103,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
               slivers: [
                 // ── AppBar ──────────────────────────────────────────────────
                 SliverAppBar(
-                  expandedHeight: 200,
+                  expandedHeight: 220,
                   pinned: true,
                   automaticallyImplyLeading: false,
                   backgroundColor: const Color(0xFF0A1628),
@@ -118,7 +118,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
                       ),
                       child: SafeArea(
                         child: Padding(
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 44),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
