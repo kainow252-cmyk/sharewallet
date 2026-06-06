@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -176,10 +177,15 @@ class MercadoPagoService extends ChangeNotifier {
   static const _databaseId = 'affiliatewalletwallet';
   static FirebaseFirestore? _dbInst;
   static FirebaseFirestore? get _db {
-    _dbInst ??= FirebaseFirestore.instanceFor(
-      app: FirebaseFirestore.instance.app,
-      databaseId: _databaseId,
-    );
+    if (_dbInst != null) return _dbInst;
+    try {
+      // Usa Firebase.app() para NÃO abrir o banco "(default)"
+      // Abrir FirebaseFirestore.instance dispara WebChannel no banco errado
+      _dbInst = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: _databaseId,
+      );
+    } catch (_) {}
     return _dbInst;
   }
   static CollectionReference<Map<String, dynamic>>? get _cfgCollection =>

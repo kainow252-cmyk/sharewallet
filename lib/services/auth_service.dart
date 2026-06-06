@@ -38,15 +38,19 @@ class AuthService extends ChangeNotifier {
         }
       }
 
-      // 2. Fallback: token local (compatibilidade com modo API)
-      await ApiService.loadToken();
-      if (ApiService.hasToken && !_isFirebaseMode) {
-        final response = await ApiService.get('/auth/me');
-        if (response.success && response.data != null) {
-          _currentUser =
-              UserModel.fromJson(response.data as Map<String, dynamic>);
-        } else {
-          await ApiService.clearToken();
+      // 2. Fallback: token local (apenas quando Firebase NÃO está ativo)
+      // ⚠️ Não tenta conectar em localhost quando Firebase está disponível —
+      //    evita 15 s de timeout travando a splash em produção.
+      if (!_isFirebaseMode) {
+        await ApiService.loadToken();
+        if (ApiService.hasToken) {
+          final response = await ApiService.get('/auth/me');
+          if (response.success && response.data != null) {
+            _currentUser =
+                UserModel.fromJson(response.data as Map<String, dynamic>);
+          } else {
+            await ApiService.clearToken();
+          }
         }
       }
     } catch (e) {
