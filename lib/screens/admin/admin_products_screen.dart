@@ -16,6 +16,20 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
   String _search = '';
 
   @override
+  void initState() {
+    super.initState();
+    // Garante carregamento mesmo quando tela é montada pelo IndexedStack
+    // antes de loadAll() terminar (timing race condition)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final svc = context.read<AdminService>();
+      // Recarrega se a lista estiver vazia (pode ser que loadAll ainda não terminou)
+      if (svc.products.isEmpty && !svc.isLoading) {
+        svc.loadProducts();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final svc = context.watch<AdminService>();
     final produtos = svc.products
@@ -29,6 +43,25 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       appBar: AppBar(
         title: const Text('Produtos'),
         actions: [
+          // Botão de refresh manual
+          if (svc.isLoading)
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: 'Recarregar produtos',
+              onPressed: () => svc.loadProducts(),
+            ),
           IconButton(
             icon: const Icon(Icons.add_rounded),
             tooltip: 'Novo produto',

@@ -497,6 +497,10 @@ class AdminService extends ChangeNotifier {
 
   // ── Produtos (CRUD admin) ─────────────────────────────────────────────────
   Future<void> loadProducts() async {
+    // Sinaliza carregamento para a UI exibir o loading indicator
+    _isLoading = true;
+    notifyListeners();
+
     try {
       if (_useFirestore) {
         final snap = await FirestoreService.products?.get();
@@ -508,19 +512,29 @@ class AdminService extends ChangeNotifier {
           }).toList();
           // Ordenar por nome em memória
           _products.sort((a, b) => a.nome.compareTo(b.nome));
-          if (kDebugMode) {
-            debugPrint('[AdminService] ${_products.length} produtos carregados do Firestore');
-          }
+          debugPrint('[AdminService] ${_products.length} produtos carregados do Firestore');
+          _isLoading = false;
+          notifyListeners();
+          return;
+        } else {
+          // Firestore retornou 0 docs — não usa mock, mantém lista vazia
+          debugPrint('[AdminService] Firestore retornou snap vazio para products');
+          _products = [];
+          _isLoading = false;
           notifyListeners();
           return;
         }
       }
     } catch (e) {
       debugPrint('[AdminService] Erro ao carregar produtos: $e');
+      _error = 'Erro ao carregar produtos: $e';
     }
 
-    // Fallback para mock
-    _products = ProductModel.mockProducts;
+    // Só usa mock se o Firebase não estiver disponível (modo demo)
+    if (!_useFirestore) {
+      _products = ProductModel.mockProducts;
+    }
+    _isLoading = false;
     notifyListeners();
   }
 
