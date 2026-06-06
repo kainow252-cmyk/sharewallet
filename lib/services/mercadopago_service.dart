@@ -72,15 +72,15 @@ class MpConfig {
   MpCredentials get active => isSandbox ? sandbox : production;
 
   factory MpConfig.defaultConfig() => MpConfig(
-        // Modo produção com credenciais da conta real (client_credentials OAuth)
-        // Token expira a cada 6h — renovado automaticamente via clientId+clientSecret
-        mode: 'production',
-        clientId:     '4493562791162337',
-        clientSecret: 'NiedJYvJnAX6G7JLPIzIfF3xSybXoyS5',
+        // Credenciais de produção MercadoPago — conta kainow
+        // Token renovado automaticamente via client_credentials (expira 6h)
+        mode:         'production',
+        clientId:     '6134195606061357',
+        clientSecret: 'vEPExNKearTDJH5CMi3dSh1yZ22atDTr',
         sandbox: MpCredentials.empty(),
         production: MpCredentials.fromMap({
-          'access_token': 'APP_USR-4493562791162337-060618-dbba35b7784dc2366844eaae4bbdc03e-3235638414',
-          'public_key':   '',
+          'access_token': 'APP_USR-6134195606061357-042317-6774542c427c45a6f274a4e19d7019c3-3235638414',
+          'public_key':   'APP_USR-1ca2945d-477b-4691-8976-8a27dc2e806e',
           'user_id':      '3235638414',
           'verified':     true,
         }),
