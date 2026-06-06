@@ -191,7 +191,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
                   SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'O saque será processado via Woovi (PIX Subconta).',
+                      'O saque será processado via transferência PIX direta.',
                       style: TextStyle(
                           color: AppColors.info, fontSize: 12),
                     ),

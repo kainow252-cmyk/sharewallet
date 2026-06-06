@@ -128,15 +128,14 @@ class ProfileScreen extends StatelessWidget {
 
                 const SizedBox(height: 12),
 
-                // Woovi / PIX
+                // Chave PIX para recebimento
                 _InfoSection(
-                  title: 'Carteira PIX (Woovi)',
+                  title: 'Recebimento PIX',
                   items: [
                     _InfoItem(
                       icon: Icons.pix_rounded,
-                      label: 'Subconta Woovi',
-                      value: user?.wooviSubaccountId ?? 'Não configurada',
-                      isProtected: true,
+                      label: 'Chave PIX',
+                      value: user?.email ?? 'Não configurada',
                     ),
                     _InfoItem(
                       icon: Icons.account_balance_rounded,

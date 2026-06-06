@@ -162,7 +162,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  void _showSuccessDialog([bool wooviCreated = false]) {
+  void _showSuccessDialog([bool walletCreated = false]) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -188,7 +188,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     color: AppColors.textPrimary)),
             const SizedBox(height: 8),
             const Text(
-              'Sua subconta PIX Woovi foi criada automaticamente. Você já pode receber comissões!',
+              'Sua conta foi criada com sucesso. Você já pode compartilhar seu link e começar a ganhar comissões!',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textSecondary, height: 1.5),
             ),
@@ -199,16 +199,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(Icons.pix_rounded, color: AppColors.primary, size: 20),
-                  const SizedBox(width: 8),
+                  Icon(Icons.pix_rounded, color: AppColors.primary, size: 20),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      wooviCreated
-                          ? 'Subconta Woovi ativada via PIX'
-                          : 'Configure sua chave PIX no Perfil',
-                      style: const TextStyle(
+                      'Pagamentos processados via Mercado Pago',
+                      style: TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w600,
                           fontSize: 13),
@@ -508,11 +506,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.pix_rounded,
+                              Icon(Icons.security_rounded,
                                   color: AppColors.primary, size: 16),
                               SizedBox(width: 6),
                               Text(
-                                'Subconta Woovi criada automaticamente',
+                                'Pagamentos seguros via Mercado Pago',
                                 style: TextStyle(
                                     fontSize: 12,
                                     color: AppColors.textSecondary),

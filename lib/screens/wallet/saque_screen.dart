@@ -121,7 +121,7 @@ class _SaqueScreenState extends State<SaqueScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Seu PIX será processado em até 1 hora útil via Woovi.',
+              'Seu PIX será processado em até 1 hora útil.',
               textAlign: TextAlign.center,
               style: TextStyle(
                   color: AppColors.textSecondary, fontSize: 14, height: 1.5),
@@ -217,7 +217,7 @@ class _SaqueScreenState extends State<SaqueScreen> {
                           const Icon(Icons.pix_rounded,
                               color: AppColors.goldLight, size: 16),
                           const SizedBox(width: 6),
-                          const Text('PIX via Woovi/OpenPix',
+                          const Text('PIX Direto',
                               style: TextStyle(
                                   color: AppColors.goldLight, fontSize: 12)),
                           const Spacer(),
@@ -406,7 +406,7 @@ class _SaqueScreenState extends State<SaqueScreen> {
                         ],
                       ),
                       SizedBox(height: 10),
-                      _InfoRow(text: 'Processado via Woovi/OpenPix'),
+                      _InfoRow(text: 'Transferência PIX direta'),
                       _InfoRow(text: 'PIX creditado em até 1 hora útil'),
                       _InfoRow(text: 'Valor mínimo: R\$ 10,00'),
                       _InfoRow(text: 'Sem taxas para o afiliado'),

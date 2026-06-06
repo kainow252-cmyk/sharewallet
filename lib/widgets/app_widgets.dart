@@ -196,7 +196,7 @@ class BalanceCard extends StatelessWidget {
               children: [
                 const Icon(Icons.pix_rounded, color: AppColors.goldLight, size: 16),
                 const SizedBox(width: 6),
-                const Text('PIX via Woovi',
+                const Text('Pagamento via PIX',
                     style: TextStyle(color: AppColors.goldLight, fontSize: 12, fontWeight: FontWeight.w600)),
               ],
             ),
