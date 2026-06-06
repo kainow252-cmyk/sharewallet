@@ -267,6 +267,33 @@ class FirebaseUserService {
 
   // ── Atualizar saldo local no Firestore ─────────────────────────────────
 
+  /// Atualiza dados do perfil do afiliado no Firestore.
+  static Future<void> atualizarPerfil({
+    required String uid,
+    required String nome,
+    required String telefone,
+    required String cpf,
+    required String pixKey,
+  }) async {
+    try {
+      final db = _getDb();
+      if (db == null) return;
+
+      await db.collection('affiliates').doc(uid).update({
+        'nome': nome,
+        'telefone': telefone,
+        'cpf': cpf,
+        'pix_key': pixKey,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      if (kDebugMode) debugPrint('[FirebaseUserService] ✅ Perfil atualizado: $uid');
+    } catch (e) {
+      if (kDebugMode) debugPrint('[FirebaseUserService] Erro atualizarPerfil: $e');
+      rethrow;
+    }
+  }
+
   /// Atualiza saldo disponível na carteira do usuário.
   static Future<void> atualizarSaldo(String uid, double novoSaldo) async {
     try {

@@ -66,12 +66,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   child: Column(
                     children: [
                       Container(
-                        height: 50,
+                        height: 56,
                         color: AppColors.surface,
+                        padding: const EdgeInsets.only(top: 4),
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                              horizontal: 16, vertical: 6),
                           itemCount: ps.categories.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(width: 8),

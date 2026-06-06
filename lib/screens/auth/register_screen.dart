@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/firebase_auth_service.dart';
+import '../../services/firebase_user_service.dart';
+import '../../services/cf_api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
 
@@ -110,7 +112,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       setState(() => _socialLoading = false);
       if (ok) {
-        _showSuccessDialog(false);
+        // Verifica se precisa completar dados (CPF / telefone)
+        final user = auth.currentUser;
+        final precisaCompletar = (user?.cpf.isEmpty ?? true) ||
+            (user?.telefone.isEmpty ?? true);
+        if (precisaCompletar && mounted) {
+          await _mostrarCompletarCadastro(context, auth);
+        } else {
+          _showSuccessDialog(false);
+        }
       } else {
         _showError(auth.error ?? 'Erro ao criar conta com Google');
       }
@@ -144,7 +154,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       setState(() => _socialLoading = false);
       if (ok) {
-        _showSuccessDialog(false);
+        // Verifica se precisa completar dados (CPF / telefone)
+        final user = auth.currentUser;
+        final precisaCompletar = (user?.cpf.isEmpty ?? true) ||
+            (user?.telefone.isEmpty ?? true);
+        if (precisaCompletar && mounted) {
+          await _mostrarCompletarCadastro(context, auth);
+        } else {
+          _showSuccessDialog(false);
+        }
       } else {
         _showError(auth.error ?? 'Erro ao criar conta com Facebook');
       }
@@ -160,6 +178,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: AppColors.error),
     );
+  }
+
+  // ── Modal: completar dados após login social ─────────────────────────────────
+  Future<void> _mostrarCompletarCadastro(
+      BuildContext context, AuthService auth) async {
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CompletarCadastroSheet(
+        uid: auth.currentUser?.id ?? '',
+        nomeAtual: auth.currentUser?.nome ?? '',
+        emailAtual: auth.currentUser?.email ?? '',
+      ),
+    );
+
+    if (!mounted) return;
+    await auth.refreshProfile();
+    _showSuccessDialog(false);
   }
 
   void _showSuccessDialog([bool walletCreated = false]) {
@@ -651,4 +690,252 @@ class _GooglePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ── Modal: Completar cadastro após login social ───────────────────────────────
+class _CompletarCadastroSheet extends StatefulWidget {
+  final String uid;
+  final String nomeAtual;
+  final String emailAtual;
+
+  const _CompletarCadastroSheet({
+    required this.uid,
+    required this.nomeAtual,
+    required this.emailAtual,
+  });
+
+  @override
+  State<_CompletarCadastroSheet> createState() =>
+      _CompletarCadastroSheetState();
+}
+
+class _CompletarCadastroSheetState
+    extends State<_CompletarCadastroSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nomeCtrl;
+  final _cpfCtrl      = TextEditingController();
+  final _telefoneCtrl = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nomeCtrl = TextEditingController(text: widget.nomeAtual);
+  }
+
+  @override
+  void dispose() {
+    _nomeCtrl.dispose();
+    _cpfCtrl.dispose();
+    _telefoneCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _salvar() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
+
+    try {
+      final nome     = _nomeCtrl.text.trim();
+      final cpf      = _cpfCtrl.text.trim();
+      final telefone = _telefoneCtrl.text.trim();
+
+      // Salva no Firestore
+      await FirebaseUserService.atualizarPerfil(
+        uid: widget.uid,
+        nome: nome,
+        cpf: cpf,
+        telefone: telefone,
+        pixKey: widget.emailAtual,
+      );
+
+      // Sincroniza no D1
+      await CfApiService.updateAffiliate(widget.uid, {
+        'nome': nome,
+        'cpf': cpf,
+        'telefone': telefone,
+      });
+
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Erro ao salvar: $e'),
+            backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: AppColors.cardBorder,
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Título
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.person_add_rounded,
+                        color: AppColors.primary, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Complete seu cadastro',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary)),
+                        Text(
+                          'Precisamos de mais alguns dados para ativar sua conta',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Banner informativo
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        color: AppColors.primary, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Estes dados são necessários para processar seus saques via PIX.',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.primary,
+                            height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // Nome completo
+              TextFormField(
+                controller: _nomeCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Nome completo *',
+                  prefixIcon: Icon(Icons.person_rounded,
+                      color: AppColors.primary),
+                ),
+                validator: (v) => v!.trim().split(' ').length < 2
+                    ? 'Informe nome e sobrenome'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+
+              // CPF
+              TextFormField(
+                controller: _cpfCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'CPF *',
+                  hintText: '000.000.000-00',
+                  prefixIcon:
+                      Icon(Icons.badge_rounded, color: AppColors.primary),
+                ),
+                validator: (v) =>
+                    v!.replaceAll(RegExp(r'\D'), '').length < 11
+                        ? 'CPF inválido'
+                        : null,
+              ),
+              const SizedBox(height: 12),
+
+              // Telefone
+              TextFormField(
+                controller: _telefoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Celular / WhatsApp *',
+                  hintText: '(11) 99999-9999',
+                  prefixIcon: Icon(Icons.phone_rounded,
+                      color: AppColors.primary),
+                ),
+                validator: (v) =>
+                    v!.replaceAll(RegExp(r'\D'), '').length < 10
+                        ? 'Número inválido'
+                        : null,
+              ),
+              const SizedBox(height: 24),
+
+              // Botão salvar
+              PrimaryButton(
+                label: 'Salvar e Continuar',
+                icon: Icons.check_circle_rounded,
+                isLoading: _loading,
+                onPressed: _loading ? null : _salvar,
+              ),
+              const SizedBox(height: 8),
+
+              // Pular (opcional)
+              Center(
+                child: TextButton(
+                  onPressed: _loading
+                      ? null
+                      : () => Navigator.pop(context, false),
+                  child: const Text(
+                    'Pular por agora (você pode completar no perfil)',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textHint),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
