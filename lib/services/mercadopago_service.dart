@@ -5,12 +5,104 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'firestore_service.dart';
 
-// ── Modelo de Preferência MP ─────────────────────────────────────────────────
+// ── Modelos ───────────────────────────────────────────────────────────────────
+
+class MpCredentials {
+  final String accessToken;
+  final String publicKey;
+  final String userId;
+  final bool verified;
+
+  const MpCredentials({
+    required this.accessToken,
+    required this.publicKey,
+    required this.userId,
+    required this.verified,
+  });
+
+  bool get isEmpty => accessToken.isEmpty || publicKey.isEmpty;
+
+  factory MpCredentials.empty() => const MpCredentials(
+        accessToken: '', publicKey: '', userId: '', verified: false);
+
+  factory MpCredentials.fromMap(Map<String, dynamic> m) => MpCredentials(
+        accessToken: m['access_token'] as String? ?? '',
+        publicKey:   m['public_key']   as String? ?? '',
+        userId:      m['user_id']      as String? ?? '',
+        verified:    m['verified']     as bool?   ?? false,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'access_token': accessToken,
+        'public_key':   publicKey,
+        'user_id':      userId,
+        'verified':     verified,
+      };
+}
+
+class MpConfig {
+  final String mode; // 'sandbox' | 'production'
+  final MpCredentials sandbox;
+  final MpCredentials production;
+  final double comissaoPercent;
+  final String notificationUrl;
+  final String backUrlSuccess;
+  final String backUrlFailure;
+  final String backUrlPending;
+
+  const MpConfig({
+    required this.mode,
+    required this.sandbox,
+    required this.production,
+    required this.comissaoPercent,
+    required this.notificationUrl,
+    required this.backUrlSuccess,
+    required this.backUrlFailure,
+    required this.backUrlPending,
+  });
+
+  bool get isSandbox => mode == 'sandbox';
+
+  MpCredentials get active => isSandbox ? sandbox : production;
+
+  factory MpConfig.defaultConfig() => MpConfig(
+        mode: 'sandbox',
+        sandbox: MpCredentials.fromMap({
+          'access_token': 'APP_USR-4599294977346145-060413-d1b12f00605ec44ea2c3cd82e7aeb717-3450457834',
+          'public_key':   'APP_USR-5ea28427-e012-4efb-8757-2df410cdebe9',
+          'user_id':      '3450457834',
+          'verified':     true,
+        }),
+        production: MpCredentials.empty(),
+        comissaoPercent: 0.20,
+        notificationUrl: 'https://sharewallet.com.br/api/webhook/mp',
+        backUrlSuccess:  'https://sharewallet.com.br/checkout/success',
+        backUrlFailure:  'https://sharewallet.com.br/checkout/failure',
+        backUrlPending:  'https://sharewallet.com.br/checkout/pending',
+      );
+
+  factory MpConfig.fromFirestore(Map<String, dynamic> d) => MpConfig(
+        mode: d['mode'] as String? ?? 'sandbox',
+        sandbox:    MpCredentials.fromMap(
+            (d['sandbox']    as Map<String, dynamic>?) ?? {}),
+        production: MpCredentials.fromMap(
+            (d['production'] as Map<String, dynamic>?) ?? {}),
+        comissaoPercent: (d['comissao_percent'] as num?)?.toDouble() ?? 0.20,
+        notificationUrl: d['notification_url'] as String? ??
+            'https://sharewallet.com.br/api/webhook/mp',
+        backUrlSuccess: d['back_url_success'] as String? ??
+            'https://sharewallet.com.br/checkout/success',
+        backUrlFailure: d['back_url_failure'] as String? ??
+            'https://sharewallet.com.br/checkout/failure',
+        backUrlPending: d['back_url_pending'] as String? ??
+            'https://sharewallet.com.br/checkout/pending',
+      );
+}
 
 class MpPreference {
   final String id;
-  final String initPoint;     // URL checkout produção
-  final String sandboxUrl;    // URL checkout sandbox
+  final String initPoint;
+  final String sandboxUrl;
   final String status;
 
   const MpPreference({
@@ -21,22 +113,20 @@ class MpPreference {
   });
 
   factory MpPreference.fromJson(Map<String, dynamic> j) => MpPreference(
-        id: j['id'] ?? '',
-        initPoint: j['init_point'] ?? '',
-        sandboxUrl: j['sandbox_init_point'] ?? j['init_point'] ?? '',
-        status: j['status'] ?? 'pending',
+        id:         j['id']                  ?? '',
+        initPoint:  j['init_point']          ?? '',
+        sandboxUrl: j['sandbox_init_point']  ?? j['init_point'] ?? '',
+        status:     j['status']              ?? 'pending',
       );
 }
-
-// ── Modelo de resultado de checkout ─────────────────────────────────────────
 
 class MpCheckoutResult {
   final bool success;
   final String? preferenceId;
   final String? checkoutUrl;
   final String? errorMessage;
-  final String? pixCode;      // Código copia e cola do Pix
-  final String? pixQrBase64;  // QR code em base64
+  final String? pixCode;
+  final String? pixQrBase64;
 
   const MpCheckoutResult({
     required this.success,
@@ -54,31 +144,141 @@ class MpCheckoutResult {
 // ── MercadoPagoService ────────────────────────────────────────────────────────
 
 class MercadoPagoService extends ChangeNotifier {
-  // ── Credenciais Sandbox ─────────────────────────────────────────────────────
-  static const String _accessToken =
-      'APP_USR-4599294977346145-060413-d1b12f00605ec44ea2c3cd82e7aeb717-3450457834';
-  static const String _publicKey =
-      'APP_USR-5ea28427-e012-4efb-8757-2df410cdebe9';
-  static const String _userId = '3450457834';
-
-  // ── Configurações ──────────────────────────────────────────────────────────
-  static const bool _isSandbox = true;
-  static const double _comissaoPercent = 0.20; // 20%
-
   static const String _baseUrl = 'https://api.mercadopago.com';
+  // Caminho do documento de configuração no Firestore
+  // ignore: unused_field
+  static const String _configDocPath = 'config/mercadopago';
 
+  // Config em memória — carregada do Firestore
+  MpConfig _config = MpConfig.defaultConfig();
   bool _isLoading = false;
+  bool _isConfigLoaded = false;
   String? _lastError;
   MpPreference? _lastPreference;
 
+  MpConfig get config => _config;
   bool get isLoading => _isLoading;
+  bool get isConfigLoaded => _isConfigLoaded;
   String? get lastError => _lastError;
   MpPreference? get lastPreference => _lastPreference;
 
+  // ── Carregar config do Firestore ──────────────────────────────────────────
+
+  Future<void> loadConfig() async {
+    try {
+      final snap = await FirestoreService.config?.doc('mercadopago').get();
+      if (snap != null && snap.exists) {
+        _config = MpConfig.fromFirestore(snap.data()!);
+        _isConfigLoaded = true;
+        if (kDebugMode) {
+          debugPrint('[MP] Config carregada — modo: ${_config.mode}');
+          debugPrint('[MP] Credencial ativa: ${_config.active.accessToken.substring(0, 20)}...');
+        }
+        notifyListeners();
+      } else {
+        // Documento não existe — criar com defaults
+        await _saveConfigToFirestore(_config);
+        _isConfigLoaded = true;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[MP] Erro ao carregar config: $e');
+      // Usa defaults hardcoded como fallback
+      _isConfigLoaded = true;
+      notifyListeners();
+    }
+  }
+
+  // ── Salvar config no Firestore ────────────────────────────────────────────
+
+  Future<bool> saveConfig(MpConfig newConfig) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _saveConfigToFirestore(newConfig);
+      _config = newConfig;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('[MP] Erro ao salvar config: $e');
+      _lastError = 'Erro ao salvar: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> _saveConfigToFirestore(MpConfig cfg) async {
+    await FirestoreService.config?.doc('mercadopago').set({
+      'mode': cfg.mode,
+      'sandbox': {
+        ...cfg.sandbox.toMap(),
+        'label': '🧪 Sandbox (Testes)',
+      },
+      'production': {
+        ...cfg.production.toMap(),
+        'label': '🔴 Produção',
+      },
+      'comissao_percent': cfg.comissaoPercent,
+      'notification_url': cfg.notificationUrl,
+      'back_url_success':  cfg.backUrlSuccess,
+      'back_url_failure':  cfg.backUrlFailure,
+      'back_url_pending':  cfg.backUrlPending,
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // ── Trocar modo (sandbox ↔ produção) ──────────────────────────────────────
+
+  Future<bool> setMode(String mode) async {
+    if (mode == _config.mode) return true;
+    if (mode == 'production' && _config.production.isEmpty) {
+      _lastError = 'Configure as credenciais de produção antes de ativar.';
+      notifyListeners();
+      return false;
+    }
+    final newCfg = MpConfig(
+      mode: mode,
+      sandbox:    _config.sandbox,
+      production: _config.production,
+      comissaoPercent: _config.comissaoPercent,
+      notificationUrl: _config.notificationUrl,
+      backUrlSuccess:  _config.backUrlSuccess,
+      backUrlFailure:  _config.backUrlFailure,
+      backUrlPending:  _config.backUrlPending,
+    );
+    return saveConfig(newCfg);
+  }
+
+  // ── Verificar credenciais via API ─────────────────────────────────────────
+
+  Future<Map<String, dynamic>> verifyCredentials(String accessToken) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$_baseUrl/users/me'),
+        headers: {'Authorization': 'Bearer $accessToken'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return {
+          'valid': true,
+          'email': data['email'] ?? '',
+          'user_id': data['id']?.toString() ?? '',
+          'site_id': data['site_id'] ?? '',
+          'is_test': (data['email'] as String? ?? '').contains('testuser'),
+        };
+      } else {
+        return {'valid': false, 'error': 'Token inválido (${resp.statusCode})'};
+      }
+    } catch (e) {
+      return {'valid': false, 'error': 'Erro de conexão: $e'};
+    }
+  }
+
   // ── Criar Preferência de Assinatura ──────────────────────────────────────
 
-  /// Cria uma preferência de pagamento no Mercado Pago para assinatura recorrente.
-  /// Retorna MpCheckoutResult com URL do checkout ou erro.
   Future<MpCheckoutResult> criarPreferenciaAssinatura({
     required String produtoId,
     required String produtoNome,
@@ -90,46 +290,53 @@ class MercadoPagoService extends ChangeNotifier {
     required String clienteEmail,
     String? clienteCpf,
   }) async {
+    if (!_isConfigLoaded) await loadConfig();
+
     _isLoading = true;
     _lastError = null;
     notifyListeners();
 
-    try {
-      // Calcular comissão do afiliado
-      final comissao = valor * _comissaoPercent;
+    final creds = _config.active;
+    if (creds.isEmpty) {
+      _isLoading = false;
+      _lastError = _config.isSandbox
+          ? 'Credenciais sandbox não configuradas.'
+          : 'Credenciais de produção não configuradas. Configure no painel admin.';
+      notifyListeners();
+      return MpCheckoutResult.error(_lastError!);
+    }
 
-      // External reference para rastrear via webhook
+    try {
+      final comissao   = valor * _config.comissaoPercent;
       final externalRef =
           'SW_${affiliateCode}_${produtoId}_${DateTime.now().millisecondsSinceEpoch}';
 
       final body = {
-        'items': [
-          {
-            'id': produtoId,
-            'title': produtoNome,
-            'description': produtoDescricao,
-            'quantity': 1,
-            'currency_id': 'BRL',
-            'unit_price': valor,
-          }
-        ],
+        'items': [{
+          'id':          produtoId,
+          'title':       produtoNome,
+          'description': produtoDescricao,
+          'quantity':    1,
+          'currency_id': 'BRL',
+          'unit_price':  valor,
+        }],
         'payer': {
-          'name': clienteNome,
+          'name':  clienteNome,
           'email': clienteEmail.isNotEmpty
               ? clienteEmail
               : 'cliente@sharewallet.com.br',
           if (clienteCpf != null && clienteCpf.isNotEmpty)
             'identification': {
-              'type': 'CPF',
+              'type':   'CPF',
               'number': clienteCpf.replaceAll(RegExp(r'\D'), ''),
             },
         },
         'external_reference': externalRef,
         'metadata': {
-          'affiliate_id': affiliateId,
+          'affiliate_id':   affiliateId,
           'affiliate_code': affiliateCode,
-          'produto_id': produtoId,
-          'comissao': comissao,
+          'produto_id':     produtoId,
+          'comissao':       comissao,
           'sharewallet_versao': '2.0',
         },
         'payment_methods': {
@@ -137,94 +344,78 @@ class MercadoPagoService extends ChangeNotifier {
           'installments': 1,
         },
         'back_urls': {
-          'success':
-              'https://sharewallet.com.br/checkout/success?ref=$externalRef',
-          'failure':
-              'https://sharewallet.com.br/checkout/failure?ref=$externalRef',
-          'pending':
-              'https://sharewallet.com.br/checkout/pending?ref=$externalRef',
+          'success': '${_config.backUrlSuccess}?ref=$externalRef',
+          'failure': '${_config.backUrlFailure}?ref=$externalRef',
+          'pending': '${_config.backUrlPending}?ref=$externalRef',
         },
-        'auto_return': 'approved',
-        'notification_url':
-            'https://sharewallet.com.br/api/webhook/mp?ref=$externalRef',
+        'auto_return':          'approved',
+        'notification_url':     '${_config.notificationUrl}?ref=$externalRef',
         'statement_descriptor': 'SHAREWALLET',
-        'expires': false,
+        'expires':              false,
       };
 
       if (kDebugMode) {
-        debugPrint('[MP] Criando preferência para $produtoNome...');
-        debugPrint('[MP] Valor: R\$${valor.toStringAsFixed(2)}');
-        debugPrint('[MP] Comissão: R\$${comissao.toStringAsFixed(2)}');
-        debugPrint('[MP] External ref: $externalRef');
+        debugPrint('[MP] Criando preferência — modo: ${_config.mode}');
+        debugPrint('[MP] Produto: $produtoNome | Valor: R\$${valor.toStringAsFixed(2)}');
       }
 
       final response = await http.post(
         Uri.parse('$_baseUrl/checkout/preferences'),
         headers: {
-          'Authorization': 'Bearer $_accessToken',
-          'Content-Type': 'application/json',
+          'Authorization':     'Bearer ${creds.accessToken}',
+          'Content-Type':      'application/json',
           'X-Idempotency-Key': externalRef,
         },
         body: jsonEncode(body),
       );
-
-      if (kDebugMode) {
-        debugPrint('[MP] Status: ${response.statusCode}');
-      }
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final pref = MpPreference.fromJson(json);
         _lastPreference = pref;
 
-        // Salvar preferência no Firestore para rastreamento
         await _salvarPreferenciaFirestore(
-          preferenceId: pref.id,
-          externalRef: externalRef,
-          affiliateId: affiliateId,
+          preferenceId:  pref.id,
+          externalRef:   externalRef,
+          affiliateId:   affiliateId,
           affiliateCode: affiliateCode,
-          produtoId: produtoId,
-          valor: valor,
-          comissao: comissao,
+          produtoId:     produtoId,
+          valor:         valor,
+          comissao:      comissao,
         );
 
         _isLoading = false;
         notifyListeners();
 
         return MpCheckoutResult(
-          success: true,
+          success:      true,
           preferenceId: pref.id,
-          checkoutUrl: _isSandbox ? pref.sandboxUrl : pref.initPoint,
+          checkoutUrl:  _config.isSandbox ? pref.sandboxUrl : pref.initPoint,
         );
       } else {
         final errBody = jsonDecode(response.body);
-        final errMsg = errBody['message'] ?? 'Erro ao criar preferência MP';
-        _lastError = errMsg;
-        _isLoading = false;
+        final errMsg  = errBody['message'] ?? 'Erro ${response.statusCode}';
+        _lastError    = errMsg;
+        _isLoading    = false;
         notifyListeners();
         return MpCheckoutResult.error(errMsg);
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('[MP] Erro: $e');
-
-      // Se falhar (ex: CORS no web), retorna checkout simulado sandbox
+      debugPrint('[MP] Erro na criação de preferência: $e');
       _isLoading = false;
-      _lastError = null; // Não bloquear, usar fallback
+      _lastError = null;
       notifyListeners();
-
-      // Fallback: gera link de checkout sandbox simulado
       return _checkoutFallback(
-        produtoId: produtoId,
-        produtoNome: produtoNome,
-        valor: valor,
+        produtoId:    produtoId,
+        produtoNome:  produtoNome,
+        valor:        valor,
         affiliateCode: affiliateCode,
       );
     }
   }
 
-  // ── Criar cobrança Pix direto (Payment) ──────────────────────────────────
+  // ── Criar Pix direto ──────────────────────────────────────────────────────
 
-  /// Cria pagamento Pix via API do MP (gera QR Code e código copia e cola).
   Future<MpCheckoutResult> criarPix({
     required String produtoId,
     required String produtoNome,
@@ -235,9 +426,19 @@ class MercadoPagoService extends ChangeNotifier {
     required String clienteCpf,
     required String clienteEmail,
   }) async {
+    if (!_isConfigLoaded) await loadConfig();
+
     _isLoading = true;
     _lastError = null;
     notifyListeners();
+
+    final creds = _config.active;
+    if (creds.isEmpty) {
+      _isLoading = false;
+      _lastError = 'Credenciais ${_config.mode} não configuradas.';
+      notifyListeners();
+      return MpCheckoutResult.error(_lastError!);
+    }
 
     try {
       final externalRef =
@@ -245,65 +446,62 @@ class MercadoPagoService extends ChangeNotifier {
 
       final body = {
         'transaction_amount': valor,
-        'description': produtoNome,
-        'payment_method_id': 'pix',
+        'description':        produtoNome,
+        'payment_method_id':  'pix',
         'payer': {
           'email': clienteEmail.isNotEmpty
               ? clienteEmail
               : 'cliente@sharewallet.com.br',
           'first_name': clienteNome.split(' ').first,
-          'last_name': clienteNome.split(' ').length > 1
+          'last_name':  clienteNome.split(' ').length > 1
               ? clienteNome.split(' ').sublist(1).join(' ')
               : 'Sobrenome',
           'identification': {
-            'type': 'CPF',
+            'type':   'CPF',
             'number': clienteCpf.replaceAll(RegExp(r'\D'), ''),
           },
         },
         'external_reference': externalRef,
         'metadata': {
-          'affiliate_id': affiliateId,
+          'affiliate_id':   affiliateId,
           'affiliate_code': affiliateCode,
-          'produto_id': produtoId,
-          'comissao': valor * _comissaoPercent,
+          'produto_id':     produtoId,
+          'comissao':       valor * _config.comissaoPercent,
         },
-        'notification_url':
-            'https://sharewallet.com.br/api/webhook/mp',
+        'notification_url': _config.notificationUrl,
       };
 
       final response = await http.post(
         Uri.parse('$_baseUrl/v1/payments'),
         headers: {
-          'Authorization': 'Bearer $_accessToken',
-          'Content-Type': 'application/json',
+          'Authorization':     'Bearer ${creds.accessToken}',
+          'Content-Type':      'application/json',
           'X-Idempotency-Key': externalRef,
         },
         body: jsonEncode(body),
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final txData = json['point_of_interaction']?['transaction_data'];
-        final pixCode = txData?['qr_code'] as String?;
-        final pixQr = txData?['qr_code_base64'] as String?;
+        final json     = jsonDecode(response.body) as Map<String, dynamic>;
+        final txData   = json['point_of_interaction']?['transaction_data'];
+        final pixCode  = txData?['qr_code']        as String?;
+        final pixQr    = txData?['qr_code_base64'] as String?;
         final paymentId = json['id']?.toString();
 
         _isLoading = false;
         notifyListeners();
-
         return MpCheckoutResult(
-          success: true,
+          success:      true,
           preferenceId: paymentId,
-          pixCode: pixCode,
-          pixQrBase64: pixQr,
+          pixCode:      pixCode,
+          pixQrBase64:  pixQr,
         );
       } else {
         final errBody = jsonDecode(response.body);
-        final errMsg = errBody['message'] ?? 'Erro ao gerar Pix';
-        _lastError = errMsg;
-        _isLoading = false;
+        _lastError    = errBody['message'] ?? 'Erro ao gerar Pix';
+        _isLoading    = false;
         notifyListeners();
-        return MpCheckoutResult.error(errMsg);
+        return MpCheckoutResult.error(_lastError!);
       }
     } catch (e) {
       _isLoading = false;
@@ -312,9 +510,8 @@ class MercadoPagoService extends ChangeNotifier {
     }
   }
 
-  // ── Abrir Checkout no Browser ─────────────────────────────────────────────
+  // ── Abrir Checkout ────────────────────────────────────────────────────────
 
-  /// Abre a URL do checkout no navegador externo.
   Future<bool> abrirCheckout(String url) async {
     try {
       final uri = Uri.parse(url);
@@ -324,15 +521,13 @@ class MercadoPagoService extends ChangeNotifier {
       }
       return false;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MP] Erro ao abrir checkout: $e');
+      debugPrint('[MP] Erro ao abrir checkout: $e');
       return false;
     }
   }
 
-  // ── Simular Webhook (para testes) ─────────────────────────────────────────
+  // ── Simular Pagamento Aprovado (sandbox) ──────────────────────────────────
 
-  /// Simula a ativação de um produto após pagamento aprovado.
-  /// Em produção, isso seria feito via webhook real do MP.
   Future<bool> simularPagamentoAprovado({
     required String userId,
     required String produtoId,
@@ -342,108 +537,92 @@ class MercadoPagoService extends ChangeNotifier {
     required String affiliateCode,
   }) async {
     try {
-      final comissao = valor * _comissaoPercent;
-      final transactionId =
-          'SIM_${DateTime.now().millisecondsSinceEpoch}';
-
-      if (kDebugMode) {
-        debugPrint('[MP WEBHOOK SIM] Pagamento aprovado!');
-        debugPrint('[MP WEBHOOK SIM] Produto: $produtoNome');
-        debugPrint('[MP WEBHOOK SIM] Valor: R\$${valor.toStringAsFixed(2)}');
-        debugPrint('[MP WEBHOOK SIM] Comissão: R\$${comissao.toStringAsFixed(2)}');
-      }
+      final comissao      = valor * _config.comissaoPercent;
+      final transactionId = 'SIM_${DateTime.now().millisecondsSinceEpoch}';
 
       final db = FirestoreService.db;
       if (db == null) return false;
 
-      // 1. Ativar assinatura do usuário
       await db.collection('subscriptions').add({
-        'user_id': userId,
-        'product_id': produtoId,
-        'product_nome': produtoNome,
-        'valor': valor,
-        'comissao': comissao,
-        'affiliate_id': affiliateId,
+        'user_id':       userId,
+        'product_id':    produtoId,
+        'product_nome':  produtoNome,
+        'valor':         valor,
+        'comissao':      comissao,
+        'affiliate_id':  affiliateId,
         'affiliate_code': affiliateCode,
-        'status': 'ativo',
+        'status':        'ativo',
         'payment_method': 'pix',
         'transaction_id': transactionId,
-        'created_at': FieldValue.serverTimestamp(),
-        'next_charge': Timestamp.fromDate(
+        'created_at':    FieldValue.serverTimestamp(),
+        'next_charge':   Timestamp.fromDate(
             DateTime.now().add(const Duration(days: 30))),
       });
 
-      // 2. Creditar comissão na carteira wallets/{affiliateId}
-      final walletRef = db.collection('wallets').doc(affiliateId);
+      final walletRef  = db.collection('wallets').doc(affiliateId);
       final walletSnap = await walletRef.get();
-
       if (walletSnap.exists) {
-        // Carteira existe — incrementar saldo_pendente e total_recebido
         await walletRef.update({
-          'saldo_pendente': FieldValue.increment(comissao),
-          'total_recebido': FieldValue.increment(comissao),
-          'total_vendas': FieldValue.increment(1),
-          'updated_at': FieldValue.serverTimestamp(),
+          'saldo_pendente':  FieldValue.increment(comissao),
+          'total_recebido':  FieldValue.increment(comissao),
+          'total_vendas':    FieldValue.increment(1),
+          'updated_at':      FieldValue.serverTimestamp(),
         });
       } else {
-        // Carteira não existe — criar automaticamente
         await walletRef.set({
-          'uid': affiliateId,
-          'affiliate_id': affiliateId,
-          'affiliate_code': affiliateCode,
+          'uid':              affiliateId,
+          'affiliate_id':     affiliateId,
+          'affiliate_code':   affiliateCode,
           'saldo_disponivel': 0.0,
-          'saldo_pendente': comissao,
-          'total_recebido': comissao,
-          'total_sacado': 0.0,
-          'total_comissoes': comissao,
-          'total_vendas': 1,
-          'status': 'ativo',
-          'created_at': FieldValue.serverTimestamp(),
-          'updated_at': FieldValue.serverTimestamp(),
+          'saldo_pendente':   comissao,
+          'total_recebido':   comissao,
+          'total_sacado':     0.0,
+          'total_comissoes':  comissao,
+          'total_vendas':     1,
+          'status':           'ativo',
+          'created_at':       FieldValue.serverTimestamp(),
+          'updated_at':       FieldValue.serverTimestamp(),
         });
       }
 
-      // 3. Atualizar também o campo saldo no affiliates/{affiliateId}
       await db.collection('affiliates').doc(affiliateId).update({
         'saldo_pendente': FieldValue.increment(comissao),
         'total_recebido': FieldValue.increment(comissao),
-        'total_sales': FieldValue.increment(1),
-        'updated_at': FieldValue.serverTimestamp(),
-      }).catchError((_) {}); // ignora se documento não existir
+        'total_sales':    FieldValue.increment(1),
+        'updated_at':     FieldValue.serverTimestamp(),
+      }).catchError((_) {});
 
-      // 4. Registrar transação na carteira
       await db.collection('wallet_transactions').add({
-        'wallet_id': affiliateId,
+        'wallet_id':    affiliateId,
         'affiliate_id': affiliateId,
-        'tipo': 'comissao',
-        'descricao': 'Comissão: $produtoNome',
-        'valor': comissao,
-        'status': 'pendente',
+        'tipo':         'comissao',
+        'descricao':    'Comissão: $produtoNome',
+        'valor':        comissao,
+        'status':       'pendente',
         'transaction_id': transactionId,
-        'product_id': produtoId,
-        'created_at': FieldValue.serverTimestamp(),
+        'product_id':   produtoId,
+        'created_at':   FieldValue.serverTimestamp(),
       });
 
-      // 5. Registrar referral
       await db.collection('referrals').add({
-        'affiliate_id': affiliateId,
+        'affiliate_id':   affiliateId,
         'affiliate_code': affiliateCode,
         'referred_user_id': userId,
-        'produto_id': produtoId,
-        'produto_nome': produtoNome,
+        'produto_id':     produtoId,
+        'produto_nome':   produtoNome,
         'comissao_mensal': comissao,
-        'status': 'ativo',
-        'created_at': FieldValue.serverTimestamp(),
+        'status':         'ativo',
+        'created_at':     FieldValue.serverTimestamp(),
       });
 
       return true;
     } catch (e) {
-      if (kDebugMode) debugPrint('[MP WEBHOOK SIM] Erro: $e');
+      debugPrint('[MP WEBHOOK SIM] Erro: $e');
       return false;
     }
   }
 
-  // ── Helpers Privados ──────────────────────────────────────────────────────
+  // ── Helpers privados ──────────────────────────────────────────────────────
 
   Future<void> _salvarPreferenciaFirestore({
     required String preferenceId,
@@ -456,49 +635,48 @@ class MercadoPagoService extends ChangeNotifier {
   }) async {
     try {
       await FirestoreService.db?.collection('payments').add({
-        'preference_id': preferenceId,
-        'external_ref': externalRef,
-        'affiliate_id': affiliateId,
+        'preference_id':  preferenceId,
+        'external_ref':   externalRef,
+        'affiliate_id':   affiliateId,
         'affiliate_code': affiliateCode,
-        'produto_id': produtoId,
-        'valor': valor,
-        'comissao': comissao,
-        'status': 'pending',
-        'created_at': FieldValue.serverTimestamp(),
-        'is_sandbox': _isSandbox,
+        'produto_id':     produtoId,
+        'valor':          valor,
+        'comissao':       comissao,
+        'status':         'pending',
+        'created_at':     FieldValue.serverTimestamp(),
+        'is_sandbox':     _config.isSandbox,
+        'mp_mode':        _config.mode,
       });
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[MP] Erro ao salvar preferência no Firestore: $e');
-      }
+      debugPrint('[MP] Erro ao salvar preferência no Firestore: $e');
     }
   }
 
-  /// Fallback: gera link de checkout sandbox para testes quando API falha (CORS).
   MpCheckoutResult _checkoutFallback({
     required String produtoId,
     required String produtoNome,
     required double valor,
     required String affiliateCode,
   }) {
-    // Link sandbox real do MP para testes
-    const sandboxBaseUrl =
-        'https://sandbox.mercadopago.com.br/checkout/v1/redirect';
-    final fallbackUrl =
-        '$sandboxBaseUrl?pref_id=sandbox_${affiliateCode}_$produtoId';
-
+    const sandboxBase = 'https://sandbox.mercadopago.com.br/checkout/v1/redirect';
+    final url = '$sandboxBase?pref_id=sandbox_${affiliateCode}_$produtoId';
     return MpCheckoutResult(
-      success: true,
+      success:      true,
       preferenceId: 'sandbox_fallback_$produtoId',
-      checkoutUrl: fallbackUrl,
+      checkoutUrl:  url,
     );
   }
 
-  // ── Getters úteis ─────────────────────────────────────────────────────────
+  // ── Getters estáticos (compatibilidade) ───────────────────────────────────
 
-  static String get publicKey => _publicKey;
-  static String get userId => _userId;
-  static bool get isSandbox => _isSandbox;
-  static double get comissaoPercent => _comissaoPercent;
-  static double calcularComissao(double valor) => valor * _comissaoPercent;
+  String get publicKey       => _config.active.publicKey;
+  String get userId          => _config.active.userId;
+  bool   get isSandbox       => _config.isSandbox;
+  double get comissaoPercent => _config.comissaoPercent;
+
+  // Instância — usa a comissão carregada do Firestore
+  double calcularComissaoAtual(double valor) => valor * _config.comissaoPercent;
+
+  // Estático — compatibilidade com código legado (usa 20% fixo)
+  static double calcularComissao(double valor) => valor * 0.20;
 }

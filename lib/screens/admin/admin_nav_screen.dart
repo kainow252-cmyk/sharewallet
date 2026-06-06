@@ -7,6 +7,7 @@ import 'admin_products_screen.dart';
 import 'admin_affiliates_screen.dart';
 import 'admin_subscriptions_screen.dart';
 import 'admin_withdrawals_screen.dart';
+import 'admin_mp_settings_screen.dart';
 
 class AdminNavScreen extends StatefulWidget {
   const AdminNavScreen({super.key});
@@ -24,6 +25,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     _NavItem(icon: Icons.people_rounded, label: 'Afiliados'),
     _NavItem(icon: Icons.repeat_rounded, label: 'Assinaturas'),
     _NavItem(icon: Icons.account_balance_wallet_rounded, label: 'Saques'),
+    _NavItem(icon: Icons.payment_rounded, label: 'Pagamentos'),
   ];
 
   final List<Widget> _screens = const [
@@ -32,6 +34,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     AdminAffiliatesScreen(),
     AdminSubscriptionsScreen(),
     AdminWithdrawalsScreen(),
+    AdminMpSettingsScreen(),
   ];
 
   void _onDestinationSelected(int idx) {
