@@ -526,10 +526,24 @@ class AdminService extends ChangeNotifier {
 
   Future<bool> saveProduct(ProductModel product, {bool isNew = false}) async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
-    try {
-      if (_useFirestore) {
+    // Verificar se há sessão Firebase Auth ativa
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (_useFirestore && currentUser == null) {
+      _error = 'Sessão expirada. Faça login novamente.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+
+    if (_useFirestore) {
+      try {
+        // Forçar refresh do token antes de escrever (resolve problemas de sessão expirada)
+        final idToken = await currentUser!.getIdToken(true);
+        debugPrint('[AdminService] Token refreshed — uid: ${currentUser.uid}, token: ${idToken?.substring(0, 20)}...');
+
         final data = product.toJson();
         data.remove('id'); // ID é o document ID, não um campo
 
@@ -542,12 +556,17 @@ class AdminService extends ChangeNotifier {
         _isLoading = false;
         notifyListeners();
         return true;
+      } catch (e) {
+        // Expõe o erro real — sem fallback silencioso
+        debugPrint('[AdminService] Erro ao salvar produto: $e');
+        _error = 'Erro ao salvar: $e';
+        _isLoading = false;
+        notifyListeners();
+        return false;
       }
-    } catch (e) {
-      debugPrint('[AdminService] Erro ao salvar produto: $e');
     }
 
-    // Fallback local
+    // Firestore não disponível — fallback local apenas quando Firebase não inicializado
     await Future.delayed(const Duration(milliseconds: 600));
     if (isNew) {
       _products.add(product);
@@ -561,17 +580,30 @@ class AdminService extends ChangeNotifier {
   }
 
   Future<bool> deleteProduct(String id) async {
-    try {
-      if (_useFirestore) {
+    _error = null;
+
+    // Verificar sessão Firebase Auth ativa
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (_useFirestore && currentUser == null) {
+      _error = 'Sessão expirada. Faça login novamente.';
+      notifyListeners();
+      return false;
+    }
+
+    if (_useFirestore) {
+      try {
         await FirestoreService.products?.doc(id).delete();
         await loadProducts();
         return true;
+      } catch (e) {
+        debugPrint('[AdminService] Erro ao deletar produto: $e');
+        _error = 'Erro ao excluir produto: $e';
+        notifyListeners();
+        return false;
       }
-    } catch (e) {
-      debugPrint('[AdminService] Erro ao deletar produto: $e');
     }
 
-    // Fallback local
+    // Fallback local apenas quando Firebase não inicializado
     _products.removeWhere((p) => p.id == id);
     notifyListeners();
     return true;

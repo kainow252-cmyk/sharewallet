@@ -121,7 +121,20 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
         ],
       ),
     );
-    if (ok == true) await svc.deleteProduct(p.id);
+    if (ok == true) {
+      final deleted = await svc.deleteProduct(p.id);
+      if (!context.mounted) return;
+      if (!deleted) {
+        final errorMsg = svc.error ?? 'Erro ao excluir produto';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _openForm(BuildContext context, ProductModel? product) async {
@@ -386,6 +399,21 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
         SnackBar(
           content: Text(isNew ? 'Produto criado!' : 'Produto atualizado!'),
           backgroundColor: AppColors.success,
+        ),
+      );
+    } else {
+      // Mostrar o erro real ao invés de silenciar
+      final errorMsg = svc.error ?? 'Erro desconhecido ao salvar produto';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {},
+          ),
         ),
       );
     }
