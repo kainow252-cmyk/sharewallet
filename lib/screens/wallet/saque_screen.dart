@@ -81,7 +81,7 @@ class _SaqueScreenState extends State<SaqueScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result.message),
+          content: Text(result.message ?? 'Erro ao solicitar saque'),
           backgroundColor: AppColors.error,
         ),
       );

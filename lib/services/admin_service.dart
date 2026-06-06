@@ -3,8 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Color;
 import '../models/product_model.dart';
 import '../models/subscription_model.dart';
-import 'firestore_service.dart';
-import 'api_service.dart';
+import 'cf_api_service.dart';
 
 // ── Modelo Afiliado (visão admin) ─────────────────────────────────────────────
 class AdminAffiliate {
@@ -43,22 +42,28 @@ class AdminAffiliate {
   });
 
   factory AdminAffiliate.fromJson(Map<String, dynamic> j) => AdminAffiliate(
-        id: FirestoreService.toStr(j['id']),
-        nome: FirestoreService.toStr(j['nome']),
-        email: FirestoreService.toStr(j['email']),
-        cpf: FirestoreService.toStr(j['cpf']),
-        telefone: FirestoreService.toStr(j['telefone']),
-        affiliateCode: FirestoreService.toStr(j['affiliateCode']),
+        id: _s(j['id']),
+        nome: _s(j['nome']),
+        email: _s(j['email']),
+        cpf: _s(j['cpf']),
+        telefone: _s(j['telefone']),
+        affiliateCode: _s(j['affiliateCode']),
         sponsorCode: j['sponsorCode'] as String?,
-        saldoDisponivel: FirestoreService.toDouble(j['saldoDisponivel']),
-        totalComissoes: FirestoreService.toDouble(j['totalComissoes']),
-        totalSacado: FirestoreService.toDouble(j['totalSacado']),
-        totalIndicados: FirestoreService.toInt(j['totalIndicados']),
-        totalAssinaturas: FirestoreService.toInt(j['totalAssinaturas']),
-        status: FirestoreService.toStr(j['status'], fallback: 'ativo'),
-        createdAt: FirestoreService.toDateTimeOrNow(j['createdAt']),
+        saldoDisponivel: _d(j['saldoDisponivel']),
+        totalComissoes: _d(j['totalComissoes']),
+        totalSacado: _d(j['totalSacado']),
+        totalIndicados: _i(j['totalIndicados']),
+        totalAssinaturas: _i(j['totalAssinaturas']),
+        status: _s(j['status'], fb: 'ativo'),
+        createdAt: _dt(j['createdAt']),
         pixKey: j['pixKey'] as String?,
       );
+
+  static String _s(dynamic v, {String fb = ''}) => v?.toString() ?? fb;
+  static double _d(dynamic v) => (v as num?)?.toDouble() ?? 0.0;
+  static int _i(dynamic v) => (v as num?)?.toInt() ?? 0;
+  static DateTime _dt(dynamic v) =>
+      v != null ? DateTime.tryParse(v.toString()) ?? DateTime.now() : DateTime.now();
 }
 
 // ── Modelo Saque (visão admin) ────────────────────────────────────────────────
@@ -90,15 +95,18 @@ class AdminWithdrawal {
   });
 
   factory AdminWithdrawal.fromJson(Map<String, dynamic> j) => AdminWithdrawal(
-        id: FirestoreService.toStr(j['id']),
-        affiliateId: FirestoreService.toStr(j['affiliateId']),
-        affiliateNome: FirestoreService.toStr(j['affiliateNome']),
-        affiliateCode: FirestoreService.toStr(j['affiliateCode']),
-        valor: FirestoreService.toDouble(j['valor']),
-        pixKey: FirestoreService.toStr(j['pixKey']),
-        status: FirestoreService.toStr(j['status'], fallback: 'pendente'),
-        solicitadoEm: FirestoreService.toDateTimeOrNow(j['solicitadoEm']),
-        processadoEm: FirestoreService.toDateTime(j['processadoEm']),
+        id: j['id']?.toString() ?? '',
+        affiliateId: j['affiliateId']?.toString() ?? '',
+        affiliateNome: j['affiliateNome']?.toString() ?? '',
+        affiliateCode: j['affiliateCode']?.toString() ?? '',
+        valor: (j['valor'] as num?)?.toDouble() ?? 0,
+        pixKey: j['pixKey']?.toString() ?? '',
+        status: j['status']?.toString() ?? 'pendente',
+        solicitadoEm: j['solicitadoEm'] != null
+            ? DateTime.tryParse(j['solicitadoEm'].toString()) ?? DateTime.now()
+            : DateTime.now(),
+        processadoEm: j['processadoEm'] != null
+            ? DateTime.tryParse(j['processadoEm'].toString()) : null,
         txId: j['txId'] as String?,
         motivo: j['motivo'] as String?,
       );
@@ -161,19 +169,18 @@ class AdminMetrics {
   });
 
   factory AdminMetrics.fromJson(Map<String, dynamic> j) => AdminMetrics(
-        receitaTotal: FirestoreService.toDouble(j['receitaTotal']),
-        receitaMes: FirestoreService.toDouble(j['receitaMes']),
-        comissoesTotal: FirestoreService.toDouble(j['comissoesTotal']),
-        comissoesMes: FirestoreService.toDouble(j['comissoesMes']),
-        totalAfiliados: FirestoreService.toInt(j['totalAfiliados']),
-        afiliadosAtivos: FirestoreService.toInt(j['afiliadosAtivos']),
-        totalAssinaturas: FirestoreService.toInt(j['totalAssinaturas']),
-        assinaturasAtivas: FirestoreService.toInt(j['assinaturasAtivas']),
-        assinaturasPendentes: FirestoreService.toInt(j['assinaturasPendentes']),
-        mrr: FirestoreService.toDouble(j['mrr']),
-        saquesPendentes: FirestoreService.toInt(j['saquesPendentes']),
-        valorSaquesPendentes:
-            FirestoreService.toDouble(j['valorSaquesPendentes']),
+        receitaTotal: (j['receitaTotal'] as num?)?.toDouble() ?? 0,
+        receitaMes: (j['receitaMes'] as num?)?.toDouble() ?? 0,
+        comissoesTotal: (j['comissoesTotal'] as num?)?.toDouble() ?? 0,
+        comissoesMes: (j['comissoesMes'] as num?)?.toDouble() ?? 0,
+        totalAfiliados: (j['totalAfiliados'] as num?)?.toInt() ?? 0,
+        afiliadosAtivos: (j['afiliadosAtivos'] as num?)?.toInt() ?? 0,
+        totalAssinaturas: (j['totalAssinaturas'] as num?)?.toInt() ?? 0,
+        assinaturasAtivas: (j['assinaturasAtivas'] as num?)?.toInt() ?? 0,
+        assinaturasPendentes: (j['assinaturasPendentes'] as num?)?.toInt() ?? 0,
+        mrr: (j['mrr'] as num?)?.toDouble() ?? 0,
+        saquesPendentes: (j['saquesPendentes'] as num?)?.toInt() ?? 0,
+        valorSaquesPendentes: (j['valorSaquesPendentes'] as num?)?.toDouble() ?? 0,
       );
 }
 
@@ -198,11 +205,8 @@ class AdminService extends ChangeNotifier {
   List<ProductModel> get products => _products;
   AdminMetrics? get metrics => _metrics;
 
-  // Credenciais admin demo
+  // Credencial admin email
   static const String _adminEmail = 'admin@affiliatewallet.com';
-  static const String _adminPassword = 'admin123';
-
-  bool get _useFirestore => FirestoreService.isAvailable;
 
   // ── Login Admin ───────────────────────────────────────────────────────────
   Future<bool> adminLogin(String email, String password) async {
@@ -252,7 +256,7 @@ class AdminService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Carregar tudo ─────────────────────────────────────────────────────────
+  // ── Carregar tudo via D1 (paralelo) ────────────────────────────────────────
   Future<void> loadAll() async {
     await Future.wait([
       loadMetrics(),
@@ -263,455 +267,253 @@ class AdminService extends ChangeNotifier {
     ]);
   }
 
-  // ── Métricas ──────────────────────────────────────────────────────────────
+  // ── Métricas via D1 ──────────────────────────────────────────────────────
   Future<void> loadMetrics() async {
     try {
-      if (_useFirestore) {
-        final snap = await FirestoreService.docGetWithTimeout(FirestoreService.metrics?.doc('global'));
-        if (snap != null && snap.exists) {
-          final data = snap.data()!;
-          _metrics = AdminMetrics.fromJson(data);
-          if (kDebugMode) debugPrint('[AdminService] Métricas carregadas do Firestore');
-          notifyListeners();
-          return;
-        }
+      final data = await CfApiService.getMetrics();
+      if (data != null) {
+        _metrics = AdminMetrics.fromJson(Map<String, dynamic>.from(data));
+        if (kDebugMode) debugPrint('[AdminService] Métricas carregadas (D1)');
+        notifyListeners();
+        return;
       }
     } catch (e) {
-      debugPrint('[AdminService] Erro ao carregar métricas: $e');
+      debugPrint('[AdminService] Erro métricas: $e');
     }
-
-    // Fallback para mock — valores do modelo financeiro ShareWallet
+    // Fallback vazio
     _metrics = const AdminMetrics(
-      receitaTotal: 450000.00,    // Receita acumulada
-      receitaMes: 75000.00,       // 5.000 usuários × R$15 ticket médio
-      comissoesTotal: 90000.00,   // 20% acumulado
-      comissoesMes: 15000.00,     // 20% de R$75K mensal
-      totalAfiliados: 1250,       // Total de afiliados cadastrados
-      afiliadosAtivos: 980,       // Afiliados com assinaturas ativas
-      totalAssinaturas: 5320,     // Total histórico de assinaturas
-      assinaturasAtivas: 5000,    // 5.000 assinantes ativos
-      assinaturasPendentes: 87,   // Aguardando pagamento
-      mrr: 75000.00,              // Monthly Recurring Revenue
-      saquesPendentes: 28,        // Solicitações de saque pendentes
-      valorSaquesPendentes: 3200.00, // R$3.200 em saques pendentes
+      receitaTotal: 0, receitaMes: 0, comissoesTotal: 0, comissoesMes: 0,
+      totalAfiliados: 0, afiliadosAtivos: 0, totalAssinaturas: 0,
+      assinaturasAtivas: 0, assinaturasPendentes: 0, mrr: 0,
+      saquesPendentes: 0, valorSaquesPendentes: 0,
     );
     notifyListeners();
   }
 
-  // ── Afiliados ─────────────────────────────────────────────────────────────
+  // ── Afiliados via D1 ─────────────────────────────────────────────────────
   Future<void> loadAffiliates() async {
     try {
-      if (_useFirestore) {
-        final snap = await FirestoreService.getWithTimeout(FirestoreService.affiliates);
-        if (snap != null && snap.docs.isNotEmpty) {
-          _affiliates = snap.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return AdminAffiliate.fromJson(data);
-          }).toList();
-          // Ordenar por nome em memória
-          _affiliates.sort((a, b) => a.nome.compareTo(b.nome));
-          if (kDebugMode) {
-            debugPrint('[AdminService] ${_affiliates.length} afiliados carregados do Firestore');
-          }
-          notifyListeners();
-          return;
-        }
-      }
+      final rows = await CfApiService.getAffiliates();
+      _affiliates = rows.map((r) => AdminAffiliate.fromJson(_normalizeAff(r))).toList();
+      _affiliates.sort((a, b) => a.nome.compareTo(b.nome));
+      if (kDebugMode) debugPrint('[AdminService] ${_affiliates.length} afiliados (D1)');
     } catch (e) {
-      debugPrint('[AdminService] Erro ao carregar afiliados: $e');
-    }
-
-    // Fallback para mock APENAS em modo demo (sem Firebase)
-    if (!_useFirestore) {
-      _affiliates = _mockAffiliates;
-    } else {
-      _affiliates = []; // Firestore disponível mas vazio — lista real vazia
+      debugPrint('[AdminService] Erro afiliados: $e');
+      _affiliates = [];
     }
     notifyListeners();
   }
 
+  static Map<String, dynamic> _normalizeAff(Map<String, dynamic> r) => {
+    'id': r['id'], 'nome': r['nome'], 'email': r['email'],
+    'cpf': r['cpf'], 'telefone': r['telefone'],
+    'affiliateCode': r['affiliate_code'],
+    'sponsorCode': r['sponsor_code'],
+    'pixKey': r['pix_key'],
+    'status': r['status'],
+    'saldoDisponivel': r['saldo_disponivel'],
+    'totalComissoes': r['total_comissoes'],
+    'totalSacado': r['total_sacado'],
+    'totalIndicados': r['total_indicados'],
+    'totalAssinaturas': r['total_assinaturas'],
+    'createdAt': r['created_at'],
+  };
+
   Future<bool> updateAffiliateStatus(String id, String status) async {
     try {
-      if (_useFirestore) {
-        await FirestoreService.affiliates?.doc(id).update({'status': status});
-        await loadAffiliates();
-        return true;
-      }
+      await CfApiService.updateAffiliate(id, {'status': status});
+      await loadAffiliates();
+      return true;
     } catch (e) {
-      debugPrint('[AdminService] Erro ao atualizar afiliado: $e');
+      debugPrint('[AdminService] Erro updateAffiliateStatus: $e');
     }
-
-    // Fallback local
-    final idx = _affiliates.indexWhere((a) => a.id == id);
-    if (idx >= 0) {
-      final a = _affiliates[idx];
-      _affiliates[idx] = AdminAffiliate(
-        id: a.id, nome: a.nome, email: a.email, cpf: a.cpf,
-        telefone: a.telefone, affiliateCode: a.affiliateCode,
-        sponsorCode: a.sponsorCode, saldoDisponivel: a.saldoDisponivel,
-        totalComissoes: a.totalComissoes, totalSacado: a.totalSacado,
-        totalIndicados: a.totalIndicados, totalAssinaturas: a.totalAssinaturas,
-        status: status, createdAt: a.createdAt, pixKey: a.pixKey,
-      );
-      notifyListeners();
-    }
-    return true;
+    return false;
   }
 
-  // ── Assinaturas ───────────────────────────────────────────────────────────
+  // ── Assinaturas via D1 ───────────────────────────────────────────────────
   Future<void> loadSubscriptions() async {
     try {
-      if (_useFirestore) {
-        final snap = await FirestoreService.getWithTimeout(FirestoreService.subscriptions);
-        if (snap != null && snap.docs.isNotEmpty) {
-          _subscriptions = snap.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return _subscriptionFromFirestore(data);
-          }).toList();
-          // Ordenar por data de início desc em memória
-          _subscriptions.sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
-          if (kDebugMode) {
-            debugPrint('[AdminService] ${_subscriptions.length} assinaturas carregadas do Firestore');
-          }
-          notifyListeners();
-          return;
-        }
-      }
+      final rows = await CfApiService.getSubscriptions();
+      _subscriptions = rows.map((r) => _subFromD1(r)).toList();
+      _subscriptions.sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
+      if (kDebugMode) debugPrint('[AdminService] ${_subscriptions.length} assinaturas (D1)');
     } catch (e) {
-      debugPrint('[AdminService] Erro ao carregar assinaturas: $e');
-    }
-
-    // Fallback APENAS em modo demo
-    if (!_useFirestore) {
-      _subscriptions = _mockAllSubscriptions;
-    } else {
-      _subscriptions = []; // Firestore disponível mas vazio
+      debugPrint('[AdminService] Erro assinaturas: $e');
+      _subscriptions = [];
     }
     notifyListeners();
   }
 
   Future<bool> cancelSubscription(String id, String motivo) async {
     try {
-      if (_useFirestore) {
-        await FirestoreService.subscriptions?.doc(id).update({
-          'status': 'cancelada',
-          'motivo': motivo,
-          'dataCancelamento': DateTime.now().toIso8601String(),
-        });
-        await loadSubscriptions();
-        return true;
-      }
+      await CfApiService.updateSubscription(id, {
+        'status': 'cancelada',
+        'motivo': motivo,
+        'data_cancelamento': DateTime.now().toIso8601String(),
+      });
+      await loadSubscriptions();
+      return true;
     } catch (e) {
-      debugPrint('[AdminService] Erro ao cancelar assinatura: $e');
+      debugPrint('[AdminService] Erro cancelSubscription: $e');
     }
-
-    // Fallback local
-    final idx = _subscriptions.indexWhere((s) => s.id == id);
-    if (idx >= 0) {
-      final s = _subscriptions[idx];
-      _subscriptions[idx] = SubscriptionModel(
-        id: s.id, productId: s.productId, productNome: s.productNome,
-        valor: s.valor, comissao: s.comissao, affiliateCode: s.affiliateCode,
-        affiliateNome: s.affiliateNome, status: SubscriptionStatus.cancelada,
-        chargeType: s.chargeType, dataInicio: s.dataInicio,
-        proximaCobranca: s.proximaCobranca, diaCobranca: s.diaCobranca,
-        motivo: motivo, historico: s.historico,
-      );
-      notifyListeners();
-    }
-    return true;
+    return false;
   }
 
-  // ── Saques ────────────────────────────────────────────────────────────────
+  // ── Saques via D1 ────────────────────────────────────────────────────────
   Future<void> loadWithdrawals() async {
     try {
-      if (_useFirestore) {
-        final snap = await FirestoreService.getWithTimeout(FirestoreService.withdrawals);
-        if (snap != null && snap.docs.isNotEmpty) {
-          _withdrawals = snap.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return AdminWithdrawal.fromJson(data);
-          }).toList();
-          // Ordenar por data de solicitação desc em memória
-          _withdrawals.sort((a, b) => b.solicitadoEm.compareTo(a.solicitadoEm));
-          if (kDebugMode) {
-            debugPrint('[AdminService] ${_withdrawals.length} saques carregados do Firestore');
-          }
-          notifyListeners();
-          return;
-        }
-      }
+      final rows = await CfApiService.getWithdrawals();
+      _withdrawals = rows.map((r) => AdminWithdrawal.fromJson(_normalizeWd(r))).toList();
+      _withdrawals.sort((a, b) => b.solicitadoEm.compareTo(a.solicitadoEm));
+      if (kDebugMode) debugPrint('[AdminService] ${_withdrawals.length} saques (D1)');
     } catch (e) {
-      debugPrint('[AdminService] Erro ao carregar saques: $e');
-    }
-
-    // Fallback APENAS em modo demo
-    if (!_useFirestore) {
-      _withdrawals = _mockWithdrawals;
-    } else {
-      _withdrawals = []; // Firestore disponível mas vazio
+      debugPrint('[AdminService] Erro saques: $e');
+      _withdrawals = [];
     }
     notifyListeners();
   }
 
+  static Map<String, dynamic> _normalizeWd(Map<String, dynamic> r) => {
+    'id': r['id'], 'affiliateId': r['user_id'],
+    'affiliateNome': r['affiliate_nome'], 'affiliateCode': r['affiliate_code'],
+    'valor': r['valor'], 'pixKey': r['pix_key'],
+    'status': r['status'], 'solicitadoEm': r['solicitado_em'],
+    'processadoEm': r['processado_em'], 'txId': r['tx_id'], 'motivo': r['motivo'],
+  };
+
   Future<bool> approveWithdrawal(String id) async {
     try {
-      if (_useFirestore) {
-        await FirestoreService.withdrawals?.doc(id).update({
-          'status': 'aprovado',
-          'processadoEm': DateTime.now().toIso8601String(),
-        });
-        await loadWithdrawals();
-        return true;
-      }
+      final ok = await CfApiService.approveWithdrawal(id);
+      if (ok) await loadWithdrawals();
+      return ok;
     } catch (e) {
-      debugPrint('[AdminService] Erro ao aprovar saque: $e');
+      debugPrint('[AdminService] Erro approveWithdrawal: $e');
+      return false;
     }
-    _updateWithdrawalStatus(id, 'aprovado');
-    return true;
   }
 
   Future<bool> rejectWithdrawal(String id, String motivo) async {
     try {
-      if (_useFirestore) {
-        await FirestoreService.withdrawals?.doc(id).update({
-          'status': 'recusado',
-          'motivo': motivo,
-          'processadoEm': DateTime.now().toIso8601String(),
-        });
-        await loadWithdrawals();
-        return true;
-      }
+      final ok = await CfApiService.rejectWithdrawal(id, motivo);
+      if (ok) await loadWithdrawals();
+      return ok;
     } catch (e) {
-      debugPrint('[AdminService] Erro ao recusar saque: $e');
-    }
-    _updateWithdrawalStatus(id, 'recusado', motivo: motivo);
-    return true;
-  }
-
-  void _updateWithdrawalStatus(String id, String status, {String? motivo}) {
-    final idx = _withdrawals.indexWhere((w) => w.id == id);
-    if (idx >= 0) {
-      final w = _withdrawals[idx];
-      _withdrawals[idx] = AdminWithdrawal(
-        id: w.id, affiliateId: w.affiliateId, affiliateNome: w.affiliateNome,
-        affiliateCode: w.affiliateCode, valor: w.valor, pixKey: w.pixKey,
-        status: status, solicitadoEm: w.solicitadoEm,
-        processadoEm: DateTime.now(), txId: w.txId,
-        motivo: motivo ?? w.motivo,
-      );
-      notifyListeners();
+      debugPrint('[AdminService] Erro rejectWithdrawal: $e');
+      return false;
     }
   }
 
-  // ── Produtos (CRUD admin) ─────────────────────────────────────────────────
+  // ── Produtos (CRUD admin) via D1 ──────────────────────────────────────────
   Future<void> loadProducts() async {
-    // Sinaliza carregamento para a UI exibir o loading indicator
     _isLoading = true;
     notifyListeners();
-
     try {
-      if (_useFirestore) {
-        final snap = await FirestoreService.getWithTimeout(FirestoreService.products);
-        if (snap != null && snap.docs.isNotEmpty) {
-          _products = snap.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return ProductModel.fromJson(data);
-          }).toList();
-          // Ordenar por nome em memória
-          _products.sort((a, b) => a.nome.compareTo(b.nome));
-          debugPrint('[AdminService] ${_products.length} produtos carregados do Firestore');
-          _isLoading = false;
-          notifyListeners();
-          return;
-        } else {
-          // Firestore retornou 0 docs — não usa mock, mantém lista vazia
-          debugPrint('[AdminService] Firestore retornou snap vazio para products');
-          _products = [];
-          _isLoading = false;
-          notifyListeners();
-          return;
-        }
-      }
+      final rows = await CfApiService.getProducts(all: true);
+      _products = rows.map((r) => ProductModel.fromJson(_normalizeProd(r))).toList();
+      _products.sort((a, b) => a.nome.compareTo(b.nome));
+      if (kDebugMode) debugPrint('[AdminService] ${_products.length} produtos (D1)');
     } catch (e) {
-      debugPrint('[AdminService] Erro ao carregar produtos: $e');
+      debugPrint('[AdminService] Erro produtos: $e');
       _error = 'Erro ao carregar produtos: $e';
-    }
-
-    // Só usa mock se o Firebase não estiver disponível (modo demo)
-    if (!_useFirestore) {
-      _products = ProductModel.mockProducts;
+      _products = [];
     }
     _isLoading = false;
     notifyListeners();
   }
+
+  static Map<String, dynamic> _normalizeProd(Map<String, dynamic> r) => {
+    'id': r['id'], 'nome': r['nome'], 'descricao': r['descricao'],
+    'valor': r['valor'], 'comissao': r['comissao'], 'categoria': r['categoria'],
+    'chargeType': r['charge_type'], 'periodicidade': r['periodicidade'],
+    'diaCobranca': r['dia_cobranca'], 'beneficios': r['beneficios'],
+    'imagem_url': r['imagem_url'],
+    'ativo': r['ativo'] == 1 || r['ativo'] == true,
+  };
 
   Future<bool> saveProduct(ProductModel product, {bool isNew = false}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
-    // Verificar se há sessão Firebase Auth ativa
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (_useFirestore && currentUser == null) {
-      _error = 'Sessão expirada. Faça login novamente.';
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
-
-    if (_useFirestore) {
-      try {
-        // Forçar refresh do token antes de escrever (resolve problemas de sessão expirada)
-        final idToken = await currentUser!.getIdToken(true);
-        debugPrint('[AdminService] Token refreshed — uid: ${currentUser.uid}, token: ${idToken?.substring(0, 20)}...');
-
-        final data = product.toJson();
-        data.remove('id'); // ID é o document ID, não um campo
-
-        if (isNew) {
-          await FirestoreService.products?.doc(product.id).set(data);
-        } else {
-          await FirestoreService.products?.doc(product.id).update(data);
-        }
+    try {
+      final data = product.toJson();
+      final result = await CfApiService.saveProduct(data, isNew: isNew);
+      if (result != null) {
         await loadProducts();
         _isLoading = false;
         notifyListeners();
         return true;
-      } catch (e) {
-        // Expõe o erro real — sem fallback silencioso
-        debugPrint('[AdminService] Erro ao salvar produto: $e');
-        _error = 'Erro ao salvar: $e';
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
-    }
-
-    // Firestore não disponível — fallback local apenas quando Firebase não inicializado
-    if (isNew) {
-      _products.add(product);
-    } else {
-      final idx = _products.indexWhere((p) => p.id == product.id);
-      if (idx >= 0) _products[idx] = product;
+      _error = 'Erro ao salvar produto';
+    } catch (e) {
+      debugPrint('[AdminService] Erro saveProduct: $e');
+      _error = 'Erro ao salvar: $e';
     }
     _isLoading = false;
     notifyListeners();
-    return true;
+    return false;
   }
 
   Future<bool> deleteProduct(String id) async {
     _error = null;
-
-    // Verificar sessão Firebase Auth ativa
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (_useFirestore && currentUser == null) {
-      _error = 'Sessão expirada. Faça login novamente.';
+    try {
+      final ok = await CfApiService.deleteProduct(id);
+      if (ok) await loadProducts();
+      return ok;
+    } catch (e) {
+      debugPrint('[AdminService] Erro deleteProduct: $e');
+      _error = 'Erro ao excluir: $e';
       notifyListeners();
       return false;
     }
-
-    if (_useFirestore) {
-      try {
-        await FirestoreService.products?.doc(id).delete();
-        await loadProducts();
-        return true;
-      } catch (e) {
-        debugPrint('[AdminService] Erro ao deletar produto: $e');
-        _error = 'Erro ao excluir produto: $e';
-        notifyListeners();
-        return false;
-      }
-    }
-
-    // Fallback local apenas quando Firebase não inicializado
-    _products.removeWhere((p) => p.id == id);
-    notifyListeners();
-    return true;
   }
 
   Future<bool> toggleProductStatus(String id) async {
-    final idx = _products.indexWhere((p) => p.id == id);
-    if (idx < 0) return false;
-    final p = _products[idx];
-
     try {
-      if (_useFirestore) {
-        await FirestoreService.products?.doc(id).update({'ativo': !p.ativo});
-        await loadProducts();
-        return true;
-      }
+      final ok = await CfApiService.toggleProduct(id);
+      if (ok) await loadProducts();
+      return ok;
     } catch (e) {
-      debugPrint('[AdminService] Erro ao toggle produto: $e');
+      debugPrint('[AdminService] Erro toggleProduct: $e');
+      return false;
     }
-
-    // Fallback local
-    final updated = ProductModel(
-      id: p.id, nome: p.nome, valor: p.valor, comissao: p.comissao,
-      descricao: p.descricao, categoria: p.categoria, imagemUrl: p.imagemUrl,
-      ativo: !p.ativo, chargeType: p.chargeType, periodicidade: p.periodicidade,
-      diaCobranca: p.diaCobranca, beneficios: p.beneficios,
-    );
-    _products[idx] = updated;
-    notifyListeners();
-    return true;
   }
 
-  // ── Converter documento Firestore → SubscriptionModel ────────────────────
-  SubscriptionModel _subscriptionFromFirestore(Map<String, dynamic> j) {
+  // ── Converter linha D1 → SubscriptionModel ───────────────────────────────
+  static SubscriptionModel _subFromD1(Map<String, dynamic> r) {
     SubscriptionStatus status;
-    switch (j['status'] as String? ?? 'ativa') {
-      case 'pendente':
-        status = SubscriptionStatus.pendente;
-        break;
-      case 'cancelada':
-        status = SubscriptionStatus.cancelada;
-        break;
-      case 'aguardando':
-        status = SubscriptionStatus.aguardando;
-        break;
-      default:
-        status = SubscriptionStatus.ativa;
+    switch (r['status']?.toString() ?? 'ativa') {
+      case 'pendente':   status = SubscriptionStatus.pendente;   break;
+      case 'cancelada':  status = SubscriptionStatus.cancelada;  break;
+      case 'aguardando': status = SubscriptionStatus.aguardando; break;
+      default:           status = SubscriptionStatus.ativa;
     }
-
-    ChargeType ct;
-    switch (j['chargeType'] as String? ?? 'pixRecorrente') {
-      case 'pixAvulso':
-        ct = ChargeType.pixAvulso;
-        break;
-      case 'unico':
-        ct = ChargeType.pixAvulso;
-        break;
-      default:
-        ct = ChargeType.pixRecorrente;
-    }
-
+    ChargeType ct = r['charge_type']?.toString() == 'pixAvulso'
+        ? ChargeType.pixAvulso : ChargeType.pixRecorrente;
+    DateTime parse(dynamic v) =>
+        v != null ? DateTime.tryParse(v.toString()) ?? DateTime.now() : DateTime.now();
     return SubscriptionModel(
-      id: FirestoreService.toStr(j['id']),
-      productId: FirestoreService.toStr(j['productId']),
-      productNome: FirestoreService.toStr(j['productNome']),
-      valor: FirestoreService.toDouble(j['valor']),
-      comissao: FirestoreService.toDouble(j['comissao']),
-      affiliateCode: FirestoreService.toStr(j['affiliateCode']),
-      affiliateNome: j['affiliateNome'] as String?,
-      status: status,
-      chargeType: ct,
-      dataInicio: FirestoreService.toDateTimeOrNow(j['dataInicio']),
-      dataCancelamento: FirestoreService.toDateTime(j['dataCancelamento']),
-      proximaCobranca: FirestoreService.toDateTimeOrNow(j['proximaCobranca']),
-      diaCobranca: FirestoreService.toInt(j['diaCobranca'], fallback: 5),
-      pixKey: j['pixKey'] as String?,
-      wooviSubscriptionId: j['wooviSubscriptionId'] as String?,
-      motivo: j['motivo'] as String?,
+      id: r['id']?.toString() ?? '',
+      productId: r['product_id']?.toString() ?? '',
+      productNome: r['product_nome']?.toString() ?? '',
+      valor: (r['valor'] as num? ?? 0).toDouble(),
+      comissao: (r['comissao'] as num? ?? 0).toDouble(),
+      affiliateCode: r['affiliate_code']?.toString() ?? '',
+      affiliateNome: r['affiliate_nome']?.toString(),
+      status: status, chargeType: ct,
+      dataInicio: parse(r['data_inicio']),
+      dataCancelamento: r['data_cancelamento'] != null
+          ? DateTime.tryParse(r['data_cancelamento'].toString()) : null,
+      proximaCobranca: parse(r['proxima_cobranca']),
+      diaCobranca: (r['dia_cobranca'] as num? ?? 5).toInt(),
+      pixKey: r['pix_key']?.toString(),
+      wooviSubscriptionId: r['woovi_subscription_id']?.toString(),
+      motivo: r['motivo']?.toString(),
       historico: [],
     );
   }
 
-  // ── Mock data (fallback) ──────────────────────────────────────────────────
+  // ── Mock data (fallback — desativado, mantido para referência) ──────────────
+  // ignore: unused_field
   static final List<AdminAffiliate> _mockAffiliates = [
     AdminAffiliate(
       id: 'aff_001', nome: 'João Silva', email: 'joao@email.com',
@@ -759,6 +561,7 @@ class AdminService extends ChangeNotifier {
     ),
   ];
 
+  // ignore: unused_field
   static final List<SubscriptionModel> _mockAllSubscriptions = [
     SubscriptionModel(
       id: 'sub_001', productId: 'prod_001', productNome: 'Seguro Motoboy',
@@ -802,6 +605,7 @@ class AdminService extends ChangeNotifier {
     ),
   ];
 
+  // ignore: unused_field
   static final List<AdminWithdrawal> _mockWithdrawals = [
     AdminWithdrawal(
       id: 'wit_001', affiliateId: 'aff_001', affiliateNome: 'João Silva',

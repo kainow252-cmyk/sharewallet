@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/subscription_model.dart';
 import '../../models/product_model.dart';
-import '../../services/firestore_service.dart';
 import '../../theme/app_theme.dart';
 
 /// Tela de Detalhes da Assinatura com histórico completo de cobranças.
@@ -38,40 +37,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
     });
 
     try {
-      final db = FirestoreService.db;
-      if (db != null) {
-        final snap = await db
-            .collection('subscription_charges')
-            .where('subscription_id', isEqualTo: widget.subscription.id)
-            .get();
-
-        final list = snap.docs.map((doc) {
-          final d = doc.data();
-          return _ChargeRecord(
-            id: doc.id,
-            valor: FirestoreService.toDouble(d['valor']),
-            dataVencimento: FirestoreService.toDateTimeOrNow(d['data_vencimento']),
-            dataPagamento: FirestoreService.toDateTime(d['data_pagamento']),
-            status: FirestoreService.toStr(d['status'], fallback: 'pendente'),
-            metodo: FirestoreService.toStr(d['metodo'], fallback: 'pix'),
-            txId: d['tx_id'] as String?,
-          );
-        }).toList();
-
-        // Ordenar do mais recente ao mais antigo
-        list.sort((a, b) => b.dataVencimento.compareTo(a.dataVencimento));
-
-        setState(() {
-          _charges = list;
-          _isLoading = false;
-        });
-      } else {
-        // Demo: gerar histórico simulado
-        setState(() {
-          _charges = _generateDemoCharges();
-          _isLoading = false;
-        });
-      }
+      // Historico de cobranças via demo gerado localmente (D1 não tem tabela de cobranças ainda)
+      setState(() {
+        _charges = _generateDemoCharges();
+        _isLoading = false;
+      });
     } catch (e) {
       setState(() {
         _charges = _generateDemoCharges();

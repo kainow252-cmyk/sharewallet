@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../../services/firestore_service.dart';
+import '../../services/cf_api_service.dart';
 import '../../theme/app_theme.dart';
 
 class IndicacoesScreen extends StatefulWidget {
@@ -42,38 +42,71 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) {
-        setState(() { _referrals = []; _totalAssinaturas = 0; _comissaoMensal = 0; });
+        setState(() {
+          _referrals = [];
+          _totalAssinaturas = 0;
+          _comissaoMensal = 0;
+        });
         return;
       }
 
-      // Uma única query — sem fallback demo
-      final snap = await FirestoreService.getWithTimeout(
-          FirestoreService.collection('referrals')
-              ?.where('referrer_id', isEqualTo: uid));
-
-      if (snap != null && snap.docs.isNotEmpty) {
-        final list = snap.docs.map((d) {
-          final data = Map<String, dynamic>.from(d.data());
-          data['id'] = d.id;
-          return data;
-        }).toList();
-
-        final ativos = list.where((r) => r['status'] == 'ATIVO').toList();
-        final comissao = ativos.fold<double>(
-            0, (s, r) => s + FirestoreService.toDouble(r['comissao_mensal']));
-
+      // Busca assinaturas pelo affiliate code via D1
+      // O "indicados" mapeamos das assinaturas do afiliado
+      final affiliateData = await CfApiService.getAffiliateByEmail(
+          FirebaseAuth.instance.currentUser?.email ?? '');
+      if (affiliateData == null) {
         setState(() {
-          _referrals = list;
-          _totalAssinaturas = ativos.length;
-          _comissaoMensal = comissao;
+          _referrals = [];
+          _totalAssinaturas = 0;
+          _comissaoMensal = 0;
         });
-      } else {
-        // Sem dados reais — zera (não injeta mock)
-        setState(() { _referrals = []; _totalAssinaturas = 0; _comissaoMensal = 0; });
+        return;
       }
+
+      final code = affiliateData['affiliate_code']?.toString() ?? '';
+      if (code.isEmpty) {
+        setState(() {
+          _referrals = [];
+          _totalAssinaturas = 0;
+          _comissaoMensal = 0;
+        });
+        return;
+      }
+
+      final subs = await CfApiService.getSubscriptionsByAffiliate(code);
+
+      final ativos = subs.where((s) =>
+          (s['status']?.toString() ?? 'ativa') == 'ativa').toList();
+      final comissao = ativos.fold<double>(
+          0,
+          (s, r) =>
+              s + ((r['valor'] as num?)?.toDouble() ?? 0) *
+                  ((r['comissao'] as num?)?.toDouble() ?? 0));
+
+      // Adapta ao formato esperado pelo widget _ReferralTile
+      final list = subs.map((s) => {
+            'id': s['id'],
+            'referred_id': s['affiliate_nome'] ?? 'Cliente',
+            'status': (s['status']?.toString() ?? 'ativa') == 'ativa'
+                ? 'ATIVO'
+                : 'INATIVO',
+            'comissao_mensal': (s['valor'] as num?)?.toDouble() ?? 0 *
+                ((s['comissao'] as num?)?.toDouble() ?? 0),
+            'meses_ativos': 1,
+          }).toList();
+
+      setState(() {
+        _referrals = list.cast<Map<String, dynamic>>();
+        _totalAssinaturas = ativos.length;
+        _comissaoMensal = comissao;
+      });
     } catch (e) {
       debugPrint('[IndicacoesScreen] Erro: $e');
-      setState(() { _referrals = []; _totalAssinaturas = 0; _comissaoMensal = 0; });
+      setState(() {
+        _referrals = [];
+        _totalAssinaturas = 0;
+        _comissaoMensal = 0;
+      });
     } finally {
       setState(() => _loading = false);
     }
@@ -474,13 +507,11 @@ class _ReferralTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = FirestoreService.toStr(referral['status']);
+    final status = referral['status']?.toString() ?? '';
     final isAtivo = status == 'ATIVO';
-    final comissao =
-        FirestoreService.toDouble(referral['comissao_mensal']);
-    final meses = FirestoreService.toInt(referral['meses_ativos']);
-    final referred =
-        FirestoreService.toStr(referral['referred_id'], fallback: 'Usuário');
+    final comissao = (referral['comissao_mensal'] as num?)?.toDouble() ?? 0;
+    final meses = (referral['meses_ativos'] as num?)?.toInt() ?? 0;
+    final referred = referral['referred_id']?.toString() ?? 'Usuário';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),

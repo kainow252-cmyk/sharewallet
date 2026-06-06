@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../../services/firestore_service.dart';
+import '../../services/wallet_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 
-/// Tela completa de Carteira ShareWallet
+/// Tela completa de Carteira ShareWallet — dados via Cloudflare D1
 class CarteiraScreen extends StatefulWidget {
   const CarteiraScreen({super.key});
 
@@ -17,14 +17,6 @@ class CarteiraScreen extends StatefulWidget {
 class _CarteiraScreenState extends State<CarteiraScreen> {
   final _fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
   bool _saldoVisible = true;
-  bool _loadingWallet = false;
-  bool _jaCarregou = false; // cache: evita reload ao voltar para aba
-
-  // Dados da carteira do Firestore
-  double _saldoDisponivel = 0;
-  double _saldoPendente = 0;
-  double _totalRecebido = 0;
-  List<Map<String, dynamic>> _transacoes = [];
   static const double _saqueMinimo = 100.0;
 
   @override
@@ -34,76 +26,22 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
   }
 
   Future<void> _loadWallet({bool forceRefresh = false}) async {
-    // Cache: não recarrega se já carregou (exceto pull-to-refresh)
-    if (_jaCarregou && !forceRefresh) return;
-    setState(() => _loadingWallet = true);
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
-
-      // Queries paralelas com tipos corretos
-      final walletFuture = FirestoreService.docGetWithTimeout(
-          FirestoreService.collection('wallets')?.doc(uid));
-      final txFuture = FirestoreService.getWithTimeout(
-          FirestoreService.collection('wallet_transactions')
-              ?.where('user_id', isEqualTo: uid));
-
-      final walletDoc = await walletFuture;
-      final txSnap    = await txFuture;
-
-      // Wallet
-      if (walletDoc != null && walletDoc.exists) {
-        final data = walletDoc.data()!;
-        setState(() {
-          _saldoDisponivel = FirestoreService.toDouble(data['saldo_disponivel']);
-          _saldoPendente   = FirestoreService.toDouble(data['saldo_pendente']);
-          _totalRecebido   = FirestoreService.toDouble(data['total_recebido']);
-        });
-      } else {
-        setState(() {
-          _saldoDisponivel = 0.0;
-          _saldoPendente   = 0.0;
-          _totalRecebido   = 0.0;
-        });
-      }
-
-      // Transações
-      if (txSnap != null && txSnap.docs.isNotEmpty) {
-        final txList = txSnap.docs.map((d) {
-          final data = Map<String, dynamic>.from(d.data());
-          data['id'] = d.id;
-          return data;
-        }).toList();
-        txList.sort((a, b) {
-          final aDate = FirestoreService.toDateTime(a['created_at']);
-          final bDate = FirestoreService.toDateTime(b['created_at']);
-          if (aDate == null || bDate == null) return 0;
-          return bDate.compareTo(aDate);
-        });
-        setState(() => _transacoes = txList);
-      } else {
-        setState(() => _transacoes = []);
-      }
-    } catch (e) {
-      debugPrint('[CarteiraScreen] Erro: $e');
-      setState(() {
-        _saldoDisponivel = 0.0;
-        _saldoPendente   = 0.0;
-        _totalRecebido   = 0.0;
-      });
-    } finally {
-      _jaCarregou = true;
-      setState(() => _loadingWallet = false);
-    }
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    await context.read<WalletService>().loadData(
+          userId: uid,
+          forceRefresh: forceRefresh,
+        );
   }
 
   Future<void> _solicitarSaque() async {
-    if (_saldoDisponivel < _saqueMinimo) {
+    final wallet = context.read<WalletService>();
+    if (wallet.saldoCarteira < _saqueMinimo) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Saldo mínimo para saque: ${_fmt.format(_saqueMinimo)}. '
-            'Você tem ${_fmt.format(_saldoDisponivel)}.',
+            'Você tem ${_fmt.format(wallet.saldoCarteira)}.',
           ),
           backgroundColor: AppColors.error,
         ),
@@ -119,18 +57,26 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _SaqueModal(
-        saldoDisponivel: _saldoDisponivel,
+        saldoDisponivel: wallet.saldoCarteira,
         pixKey: user?.email ?? '',
         onConfirm: (valor, pixKey, pixType) async {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Solicitação de saque de ${_fmt.format(valor)} enviada! ✅'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-          await _loadWallet(forceRefresh: true);
+          final result = await context.read<WalletService>().solicitarSaque(
+                valor: valor,
+                pixKey: pixKey,
+                pixKeyType: pixType,
+              );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result.success
+                    ? 'Solicitação de saque de ${_fmt.format(valor)} enviada! ✅'
+                    : result.message ?? 'Erro ao solicitar saque'),
+                backgroundColor:
+                    result.success ? AppColors.success : AppColors.error,
+              ),
+            );
+          }
         },
       ),
     );
@@ -138,294 +84,312 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final metaPct = (_saldoDisponivel / _saqueMinimo).clamp(0.0, 1.0);
-    final faltam = (_saqueMinimo - _saldoDisponivel).clamp(0.0, _saqueMinimo);
-    final podesSacar = _saldoDisponivel >= _saqueMinimo;
+    return Consumer<WalletService>(
+      builder: (context, wallet, _) {
+        final saldo = wallet.saldoCarteira;
+        final pendente = wallet.saldoPendente;
+        final totalRecebido = wallet.totalRecebido;
+        final transacoes = wallet.extratoCompleto;
+        final metaPct = (saldo / _saqueMinimo).clamp(0.0, 1.0);
+        final faltam = (_saqueMinimo - saldo).clamp(0.0, _saqueMinimo);
+        final podesSacar = saldo >= _saqueMinimo;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: RefreshIndicator(
-        onRefresh: () => _loadWallet(forceRefresh: true),
-        color: const Color(0xFF00E5B4),
-        child: CustomScrollView(
-          slivers: [
-            // ── AppBar ──────────────────────────────────────────────────
-            SliverAppBar(
-              expandedHeight: 200,
-              pinned: true,
-              automaticallyImplyLeading: false,
-              backgroundColor: const Color(0xFF0A1628),
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF0A1628), Color(0xFF0D3B2E)],
-                    ),
-                  ),
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: RefreshIndicator(
+            onRefresh: () => _loadWallet(forceRefresh: true),
+            color: const Color(0xFF00E5B4),
+            child: CustomScrollView(
+              slivers: [
+                // ── AppBar ──────────────────────────────────────────────────
+                SliverAppBar(
+                  expandedHeight: 200,
+                  pinned: true,
+                  automaticallyImplyLeading: false,
+                  backgroundColor: const Color(0xFF0A1628),
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF0A1628), Color(0xFF0D3B2E)],
+                        ),
+                      ),
+                      child: SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Minha Carteira',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const Spacer(),
-                              IconButton(
-                                onPressed: () => setState(
-                                    () => _saldoVisible = !_saldoVisible),
-                                icon: Icon(
-                                  _saldoVisible
-                                      ? Icons.visibility_rounded
-                                      : Icons.visibility_off_rounded,
-                                  color: Colors.white70,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          const Text('Saldo Disponível',
-                              style: TextStyle(
-                                  color: Colors.white60, fontSize: 13)),
-                          const SizedBox(height: 4),
-                          _loadingWallet
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                      color: Color(0xFF00E5B4), strokeWidth: 2),
-                                )
-                              : Text(
-                                  _saldoVisible
-                                      ? _fmt.format(_saldoDisponivel)
-                                      : 'R\$ ••••••',
-                                  style: const TextStyle(
-                                    color: Color(0xFF00E5B4),
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.w900,
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Minha Carteira',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
-                                ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(0),
-                child: Container(
-                  height: 24,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF5F7F5),
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                ),
-              ),
-            ),
-
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 8),
-
-                    // ── Cards de saldo ──────────────────────────────────
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _SaldoCard(
-                            label: 'Saldo Pendente',
-                            valor: _saldoVisible
-                                ? _fmt.format(_saldoPendente)
-                                : 'R\$ ••',
-                            icon: Icons.hourglass_empty_rounded,
-                            color: AppColors.warning,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _SaldoCard(
-                            label: 'Total Recebido',
-                            valor: _saldoVisible
-                                ? _fmt.format(_totalRecebido)
-                                : 'R\$ ••••',
-                            icon: Icons.trending_up_rounded,
-                            color: AppColors.success,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // ── Card meta de saque ──────────────────────────────
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.cardBorder),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.flag_rounded,
-                                  color: AppColors.primary, size: 18),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Meta para saque',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                  const Spacer(),
+                                  IconButton(
+                                    onPressed: () => setState(
+                                        () => _saldoVisible = !_saldoVisible),
+                                    icon: Icon(
+                                      _saldoVisible
+                                          ? Icons.visibility_rounded
+                                          : Icons.visibility_off_rounded,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const Spacer(),
-                              Text(
-                                '${(metaPct * 100).toStringAsFixed(0)}%',
-                                style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14,
-                                ),
-                              ),
+                              const SizedBox(height: 12),
+                              const Text('Saldo Disponível',
+                                  style: TextStyle(
+                                      color: Colors.white60, fontSize: 13)),
+                              const SizedBox(height: 4),
+                              wallet.isLoading
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                          color: Color(0xFF00E5B4),
+                                          strokeWidth: 2),
+                                    )
+                                  : Text(
+                                      _saldoVisible
+                                          ? _fmt.format(saldo)
+                                          : 'R\$ ••••••',
+                                      style: const TextStyle(
+                                        color: Color(0xFF00E5B4),
+                                        fontSize: 34,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
                             ],
                           ),
-                          const SizedBox(height: 10),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: LinearProgressIndicator(
-                              value: metaPct,
-                              backgroundColor: AppColors.cardBorder,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                Color(0xFF00E5B4),
-                              ),
-                              minHeight: 10,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            podesSacar
-                                ? '✅ Você já pode solicitar seu saque!'
-                                : 'Faltam ${_fmt.format(faltam)} para atingir o mínimo de ${_fmt.format(_saqueMinimo)}',
-                            style: TextStyle(
-                              color: podesSacar
-                                  ? AppColors.success
-                                  : AppColors.textSecondary,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // ── Botão Solicitar Saque ────────────────────────────
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _solicitarSaque,
-                        icon: const Icon(Icons.pix_rounded, size: 20),
-                        label: const Text('Solicitar Saque via PIX',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: podesSacar
-                              ? const Color(0xFF00E5B4)
-                              : AppColors.textHint,
-                          foregroundColor: podesSacar
-                              ? const Color(0xFF0A1628)
-                              : Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          elevation: 0,
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 8),
-                    Text(
-                      'Mínimo: ${_fmt.format(_saqueMinimo)} • Processamento em até 24h',
-                      style: const TextStyle(
-                          color: AppColors.textHint, fontSize: 11),
+                  ),
+                  bottom: PreferredSize(
+                    preferredSize: const Size.fromHeight(0),
+                    child: Container(
+                      height: 24,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF5F7F5),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(24)),
+                      ),
                     ),
+                  ),
+                ),
 
-                    const SizedBox(height: 24),
-
-                    // ── Histórico de transações ──────────────────────────
-                    Row(
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
                       children: [
-                        const Text(
-                          'Histórico',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${_transacoes.length} transações',
-                          style: const TextStyle(
-                              color: AppColors.textHint, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
+                        const SizedBox(height: 8),
 
-                    if (_transacoes.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(32),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.cardBorder),
-                        ),
-                        child: const Column(
+                        // ── Cards de saldo ──────────────────────────────────
+                        Row(
                           children: [
-                            Icon(Icons.receipt_long_outlined,
-                                color: AppColors.textHint, size: 40),
-                            SizedBox(height: 12),
-                            Text('Nenhuma transação ainda',
-                                style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w500)),
-                            Text('Suas comissões aparecerão aqui',
-                                style: TextStyle(
-                                    color: AppColors.textHint, fontSize: 12)),
+                            Expanded(
+                              child: _SaldoCard(
+                                label: 'Saldo Pendente',
+                                valor: _saldoVisible
+                                    ? _fmt.format(pendente)
+                                    : 'R\$ ••',
+                                icon: Icons.hourglass_empty_rounded,
+                                color: AppColors.warning,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _SaldoCard(
+                                label: 'Total Recebido',
+                                valor: _saldoVisible
+                                    ? _fmt.format(totalRecebido)
+                                    : 'R\$ ••••',
+                                icon: Icons.trending_up_rounded,
+                                color: AppColors.success,
+                              ),
+                            ),
                           ],
                         ),
-                      )
-                    else
-                      ..._transacoes
-                          .take(20)
-                          .map((tx) => _TransacaoTile(tx: tx, fmt: _fmt)),
 
-                    const SizedBox(height: 32),
-                  ],
+                        const SizedBox(height: 16),
+
+                        // ── Card meta de saque ──────────────────────────────
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.cardBorder),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.flag_rounded,
+                                      color: AppColors.primary, size: 18),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Meta para saque',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    '${(metaPct * 100).toStringAsFixed(0)}%',
+                                    style: const TextStyle(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: LinearProgressIndicator(
+                                  value: metaPct,
+                                  backgroundColor: AppColors.cardBorder,
+                                  valueColor:
+                                      const AlwaysStoppedAnimation<Color>(
+                                    Color(0xFF00E5B4),
+                                  ),
+                                  minHeight: 10,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                podesSacar
+                                    ? '✅ Você já pode solicitar seu saque!'
+                                    : 'Faltam ${_fmt.format(faltam)} para atingir o mínimo de ${_fmt.format(_saqueMinimo)}',
+                                style: TextStyle(
+                                  color: podesSacar
+                                      ? AppColors.success
+                                      : AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // ── Botão Solicitar Saque ────────────────────────────
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _solicitarSaque,
+                            icon: const Icon(Icons.pix_rounded, size: 20),
+                            label: const Text('Solicitar Saque via PIX',
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: podesSacar
+                                  ? const Color(0xFF00E5B4)
+                                  : AppColors.textHint,
+                              foregroundColor: podesSacar
+                                  ? const Color(0xFF0A1628)
+                                  : Colors.white,
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              elevation: 0,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 8),
+                        Text(
+                          'Mínimo: ${_fmt.format(_saqueMinimo)} • Processamento em até 24h',
+                          style: const TextStyle(
+                              color: AppColors.textHint, fontSize: 11),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // ── Histórico de transações ──────────────────────────
+                        Row(
+                          children: [
+                            const Text(
+                              'Histórico',
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '${transacoes.length} transações',
+                              style: const TextStyle(
+                                  color: AppColors.textHint, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        if (wallet.isLoading)
+                          const Padding(
+                            padding: EdgeInsets.all(32),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else if (transacoes.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(32),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.cardBorder),
+                            ),
+                            child: const Column(
+                              children: [
+                                Icon(Icons.receipt_long_outlined,
+                                    color: AppColors.textHint, size: 40),
+                                SizedBox(height: 12),
+                                Text('Nenhuma transação ainda',
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontWeight: FontWeight.w500)),
+                                Text('Suas comissões aparecerão aqui',
+                                    style: TextStyle(
+                                        color: AppColors.textHint,
+                                        fontSize: 12)),
+                              ],
+                            ),
+                          )
+                        else
+                          ...transacoes
+                              .take(20)
+                              .map((tx) => _TransacaoTile(tx: tx, fmt: _fmt)),
+
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -465,8 +429,8 @@ class _SaldoCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(label,
-              style: const TextStyle(
-                  color: AppColors.textHint, fontSize: 11)),
+              style:
+                  const TextStyle(color: AppColors.textHint, fontSize: 11)),
           const SizedBox(height: 2),
           Text(valor,
               style: const TextStyle(
@@ -489,10 +453,10 @@ class _TransacaoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tipo = FirestoreService.toStr(tx['tipo'], fallback: 'COMISSAO');
-    final valor = FirestoreService.toDouble(tx['valor']);
-    final desc = FirestoreService.toStr(tx['descricao'], fallback: 'Comissão');
-    final date = FirestoreService.toDateTime(tx['created_at']);
+    final tipo = (tx['tipo'] as String? ?? 'comissao').toUpperCase();
+    final valor = (tx['valor'] as num?)?.toDouble() ?? 0.0;
+    final desc = tx['descricao'] as String? ?? 'Comissão';
+    final date = tx['data'] as DateTime?;
     final isComissao = tipo == 'COMISSAO';
 
     return Container(
@@ -594,7 +558,9 @@ class _SaqueModalState extends State<_SaqueModal> {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(
-        left: 24, right: 24, top: 24,
+        left: 24,
+        right: 24,
+        top: 24,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
       decoration: const BoxDecoration(
@@ -608,7 +574,8 @@ class _SaqueModalState extends State<_SaqueModal> {
           // Handle
           Center(
             child: Container(
-              width: 40, height: 4,
+              width: 40,
+              height: 4,
               decoration: BoxDecoration(
                 color: AppColors.cardBorder,
                 borderRadius: BorderRadius.circular(2),
@@ -624,7 +591,8 @@ class _SaqueModalState extends State<_SaqueModal> {
           const SizedBox(height: 4),
           Text(
             'Saldo disponível: ${_fmt.format(widget.saldoDisponivel)}',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            style:
+                const TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 20),
 
@@ -660,7 +628,8 @@ class _SaqueModalState extends State<_SaqueModal> {
               DropdownMenuItem(value: 'EMAIL', child: Text('E-mail')),
               DropdownMenuItem(value: 'CPF', child: Text('CPF')),
               DropdownMenuItem(value: 'TELEFONE', child: Text('Telefone')),
-              DropdownMenuItem(value: 'ALEATORIA', child: Text('Chave aleatória')),
+              DropdownMenuItem(
+                  value: 'ALEATORIA', child: Text('Chave aleatória')),
             ],
             onChanged: (v) => setState(() => _pixType = v ?? 'EMAIL'),
           ),
@@ -687,8 +656,9 @@ class _SaqueModalState extends State<_SaqueModal> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                final valor =
-                    double.tryParse(_valorController.text.replaceAll(',', '.')) ?? 0;
+                final valor = double.tryParse(
+                        _valorController.text.replaceAll(',', '.')) ??
+                    0;
                 if (valor <= 0 || _pixController.text.isEmpty) return;
                 widget.onConfirm(valor, _pixController.text, _pixType);
               },

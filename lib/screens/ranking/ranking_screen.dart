@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../services/firestore_service.dart';
+import '../../services/cf_api_service.dart';
 import '../../theme/app_theme.dart';
 
 class RankingScreen extends StatefulWidget {
@@ -24,21 +24,12 @@ class _RankingScreenState extends State<RankingScreen> {
   Future<void> _loadRanking() async {
     setState(() => _loading = true);
     try {
-      final snap = await FirestoreService.getWithTimeout(
-          FirestoreService.collection('ranking'));
-      if (snap != null && snap.docs.isNotEmpty) {
-        final list = snap.docs.map((d) {
-          final data = Map<String, dynamic>.from(d.data());
-          data['id'] = d.id;
-          return data;
-        }).toList();
-        list.sort((a, b) => FirestoreService.toInt(a['position'])
-            .compareTo(FirestoreService.toInt(b['position'])));
-        setState(() => _ranking = list);
-      } else {
-        // Firestore disponível mas ranking ainda vazio
-        setState(() => _ranking = []);
-      }
+      final list = await CfApiService.getRanking();
+      // Garante ordenação por position
+      list.sort((a, b) =>
+          ((a['position'] as num?)?.toInt() ?? 0)
+              .compareTo((b['position'] as num?)?.toInt() ?? 0));
+      setState(() => _ranking = list);
     } catch (e) {
       debugPrint('[RankingScreen] Erro: $e');
       setState(() => _ranking = []);
@@ -172,15 +163,11 @@ class _RankingScreenState extends State<RankingScreen> {
                                 final item = entry.value;
                             return _RankingTile(
                               position: pos,
-                              nome: FirestoreService.toStr(item['nome']),
-                              assinaturas:
-                                  FirestoreService.toInt(item['assinaturas']),
-                              comissaoTotal: FirestoreService.toDouble(
-                                  item['comissao_total']),
-                              nivel:
-                                  FirestoreService.toStr(item['nivel']),
-                              nivelColor: _nivelColor(
-                                  FirestoreService.toStr(item['nivel'])),
+                              nome: item['nome']?.toString() ?? '',
+                              assinaturas: (item['assinaturas'] as num?)?.toInt() ?? 0,
+                              comissaoTotal: (item['comissao_total'] as num?)?.toDouble() ?? 0,
+                              nivel: item['nivel']?.toString() ?? 'Bronze',
+                              nivelColor: _nivelColor(item['nivel']?.toString() ?? 'Bronze'),
                               fmt: _fmt,
                             );
                           }),
@@ -231,8 +218,8 @@ class _Podium extends StatelessWidget {
               Expanded(
                 child: _PodiumItem(
                   position: 2,
-                  nome: FirestoreService.toStr(top3[1]['nome']),
-                  assinaturas: FirestoreService.toInt(top3[1]['assinaturas']),
+                  nome: top3[1]['nome']?.toString() ?? '',
+                  assinaturas: (top3[1]['assinaturas'] as num?)?.toInt() ?? 0,
                   height: 90,
                   medalColor: const Color(0xFFBDBDBD),
                   emoji: '🥈',
@@ -242,8 +229,8 @@ class _Podium extends StatelessWidget {
               Expanded(
                 child: _PodiumItem(
                   position: 1,
-                  nome: FirestoreService.toStr(top3[0]['nome']),
-                  assinaturas: FirestoreService.toInt(top3[0]['assinaturas']),
+                  nome: top3[0]['nome']?.toString() ?? '',
+                  assinaturas: (top3[0]['assinaturas'] as num?)?.toInt() ?? 0,
                   height: 120,
                   medalColor: const Color(0xFFFFD740),
                   emoji: '🥇',
@@ -253,8 +240,8 @@ class _Podium extends StatelessWidget {
               Expanded(
                 child: _PodiumItem(
                   position: 3,
-                  nome: FirestoreService.toStr(top3[2]['nome']),
-                  assinaturas: FirestoreService.toInt(top3[2]['assinaturas']),
+                  nome: top3[2]['nome']?.toString() ?? '',
+                  assinaturas: (top3[2]['assinaturas'] as num?)?.toInt() ?? 0,
                   height: 70,
                   medalColor: const Color(0xFFCD7F32),
                   emoji: '🥉',

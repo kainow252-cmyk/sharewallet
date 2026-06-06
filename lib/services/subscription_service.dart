@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/subscription_model.dart';
 import '../models/product_model.dart';
-import 'firestore_service.dart';
+import 'cf_api_service.dart';
 
 // ── Resultado da autorização de assinatura ───────────────────────────────────
 class SubscribeResult {
@@ -24,32 +24,30 @@ class SubscribeResult {
 class WithdrawResult {
   final bool success;
   final String? txId;
-  final double? valor;
+  final double value;
+  final String? pixKey;
   final String? message;
 
   const WithdrawResult({
     required this.success,
     this.txId,
-    this.valor,
+    this.value = 0,
+    this.pixKey,
     this.message,
   });
 }
 
 class SubscriptionService extends ChangeNotifier {
-  // ── Estado ────────────────────────────────────────────────────────────────
   List<SubscriptionModel> _subscriptions = [];
   bool _isLoading = false;
   String? _error;
 
-  // Carteira interna
   double _saldoDisponivel = 0.0;
-  // ignore: prefer_final_fields
   double _saldoPendente = 0.0;
   double _totalSacado = 0.0;
 
-  static const double saqueMinimo = 100.0;
+  static const double saqueMinimo = 10.0;
 
-  // Getters
   List<SubscriptionModel> get subscriptions => _subscriptions;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -60,7 +58,6 @@ class SubscriptionService extends ChangeNotifier {
 
   List<SubscriptionModel> get ativas =>
       _subscriptions.where((s) => s.status == SubscriptionStatus.ativa).toList();
-
   List<SubscriptionModel> get pendentes =>
       _subscriptions.where((s) => s.status == SubscriptionStatus.pendente).toList();
 
@@ -70,73 +67,28 @@ class SubscriptionService extends ChangeNotifier {
   double get comissoesMensaisRecorrentes =>
       ativas.fold(0.0, (sum, s) => sum + s.valorComissao);
 
-  bool get _useFirestore => FirestoreService.isAvailable;
-
-  // ── Carregar assinaturas ──────────────────────────────────────────────────
+  // ── Carregar assinaturas via D1 ───────────────────────────────────────────
   Future<void> loadSubscriptions(String affiliateCode) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      if (_useFirestore) {
-        // Query simples por affiliateCode (sem orderBy para evitar composite index)
-        final snap = await FirestoreService.getWithTimeout(
-          FirestoreService.subscriptions
-              ?.where('affiliateCode', isEqualTo: affiliateCode));
-
-        if (snap != null) {
-          final all = snap.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return _fromFirestore(data);
-          }).toList();
-
-          // Ordenar em memória por data de início desc
-          all.sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
-          _subscriptions = all;
-          _calcularSaldo();
-
-          if (kDebugMode) {
-            debugPrint('[SubscriptionService] ${_subscriptions.length} assinaturas para $affiliateCode');
-          }
-          _isLoading = false;
-          notifyListeners();
-          return;
-        }
-      }
-
-      // Fallback para mock APENAS em modo demo (sem Firebase)
-      if (!_useFirestore) {
-        _subscriptions = SubscriptionModel.mockSubscriptions
-            .where((s) => s.affiliateCode == affiliateCode)
-            .toList();
-        _calcularSaldo();
-      } else {
-        // Firestore disponivel mas sem assinaturas: lista vazia é o correto
-        _subscriptions = [];
-        _calcularSaldo();
-      }
+      final rows = await CfApiService.getSubscriptionsByAffiliate(affiliateCode);
+      _subscriptions = rows.map((r) => _fromD1(r)).toList();
+      _subscriptions.sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
+      if (kDebugMode) debugPrint('[SubscriptionService] ${_subscriptions.length} assinaturas (D1)');
     } catch (e) {
-      debugPrint('[SubscriptionService] Erro ao carregar assinaturas: $e');
-      _error = 'Erro ao carregar assinaturas. Tente novamente.';
-      // Fallback para mock APENAS em modo demo
-      if (!_useFirestore) {
-        _subscriptions = SubscriptionModel.mockSubscriptions
-            .where((s) => s.affiliateCode == affiliateCode)
-            .toList();
-        _calcularSaldo();
-      } else {
-        _subscriptions = [];
-        _calcularSaldo();
-      }
+      debugPrint('[SubscriptionService] Erro: $e');
+      _error = 'Erro ao carregar assinaturas.';
+      _subscriptions = [];
     }
 
     _isLoading = false;
     notifyListeners();
   }
 
-  // ── Autorizar nova assinatura ─────────────────────────────────────────────
+  // ── Criar assinatura via D1 ───────────────────────────────────────────────
   Future<SubscribeResult> subscribe({
     required ProductModel product,
     required String clienteNome,
@@ -150,177 +102,54 @@ class SubscriptionService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (_useFirestore) {
-        // Criar documento de assinatura no Firestore
-        final subId = 'sub_${DateTime.now().millisecondsSinceEpoch}';
-        final now = DateTime.now();
+      final now = DateTime.now();
+      final proxima = _proximaCobranca(product.diaCobranca ?? 5);
 
-        final subData = {
-          'productId': product.id,
-          'productNome': product.nome,
-          'valor': product.valor,
-          'comissao': product.comissao,
-          'affiliateCode': affiliateCode,
-          'affiliateNome': null,
-          'status': 'ativa',
-          'chargeType': product.chargeType.name,
-          'dataInicio': now.toIso8601String(),
-          'proximaCobranca': _proximaCobranca(product.diaCobranca ?? 5).toIso8601String(),
-          'diaCobranca': product.diaCobranca ?? 5,
-          'pixKey': clientePixKey,
-          'clienteNome': clienteNome,
-          'clienteCpf': clienteCpf,
-          'clienteCelular': clienteCelular,
-          'createdAt': now.toIso8601String(),
-        };
+      final result = await CfApiService.createSubscription({
+        'productId': product.id,
+        'productNome': product.nome,
+        'valor': product.valor,
+        'comissao': product.comissao,
+        'affiliateCode': affiliateCode,
+        'chargeType': product.chargeType.name,
+        'status': 'ativa',
+        'pixKey': clientePixKey,
+        'diaCobranca': product.diaCobranca ?? 5,
+        'dataInicio': now.toIso8601String(),
+        'proximaCobranca': proxima.toIso8601String(),
+      });
 
-        await FirestoreService.subscriptions?.doc(subId).set(subData);
-
-        final nova = SubscriptionModel(
-          id: subId,
-          productId: product.id,
-          productNome: product.nome,
-          valor: product.valor,
-          comissao: product.comissao,
-          affiliateCode: affiliateCode,
-          status: SubscriptionStatus.ativa,
-          chargeType: product.chargeType,
-          dataInicio: now,
-          proximaCobranca: _proximaCobranca(product.diaCobranca ?? 5),
-          diaCobranca: product.diaCobranca ?? 5,
-          pixKey: clientePixKey,
-          historico: [],
-        );
-
+      if (result != null) {
+        final nova = _fromD1(result);
         _subscriptions.add(nova);
-        _calcularSaldo();
         _isLoading = false;
         notifyListeners();
-
         return SubscribeResult(
           success: true,
-          subscriptionId: subId,
+          subscriptionId: result['id']?.toString(),
           message: product.isPixAutomatico
               ? 'Autorize o Pix Recorrente no seu banco para ativar'
               : 'Assinatura criada com sucesso!',
         );
       }
-
-      // Modo demo sem Firestore
-      final nova = SubscriptionModel(
-        id: 'sub_demo_${DateTime.now().millisecondsSinceEpoch}',
-        productId: product.id,
-        productNome: product.nome,
-        valor: product.valor,
-        comissao: product.comissao,
-        affiliateCode: affiliateCode,
-        status: SubscriptionStatus.ativa,
-        chargeType: product.chargeType,
-        dataInicio: DateTime.now(),
-        proximaCobranca: _proximaCobranca(product.diaCobranca ?? 5),
-        diaCobranca: product.diaCobranca ?? 5,
-        pixKey: clientePixKey,
-        historico: [],
-      );
-
-      _subscriptions.add(nova);
-      _calcularSaldo();
-      _isLoading = false;
-      notifyListeners();
-
-      return const SubscribeResult(
-        success: true,
-        message: 'Assinatura ativada (modo demonstração)',
-        authorizationUrl: null,
-      );
     } catch (e) {
-      _isLoading = false;
-      _error = 'Erro ao criar assinatura. Tente novamente.';
-      notifyListeners();
-      return SubscribeResult(success: false, message: _error);
-    }
-  }
-
-  // ── Saque ─────────────────────────────────────────────────────────────────
-  Future<WithdrawResult> requestWithdraw({
-    required String affiliateCode,
-    required String pixKey,
-  }) async {
-    if (!podeSacar) {
-      return WithdrawResult(
-        success: false,
-        message:
-            'Saldo insuficiente. Mínimo para saque: R\$ ${saqueMinimo.toStringAsFixed(2).replaceAll('.', ',')}',
-      );
+      debugPrint('[SubscriptionService] Erro subscribe: $e');
     }
 
-    _isLoading = true;
+    _isLoading = false;
+    _error = 'Erro ao criar assinatura. Tente novamente.';
     notifyListeners();
-
-    try {
-      if (_useFirestore) {
-        // Registrar saque no Firestore
-        final witId = 'wit_${DateTime.now().millisecondsSinceEpoch}';
-        final valorSacado = _saldoDisponivel;
-
-        await FirestoreService.withdrawals?.doc(witId).set({
-          'affiliateCode': affiliateCode,
-          'valor': valorSacado,
-          'pixKey': pixKey,
-          'status': 'pendente',
-          'solicitadoEm': DateTime.now().toIso8601String(),
-        });
-
-        _totalSacado += valorSacado;
-        _saldoDisponivel = 0.0;
-        _isLoading = false;
-        notifyListeners();
-
-        return WithdrawResult(
-          success: true,
-          valor: valorSacado,
-          message:
-              'Saque de R\$ ${valorSacado.toStringAsFixed(2).replaceAll('.', ',')} solicitado! Aguardando aprovação.',
-        );
-      }
-
-      // Modo demo
-      final valorSacado = _saldoDisponivel;
-      _totalSacado += valorSacado;
-      _saldoDisponivel = 0.0;
-      _isLoading = false;
-      notifyListeners();
-      return WithdrawResult(
-        success: true,
-        valor: valorSacado,
-        message:
-            'Saque de R\$ ${valorSacado.toStringAsFixed(2).replaceAll('.', ',')} enviado via PIX!',
-      );
-    } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      return const WithdrawResult(
-          success: false, message: 'Erro de conexão. Tente novamente.');
-    }
+    return SubscribeResult(success: false, message: _error);
   }
 
-  // ── Creditar comissão ─────────────────────────────────────────────────────
   void creditarComissao(double valor) {
     _saldoDisponivel += valor;
     notifyListeners();
   }
 
-  // ── Helpers privados ──────────────────────────────────────────────────────
-  void _calcularSaldo() {
-    double saldo = 0.0;
-    for (final sub in _subscriptions) {
-      for (final pay in sub.historico) {
-        if (pay.status == PaymentStatus.pago) {
-          saldo += sub.valorComissao;
-        }
-      }
-    }
-    _saldoDisponivel = saldo;
+  void clearError() {
+    _error = null;
+    notifyListeners();
   }
 
   DateTime _proximaCobranca(int diaCobranca) {
@@ -332,58 +161,43 @@ class SubscriptionService extends ChangeNotifier {
     return proxima;
   }
 
-  /// Converte um documento Firestore em SubscriptionModel
-  SubscriptionModel _fromFirestore(Map<String, dynamic> j) {
+  static SubscriptionModel _fromD1(Map<String, dynamic> r) {
     SubscriptionStatus status;
-    switch (j['status'] as String? ?? 'ativa') {
-      case 'pendente':
-        status = SubscriptionStatus.pendente;
-        break;
-      case 'cancelada':
-        status = SubscriptionStatus.cancelada;
-        break;
-      case 'aguardando':
-        status = SubscriptionStatus.aguardando;
-        break;
-      default:
-        status = SubscriptionStatus.ativa;
+    switch (r['status']?.toString() ?? 'ativa') {
+      case 'pendente':   status = SubscriptionStatus.pendente;   break;
+      case 'cancelada':  status = SubscriptionStatus.cancelada;  break;
+      case 'aguardando': status = SubscriptionStatus.aguardando; break;
+      default:           status = SubscriptionStatus.ativa;
     }
 
     ChargeType ct;
-    switch (j['chargeType'] as String? ?? 'pixRecorrente') {
-      case 'pixAvulso':
-        ct = ChargeType.pixAvulso;
-        break;
-      case 'unico':
-        ct = ChargeType.pixAvulso;
-        break;
-      default:
-        ct = ChargeType.pixRecorrente;
+    switch (r['charge_type']?.toString() ?? 'pixRecorrente') {
+      case 'pixAvulso': ct = ChargeType.pixAvulso; break;
+      default:          ct = ChargeType.pixRecorrente;
     }
 
+    DateTime parse(dynamic v) =>
+        v != null ? DateTime.tryParse(v.toString()) ?? DateTime.now() : DateTime.now();
+
     return SubscriptionModel(
-      id: FirestoreService.toStr(j['id']),
-      productId: FirestoreService.toStr(j['productId']),
-      productNome: FirestoreService.toStr(j['productNome']),
-      valor: FirestoreService.toDouble(j['valor']),
-      comissao: FirestoreService.toDouble(j['comissao']),
-      affiliateCode: FirestoreService.toStr(j['affiliateCode']),
-      affiliateNome: j['affiliateNome'] as String?,
+      id: r['id']?.toString() ?? '',
+      productId: r['product_id']?.toString() ?? '',
+      productNome: r['product_nome']?.toString() ?? '',
+      valor: (r['valor'] as num? ?? 0).toDouble(),
+      comissao: (r['comissao'] as num? ?? 0).toDouble(),
+      affiliateCode: r['affiliate_code']?.toString() ?? '',
+      affiliateNome: r['affiliate_nome']?.toString(),
       status: status,
       chargeType: ct,
-      dataInicio: FirestoreService.toDateTimeOrNow(j['dataInicio']),
-      dataCancelamento: FirestoreService.toDateTime(j['dataCancelamento']),
-      proximaCobranca: FirestoreService.toDateTimeOrNow(j['proximaCobranca']),
-      diaCobranca: FirestoreService.toInt(j['diaCobranca'], fallback: 5),
-      pixKey: j['pixKey'] as String?,
-      wooviSubscriptionId: j['wooviSubscriptionId'] as String?,
-      motivo: j['motivo'] as String?,
+      dataInicio: parse(r['data_inicio']),
+      dataCancelamento: r['data_cancelamento'] != null
+          ? DateTime.tryParse(r['data_cancelamento'].toString()) : null,
+      proximaCobranca: parse(r['proxima_cobranca']),
+      diaCobranca: (r['dia_cobranca'] as num? ?? 5).toInt(),
+      pixKey: r['pix_key']?.toString(),
+      wooviSubscriptionId: r['woovi_subscription_id']?.toString(),
+      motivo: r['motivo']?.toString(),
       historico: [],
     );
-  }
-
-  void clearError() {
-    _error = null;
-    notifyListeners();
   }
 }

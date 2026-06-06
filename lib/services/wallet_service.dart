@@ -1,22 +1,19 @@
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/sale_model.dart';
 import '../models/withdraw_model.dart';
-import 'api_service.dart';
-import 'woovi_service.dart';
-import 'firestore_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'cf_api_service.dart';
+import 'subscription_service.dart'; // WithdrawResult
 
 class WalletService extends ChangeNotifier {
   List<SaleModel> _sales = [];
   List<WithdrawModel> _withdraws = [];
   bool _isLoading = false;
   int _totalIndicados = 0;
-  double _balanceFromServer = 0; // ignore: unused_field
-
-  // Saldo real da carteira Firestore
   double _saldoCarteira = 0.0;
   double _saldoPendente = 0.0;
   double _totalRecebido = 0.0;
+  double _totalSacado = 0.0;
 
   List<SaleModel> get sales => _sales;
   List<SaleModel> get salesCompleted => _sales.where((s) => s.isCompleted).toList();
@@ -25,12 +22,10 @@ class WalletService extends ChangeNotifier {
   int get totalIndicados => _totalIndicados;
   int get totalVendas => salesCompleted.length;
 
-  // Saldo real da carteira (wallets/{uid} no Firestore)
-  double get saldoCarteira => _saldoCarteira > 0
-      ? _saldoCarteira
-      : totalComissoes; // fallback para soma de comissões
+  double get saldoCarteira => _saldoCarteira;
   double get saldoPendente => _saldoPendente;
   double get totalRecebido => _totalRecebido;
+  double get totalSacado => _totalSacado;
 
   double get totalComissoes =>
       salesCompleted.fold(0.0, (sum, s) => sum + s.comissao);
@@ -38,210 +33,121 @@ class WalletService extends ChangeNotifier {
   double get comissoesEsteMes {
     final agora = DateTime.now();
     return salesCompleted
-        .where((s) =>
-            s.createdAt.month == agora.month &&
-            s.createdAt.year == agora.year)
+        .where((s) => s.createdAt.month == agora.month && s.createdAt.year == agora.year)
         .fold(0.0, (sum, s) => sum + s.comissao);
   }
 
-  // ── Carregar dados ────────────────────────────────────────────────────────
-
+  // ── Carregar dados via Cloudflare D1 ──────────────────────────────────────
   Future<void> loadData({String? userId, bool forceRefresh = false}) async {
-    // Cache: não recarrega se já tem dados e não é refresh forçado
     if (!forceRefresh && (_sales.isNotEmpty || _saldoCarteira > 0)) return;
 
     _isLoading = true;
     notifyListeners();
 
     try {
-      if (ApiService.hasToken) {
-        await Future.wait([_loadSales(), _loadWithdrawals(), _loadDashboard()]);
-      } else if (FirestoreService.isAvailable) {
-        final uid = userId ?? FirebaseAuth.instance.currentUser?.uid;
-        if (uid != null) {
-          await Future.wait([
-            _loadSalesFromFirestore(uid),
-            _loadWithdrawalsFromFirestore(uid),
-            _loadAffiliateDataFromFirestore(uid),
-          ]);
+      final uid = userId ?? FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+
+      // Busca carteira + sales + withdrawals em paralelo
+      final results = await Future.wait([
+        CfApiService.getWallet(uid),
+        CfApiService.getSalesByUser(uid),
+        CfApiService.getWithdrawalsByUser(uid),
+      ]);
+
+      // Carteira
+      final walletData = results[0] as Map<String, dynamic>?;
+      if (walletData != null) {
+        final wallet = walletData['wallet'] as Map<String, dynamic>?;
+        if (wallet != null) {
+          _saldoCarteira  = _toDouble(wallet['saldo_disponivel']);
+          _saldoPendente  = _toDouble(wallet['saldo_pendente']);
+          _totalRecebido  = _toDouble(wallet['total_recebido']);
+          _totalSacado    = _toDouble(wallet['total_sacado']);
+          _totalIndicados = _toInt(wallet['total_indicados']);
         }
+        // Sales e withdrawals já vêm no walletData também
+        final salesRaw = walletData['sales'] as List? ?? [];
+        final wdsRaw   = walletData['withdrawals'] as List? ?? [];
+        _sales    = salesRaw.map((r) => SaleModel.fromD1(r as Map<String, dynamic>)).toList();
+        _withdraws = wdsRaw.map((r) => WithdrawModel.fromD1(r as Map<String, dynamic>)).toList();
       } else {
-        // Modo demo sem Firebase
-        _sales = SaleModel.mockSales;
-        _withdraws = WithdrawModel.mockWithdraws;
-        _totalIndicados = 0;
+        // Fallback: usa os resultados separados
+        final salesRaw = results[1] as List<Map<String, dynamic>>;
+        final wdsRaw   = results[2] as List<Map<String, dynamic>>;
+        _sales    = salesRaw.map((r) => SaleModel.fromD1(r)).toList();
+        _withdraws = wdsRaw.map((r) => WithdrawModel.fromD1(r)).toList();
+      }
+
+      if (kDebugMode) {
+        debugPrint('[WalletService] D1 — saldo=R\$$_saldoCarteira '
+            'sales=${_sales.length} withdrawals=${_withdraws.length}');
       }
     } catch (e) {
-      // Erro real — não injeta dados falsos
-      if (kDebugMode) debugPrint('WalletService erro: $e');
+      if (kDebugMode) debugPrint('[WalletService] Erro: $e');
     }
 
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> _loadSalesFromFirestore(String userId) async {
-    try {
-      final col = FirestoreService.collection('sales');
-      if (col == null) return;
-      final snap = await FirestoreService.getWithTimeout(col.where('user_id', isEqualTo: userId));
-      if (snap == null) return;
-      final all = snap.docs.map((d) {
-        final data = Map<String, dynamic>.from(d.data());
-        data['id'] = d.id;
-        return SaleModel.fromJson(data);
-      }).toList();
-      all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      _sales = all;
-    } catch (e) {
-      if (kDebugMode) debugPrint('[WalletService] Erro sales Firestore: $e');
-    }
-  }
-
-  Future<void> _loadWithdrawalsFromFirestore(String userId) async {
-    try {
-      final col = FirestoreService.withdrawals;
-      if (col == null) return;
-      final snap = await FirestoreService.getWithTimeout(col.where('user_id', isEqualTo: userId));
-      if (snap == null) return;
-      final all = snap.docs.map((d) {
-        final data = Map<String, dynamic>.from(d.data());
-        data['id'] = d.id;
-        return WithdrawModel.fromJson(data);
-      }).toList();
-      all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      _withdraws = all;
-    } catch (e) {
-      if (kDebugMode) debugPrint('[WalletService] Erro withdrawals Firestore: $e');
-    }
-  }
-
-  Future<void> _loadAffiliateDataFromFirestore(String userId) async {
-    try {
-      final db = FirestoreService.db;
-      if (db == null) return;
-
-      // 1. Buscar dados da carteira em wallets/{uid}
-      final walletDoc = await FirestoreService.docGetWithTimeout(db.collection('wallets').doc(userId));
-      if (walletDoc == null) return;
-      if (walletDoc.exists) {
-        final data = walletDoc.data()!;
-        _totalIndicados = FirestoreService.toInt(data['total_referrals']);
-        _saldoCarteira = FirestoreService.toDouble(data['saldo_disponivel']);
-        _saldoPendente = FirestoreService.toDouble(data['saldo_pendente']);
-        _totalRecebido = FirestoreService.toDouble(data['total_recebido']);
-        if (kDebugMode) {
-          debugPrint('[WalletService] Carteira carregada: '
-              'disponível=R\$$_saldoCarteira '
-              'pendente=R\$$_saldoPendente');
-        }
-        return;
-      }
-
-      // 2. Fallback: buscar em affiliates/{uid}
-      final affiliateDoc = await FirestoreService.docGetWithTimeout(db.collection('affiliates').doc(userId));
-      if (affiliateDoc == null) return;
-      if (affiliateDoc.exists) {
-        final data = affiliateDoc.data()!;
-        _totalIndicados = FirestoreService.toInt(data['total_referrals']);
-        _saldoCarteira = FirestoreService.toDouble(data['saldo_disponivel']);
-        return;
-      }
-
-      // 3. Fallback 2: buscar por firebase_uid (estrutura antiga)
-      final col = FirestoreService.affiliates;
-      if (col == null) return;
-      final snap = await FirestoreService.getWithTimeout(
-          col.where('firebase_uid', isEqualTo: userId).limit(1));
-      if (snap != null && snap.docs.isNotEmpty) {
-        final data = snap.docs.first.data();
-        _totalIndicados = FirestoreService.toInt(data['total_referrals']);
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('[WalletService] Erro affiliate Firestore: $e');
-    }
-  }
-
-  Future<void> _loadSales() async {
-    final response = await ApiService.get('/sales/my?page=1&limit=50');
-    if (response.success && response.data != null) {
-      final List<dynamic> salesData = response.data['data'] ?? [];
-      _sales = salesData.map((json) => SaleModel.fromApiJson(json)).toList();
-    }
-  }
-
-  Future<void> _loadWithdrawals() async {
-    final response = await ApiService.get('/withdrawals/history?page=1&limit=50');
-    if (response.success && response.data != null) {
-      final List<dynamic> withdrawsData = response.data['data'] ?? [];
-      _withdraws =
-          withdrawsData.map((json) => WithdrawModel.fromApiJson(json)).toList();
-    }
-  }
-
-  Future<void> _loadDashboard() async {
-    final dashboard = await WooviService.getDashboard();
-    if (dashboard != null) {
-      _totalIndicados = dashboard['totalReferrals'] as int? ?? 0;
-      _balanceFromServer =
-          (dashboard['balanceInReais'] as num?)?.toDouble() ?? 0;
-    }
-  }
-
-  // ── Solicitar Saque ───────────────────────────────────────────────────────
-
+  // ── Solicitar Saque via D1 ────────────────────────────────────────────────
   Future<WithdrawResult> solicitarSaque({
-    double? valor,
-    String? pixKey,
+    required double valor,
+    required String pixKey,
     String? pixKeyType,
     double? saldoAtual,
   }) async {
-    // Validações básicas (frontend)
-    if (saldoAtual != null && saldoAtual < 10.0) {
-      return WithdrawResult(
-        success: false,
-        message: 'Saldo insuficiente. Mínimo R\$10,00',
-      );
+    if ((saldoAtual ?? _saldoCarteira) < 10.0) {
+      return WithdrawResult(success: false, message: 'Saldo insuficiente. Mínimo R\$10,00');
+    }
+    if (valor > (saldoAtual ?? _saldoCarteira)) {
+      return WithdrawResult(success: false, message: 'Valor maior que o saldo disponível');
     }
 
     _isLoading = true;
     notifyListeners();
 
-    // Chama o backend → que chama a Woovi
-    final result = await WooviService.requestWithdraw();
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final result = await CfApiService.createWithdrawal({
+        'userId': uid,
+        'valor': valor,
+        'pixKey': pixKey,
+        'affiliateCode': '',
+        'affiliateNome': '',
+      });
 
-    if (result.success) {
-      // Registra localmente o saque enquanto aguarda webhook
-      final novoSaque = WithdrawModel(
-        id: 'w_${DateTime.now().millisecondsSinceEpoch}',
-        userId: 'current',
-        valor: result.value,
-        pixKey: result.pixKey ?? pixKey ?? '',
-        pixKeyType: pixKeyType ?? 'EMAIL',
-        status: 'PROCESSING',
-        createdAt: DateTime.now(),
-      );
-      _withdraws.insert(0, novoSaque);
+      if (result != null) {
+        // Atualiza saldo local
+        _saldoCarteira -= valor;
+        _saldoPendente += valor;
+        final wd = WithdrawModel.fromD1(result);
+        _withdraws.insert(0, wd);
+        _isLoading = false;
+        notifyListeners();
+        return WithdrawResult(success: true, message: 'Saque solicitado!', value: valor, pixKey: pixKey);
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[WalletService] Erro saque: $e');
     }
 
     _isLoading = false;
     notifyListeners();
-
-    return result;
+    return WithdrawResult(success: false, message: 'Erro ao solicitar saque. Tente novamente.');
   }
-
-  // ── Adicionar venda recebida via WebSocket/Push ───────────────────────────
 
   void adicionarVenda(SaleModel sale) {
     _sales.insert(0, sale);
     notifyListeners();
   }
 
-  // ── Extrato completo (vendas + saques) ────────────────────────────────────
-
   List<Map<String, dynamic>> get extratoCompleto {
     final List<Map<String, dynamic>> items = [];
-
     for (final sale in salesCompleted) {
       items.add({
         'tipo': 'comissao',
@@ -252,7 +158,6 @@ class WalletService extends ChangeNotifier {
         'status': sale.status,
       });
     }
-
     for (final w in _withdraws) {
       items.add({
         'tipo': 'saque',
@@ -263,9 +168,21 @@ class WalletService extends ChangeNotifier {
         'status': w.status,
       });
     }
-
-    items.sort(
-        (a, b) => (b['data'] as DateTime).compareTo(a['data'] as DateTime));
+    items.sort((a, b) => (b['data'] as DateTime).compareTo(a['data'] as DateTime));
     return items;
+  }
+
+  static double _toDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
+  }
+
+  static int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is double) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
   }
 }

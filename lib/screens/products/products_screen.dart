@@ -21,7 +21,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProductService>().loadProducts();
+      // forceRefresh: true garante que produto novo criado no admin apareça aqui
+      context.read<ProductService>().loadProducts(forceRefresh: true);
     });
   }
 
@@ -58,7 +59,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
       body: ps.isLoading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary))
-          : CustomScrollView(
+          : RefreshIndicator(
+              color: AppColors.primary,
+              onRefresh: () => ps.loadProducts(forceRefresh: true),
+              child: CustomScrollView(
               slivers: [
                 // ── Filtro chips ─────────────────────────────────────────
                 SliverToBoxAdapter(
@@ -177,6 +181,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   ),
               ],
             ),
+          ),
     );
   }
 

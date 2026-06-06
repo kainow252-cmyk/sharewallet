@@ -61,6 +61,34 @@ class SaleModel {
     );
   }
 
+  /// Factory para Cloudflare D1 (snake_case, status em minúsculo)
+  factory SaleModel.fromD1(Map<String, dynamic> r) {
+    final comissaoValor = (r['valor'] as num? ?? 0).toDouble() *
+        (r['comissao'] as num? ?? 0).toDouble();
+    return SaleModel(
+      id: r['id']?.toString() ?? '',
+      userId: r['user_id']?.toString() ?? '',
+      productId: r['product_id']?.toString() ?? '',
+      productNome: r['product_nome']?.toString() ?? '',
+      valor: (r['valor'] as num? ?? 0).toDouble(),
+      comissao: comissaoValor,
+      plataforma: 0,
+      status: _d1Status(r['status']?.toString() ?? 'aprovado'),
+      createdAt: r['created_at'] != null
+          ? DateTime.tryParse(r['created_at'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+    );
+  }
+
+  static String _d1Status(String s) {
+    switch (s) {
+      case 'aprovado': return 'COMPLETED';
+      case 'pendente': return 'PENDING';
+      case 'cancelado': return 'CANCELLED';
+      default: return s.toUpperCase();
+    }
+  }
+
   static String _mapApiStatus(String apiStatus) {
     switch (apiStatus) {
       case 'PAID': return 'COMPLETED';

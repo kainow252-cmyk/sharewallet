@@ -19,7 +19,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import 'firebase_auth_service.dart';
-import 'firestore_service.dart';
 
 // ── Resultado de operações do serviço ────────────────────────────────────────
 
@@ -74,8 +73,8 @@ class FirebaseUserService {
       final pixFinal = pixKey.isNotEmpty ? pixKey : email;
       final now = DateTime.now();
 
-      final db = FirestoreService.db;
-      if (db == null) {
+    final db = _getDb();
+    if (db == null) {
         // Firebase não disponível — retorna usuário local sem Firestore
         return UserServiceResult(
           success: true,
@@ -256,7 +255,7 @@ class FirebaseUserService {
   /// Atualiza saldo disponível na carteira do usuário.
   static Future<void> atualizarSaldo(String uid, double novoSaldo) async {
     try {
-      final db = FirestoreService.db;
+      final db = _getDb();
       if (db == null) return;
 
       await Future.wait([
@@ -287,7 +286,7 @@ class FirebaseUserService {
     String? displayName,
     bool isNewUser = false,
   }) async {
-    final db = FirestoreService.db;
+    final db = _getDb();
     final fallback = UserModel(
       id: uid,
       nome: displayName ?? email.split('@').first,
@@ -346,8 +345,8 @@ class FirebaseUserService {
       // Perfil existe — montar UserModel com dados reais
       final aData = affiliateDoc.data()!;
       final saldoDisponivel = walletDoc.exists
-          ? FirestoreService.toDouble(walletDoc.data()?['saldo_disponivel'])
-          : FirestoreService.toDouble(aData['saldo']);
+          ? _toDouble(walletDoc.data()?['saldo_disponivel'])
+          : _toDouble(aData['saldo']);
 
       // Atualizar last_login
       db.collection('affiliates').doc(uid).update({
@@ -357,17 +356,17 @@ class FirebaseUserService {
 
       return UserModel(
         id: uid,
-        nome: FirestoreService.toStr(aData['nome'],
+        nome: _toStr(aData['nome'],
             fallback: displayName ?? email.split('@').first),
-        cpf: FirestoreService.toStr(aData['cpf']),
+        cpf: _toStr(aData['cpf']),
         email: email,
-        telefone: FirestoreService.toStr(aData['telefone']),
-        affiliateCode: FirestoreService.toStr(aData['affiliate_code'],
+        telefone: _toStr(aData['telefone']),
+        affiliateCode: _toStr(aData['affiliate_code'],
             fallback: _gerarCodigo(uid)),
         sponsorId: aData['sponsor_id']?.toString(),
         saldo: saldoDisponivel,
-        status: FirestoreService.toStr(aData['status'], fallback: 'ativo'),
-        createdAt: FirestoreService.toDateTimeOrNow(aData['created_at']),
+        status: _toStr(aData['status'], fallback: 'ativo'),
+        createdAt: _toDateTimeOrNow(aData['created_at']),
       );
     } catch (e) {
       if (kDebugMode) {
@@ -453,6 +452,44 @@ class FirebaseUserService {
       buffer.write(chars[idx % chars.length]);
     }
     return buffer.toString();
+  }
+
+  // ── Helpers inline (substitui FirestoreService helpers) ────────────────
+
+  static const String _databaseId = 'affiliatewalletwallet';
+  static FirebaseFirestore? _dbInstance;
+
+  static FirebaseFirestore? _getDb() {
+    if (_dbInstance != null) return _dbInstance;
+    try {
+      _dbInstance = FirebaseFirestore.instanceFor(
+        app: FirebaseFirestore.instance.app,
+        databaseId: _databaseId,
+      );
+      _dbInstance!.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+      return _dbInstance;
+    } catch (_) {
+      try {
+        return FirebaseFirestore.instance;
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  static double _toDouble(dynamic v) =>
+      (v is num) ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0;
+
+  static String _toStr(dynamic v, {String fallback = ''}) =>
+      v?.toString().isNotEmpty == true ? v.toString() : fallback;
+
+  static DateTime _toDateTimeOrNow(dynamic v) {
+    if (v == null) return DateTime.now();
+    if (v is Timestamp) return v.toDate();
+    return DateTime.tryParse(v.toString()) ?? DateTime.now();
   }
 
   /// Traduz erros Firebase para português.

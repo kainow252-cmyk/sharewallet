@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/product_model.dart';
-import 'firestore_service.dart';
+import 'cf_api_service.dart';
 
 class ProductService extends ChangeNotifier {
   List<ProductModel> _products = [];
@@ -43,35 +43,19 @@ class ProductService extends ChangeNotifier {
     'geral': '📦',
   };
 
-  // ── Carregar produtos ─────────────────────────────────────────────────────
+  // ── Carregar produtos via Cloudflare D1 ───────────────────────────────────
   Future<void> loadProducts({bool forceRefresh = false}) async {
-    // Cache: não recarrega se já tem produtos e não é refresh forçado
     if (!forceRefresh && _products.isNotEmpty) return;
 
     _isLoading = true;
     notifyListeners();
 
     try {
-      final col = FirestoreService.products;
-
-      if (col == null) {
-        // Modo demo — Firebase não inicializado
-        _products = ProductModel.mockProducts;
-        if (kDebugMode) debugPrint('[ProductService] Modo demo');
-      } else {
-        final snapshot = await FirestoreService.getWithTimeout(col);
-        if (snapshot != null) {
-          final all = snapshot.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return ProductModel.fromJson(data);
-          }).toList();
-          _products = all.where((p) => p.ativo).toList();
-          if (kDebugMode) debugPrint('[ProductService] ${_products.length} produtos');
-        }
-      }
+      final rows = await CfApiService.getProducts();
+      _products = rows.map((r) => ProductModel.fromJson(_normalize(r))).toList();
+      if (kDebugMode) debugPrint('[ProductService] ${_products.length} produtos (D1)');
     } catch (e) {
-      debugPrint('[ProductService] Erro ao carregar produtos: $e');
+      debugPrint('[ProductService] Erro: $e');
     }
 
     _isLoading = false;
@@ -89,8 +73,6 @@ class ProductService extends ChangeNotifier {
     required String userId,
   }) async {
     final product = _products.firstWhere((p) => p.id == productId);
-
-    // POST /api/v1/charge no backend com split Woovi
     return {
       'success': true,
       'charge_id': 'charge_${DateTime.now().millisecondsSinceEpoch}',
@@ -100,4 +82,20 @@ class ProductService extends ChangeNotifier {
       'comissao': product.valorComissao,
     };
   }
+
+  // D1 usa snake_case — normaliza para o ProductModel.fromJson
+  static Map<String, dynamic> _normalize(Map<String, dynamic> r) => {
+    'id': r['id'],
+    'nome': r['nome'],
+    'descricao': r['descricao'],
+    'valor': r['valor'],
+    'comissao': r['comissao'],
+    'categoria': r['categoria'],
+    'chargeType': r['charge_type'],
+    'periodicidade': r['periodicidade'],
+    'diaCobranca': r['dia_cobranca'],
+    'beneficios': r['beneficios'],
+    'imagem_url': r['imagem_url'],
+    'ativo': r['ativo'] == 1 || r['ativo'] == true,
+  };
 }

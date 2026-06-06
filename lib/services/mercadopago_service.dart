@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-import 'firestore_service.dart';
 
 // ── Modelos ───────────────────────────────────────────────────────────────────
 
@@ -162,11 +161,24 @@ class MercadoPagoService extends ChangeNotifier {
   String? get lastError => _lastError;
   MpPreference? get lastPreference => _lastPreference;
 
+  // ── Instância Firestore (banco affiliatewalletwallet) ────────────────────
+  static const _databaseId = 'affiliatewalletwallet';
+  static FirebaseFirestore? _dbInst;
+  static FirebaseFirestore? get _db {
+    _dbInst ??= FirebaseFirestore.instanceFor(
+      app: FirebaseFirestore.instance.app,
+      databaseId: _databaseId,
+    );
+    return _dbInst;
+  }
+  static CollectionReference<Map<String, dynamic>>? get _cfgCollection =>
+      _db?.collection('config');
+
   // ── Carregar config do Firestore ──────────────────────────────────────────
 
   Future<void> loadConfig() async {
     try {
-      final snap = await FirestoreService.config?.doc('mercadopago').get();
+      final snap = await _cfgCollection?.doc('mercadopago').get();
       if (snap != null && snap.exists) {
         _config = MpConfig.fromFirestore(snap.data()!);
         _isConfigLoaded = true;
@@ -210,7 +222,7 @@ class MercadoPagoService extends ChangeNotifier {
   }
 
   Future<void> _saveConfigToFirestore(MpConfig cfg) async {
-    await FirestoreService.config?.doc('mercadopago').set({
+    await _cfgCollection?.doc('mercadopago').set({
       'mode': cfg.mode,
       'sandbox': {
         ...cfg.sandbox.toMap(),
@@ -540,7 +552,7 @@ class MercadoPagoService extends ChangeNotifier {
       final comissao      = valor * _config.comissaoPercent;
       final transactionId = 'SIM_${DateTime.now().millisecondsSinceEpoch}';
 
-      final db = FirestoreService.db;
+      final db = _db;
       if (db == null) return false;
 
       await db.collection('subscriptions').add({
@@ -634,7 +646,7 @@ class MercadoPagoService extends ChangeNotifier {
     required double comissao,
   }) async {
     try {
-      await FirestoreService.db?.collection('payments').add({
+      await _db?.collection('payments').add({
         'preference_id':  preferenceId,
         'external_ref':   externalRef,
         'affiliate_id':   affiliateId,

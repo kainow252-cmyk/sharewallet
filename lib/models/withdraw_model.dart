@@ -54,6 +54,33 @@ class WithdrawModel {
     );
   }
 
+  /// Factory para Cloudflare D1
+  factory WithdrawModel.fromD1(Map<String, dynamic> r) {
+    return WithdrawModel(
+      id: r['id']?.toString() ?? '',
+      userId: r['user_id']?.toString() ?? '',
+      valor: (r['valor'] as num? ?? 0).toDouble(),
+      pixKey: r['pix_key']?.toString() ?? '',
+      pixKeyType: 'PIX',
+      status: _d1Status(r['status']?.toString() ?? 'pendente'),
+      createdAt: r['solicitado_em'] != null
+          ? DateTime.tryParse(r['solicitado_em'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      processedAt: r['processado_em'] != null
+          ? DateTime.tryParse(r['processado_em'].toString())
+          : null,
+    );
+  }
+
+  static String _d1Status(String s) {
+    switch (s) {
+      case 'aprovado': return 'APPROVED';
+      case 'recusado': return 'REJECTED';
+      case 'processando': return 'PROCESSING';
+      default: return 'PENDING';
+    }
+  }
+
   static String _mapApiStatus(String s) {
     switch (s) {
       case 'COMPLETED': return 'APPROVED';
