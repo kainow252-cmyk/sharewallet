@@ -141,13 +141,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.autorenew_rounded,
+                        Icon(Icons.pix_rounded,
                             color: Colors.white70, size: 18),
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Pix Automático — cliente autoriza uma vez '
-                            'e paga todo mês automaticamente!',
+                            '100% Pix — Recorrente (autoriza 1x, débito automático) '
+                            'ou Único (QR Code a cada cobrança).',
                             style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -370,10 +370,10 @@ class _ProductCardState extends State<_ProductCard> {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: product.isPixAutomatico
+          color: product.isPixRecorrente
               ? AppColors.primary.withValues(alpha: 0.25)
               : AppColors.cardBorder,
-          width: product.isPixAutomatico ? 1.5 : 1,
+          width: product.isPixRecorrente ? 1.5 : 1,
         ),
         boxShadow: [
           BoxShadow(
@@ -486,7 +486,7 @@ class _ProductCardState extends State<_ProductCard> {
                             ),
                         ],
                       ),
-                      if (product.isPixAutomatico && product.diaCobranca != null)
+                      if (product.isPixRecorrente && product.diaCobranca != null)
                         Row(
                           children: [
                             const Icon(Icons.calendar_today_rounded,
@@ -630,27 +630,25 @@ class _ProductCardState extends State<_ProductCard> {
                   child: ElevatedButton.icon(
                     onPressed: () => _assinar(context, product),
                     icon: Icon(
-                      product.isPixAutomatico
+                      product.isPixRecorrente
                           ? Icons.autorenew_rounded
                           : Icons.pix_rounded,
                       size: 16,
                       color: Colors.white,
                     ),
                     label: Text(
-                      product.isPixAutomatico
-                          ? 'Assinar — Pix Automático'
-                          : product.isPixAvulso
-                              ? 'Pagar com Pix'
-                              : 'Comprar Agora',
+                      product.isPixRecorrente
+                          ? 'Assinar — Pix Recorrente'
+                          : 'Pagar com Pix',
                       style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: Colors.white),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: product.isPixAutomatico
+                      backgroundColor: product.isPixRecorrente
                           ? AppColors.primary
-                          : AppColors.gold,
+                          : const Color(0xFF1976D2),
                       padding: const EdgeInsets.symmetric(vertical: 11),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -671,7 +669,7 @@ class _ProductCardState extends State<_ProductCard> {
     final auth = context.read<AuthService>();
     final affiliateCode = auth.currentUser?.affiliateCode ?? 'ABC123';
 
-    // Abre modal para escolher fluxo: MP Checkout ou Pix Automático legado
+    // Abre modal para escolher fluxo: MP Checkout ou Pix Recorrente legado
     _showCheckoutOptions(context, product, affiliateCode);
   }
 
@@ -727,7 +725,7 @@ class _ProductCardState extends State<_ProductCard> {
                             color: AppColors.textPrimary),
                       ),
                       Text(
-                        'Sua comissão: R\$ ${comissao.toStringAsFixed(2)}/mês',
+                        'Sua comissão: R\$ ${comissao.toStringAsFixed(2)}${product.isPixRecorrente ? '/mês' : ''}',
                         style: const TextStyle(
                             color: AppColors.success,
                             fontSize: 12,
@@ -754,7 +752,9 @@ class _ProductCardState extends State<_ProductCard> {
               badge: 'RECOMENDADO',
               badgeColor: AppColors.success,
               title: 'Pagar com Mercado Pago',
-              subtitle: 'Checkout seguro • Pix, cartão ou boleto',
+              subtitle: product.isPixRecorrente
+                  ? 'Checkout seguro • Pix Recorrente ou cartão'
+                  : 'Checkout seguro • Pix Único ou cartão',
               onTap: () {
                 Navigator.pop(ctx);
                 Navigator.push(
@@ -770,12 +770,12 @@ class _ProductCardState extends State<_ProductCard> {
             ),
             const SizedBox(height: 12),
 
-            // Opção 2: Pix Automático legado
+            // Opção 2: Pix Recorrente legado
             _CheckoutOption(
               icon: Icons.autorenew_rounded,
               iconColor: const Color(0xFF32BCAD),
-              title: 'Autorizar Pix Automático',
-              subtitle: 'Débito automático mensal no banco',
+              title: 'Autorizar Pix Recorrente',
+              subtitle: 'Débito automático mensal direto no banco',
               onTap: () {
                 Navigator.pop(ctx);
                 Navigator.push(

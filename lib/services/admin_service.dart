@@ -621,15 +621,15 @@ class AdminService extends ChangeNotifier {
     }
 
     ChargeType ct;
-    switch (j['chargeType'] as String? ?? 'pixAutomatico') {
+    switch (j['chargeType'] as String? ?? 'pixRecorrente') {
       case 'pixAvulso':
         ct = ChargeType.pixAvulso;
         break;
       case 'unico':
-        ct = ChargeType.unico;
+        ct = ChargeType.pixAvulso;
         break;
       default:
-        ct = ChargeType.pixAutomatico;
+        ct = ChargeType.pixRecorrente;
     }
 
     return SubscriptionModel(
@@ -706,7 +706,7 @@ class AdminService extends ChangeNotifier {
       id: 'sub_001', productId: 'prod_001', productNome: 'Seguro Motoboy',
       valor: 10.00, comissao: 0.20, affiliateCode: 'ABC123',
       affiliateNome: 'Carlos Motoboy', status: SubscriptionStatus.ativa,
-      chargeType: ChargeType.pixAutomatico, dataInicio: DateTime(2024, 3, 5),
+      chargeType: ChargeType.pixRecorrente, dataInicio: DateTime(2024, 3, 5),
       proximaCobranca: DateTime(2026, 7, 5), diaCobranca: 5,
       pixKey: 'carlos.moto@gmail.com', historico: [],
     ),
@@ -714,7 +714,7 @@ class AdminService extends ChangeNotifier {
       id: 'sub_002', productId: 'prod_002', productNome: 'Telesena+',
       valor: 25.00, comissao: 0.25, affiliateCode: 'ABC123',
       affiliateNome: 'Fernanda Costa', status: SubscriptionStatus.ativa,
-      chargeType: ChargeType.pixAutomatico, dataInicio: DateTime(2024, 4, 5),
+      chargeType: ChargeType.pixRecorrente, dataInicio: DateTime(2024, 4, 5),
       proximaCobranca: DateTime(2026, 7, 5), diaCobranca: 5,
       pixKey: 'fernanda@email.com', historico: [],
     ),
@@ -722,7 +722,7 @@ class AdminService extends ChangeNotifier {
       id: 'sub_003', productId: 'prod_003', productNome: 'Clube de Benefícios',
       valor: 19.90, comissao: 0.30, affiliateCode: 'DEF456',
       affiliateNome: 'Roberto Alves', status: SubscriptionStatus.pendente,
-      chargeType: ChargeType.pixAutomatico, dataInicio: DateTime(2024, 5, 5),
+      chargeType: ChargeType.pixRecorrente, dataInicio: DateTime(2024, 5, 5),
       proximaCobranca: DateTime(2026, 7, 5), diaCobranca: 5,
       motivo: 'Saldo insuficiente', pixKey: '11999990000', historico: [],
     ),
@@ -730,7 +730,7 @@ class AdminService extends ChangeNotifier {
       id: 'sub_004', productId: 'prod_001', productNome: 'Seguro Motoboy',
       valor: 10.00, comissao: 0.20, affiliateCode: 'XYZ789',
       affiliateNome: 'Luiz Motoboy', status: SubscriptionStatus.ativa,
-      chargeType: ChargeType.pixAutomatico, dataInicio: DateTime(2024, 2, 5),
+      chargeType: ChargeType.pixRecorrente, dataInicio: DateTime(2024, 2, 5),
       proximaCobranca: DateTime(2026, 7, 5), diaCobranca: 5,
       pixKey: 'luiz@gmail.com', historico: [],
     ),
@@ -738,7 +738,7 @@ class AdminService extends ChangeNotifier {
       id: 'sub_005', productId: 'prod_004', productNome: 'Assistência Residencial',
       valor: 15.00, comissao: 0.20, affiliateCode: 'JKL654',
       affiliateNome: 'Sandra Oliveira', status: SubscriptionStatus.cancelada,
-      chargeType: ChargeType.pixAutomatico, dataInicio: DateTime(2024, 1, 5),
+      chargeType: ChargeType.pixRecorrente, dataInicio: DateTime(2024, 1, 5),
       proximaCobranca: DateTime(2026, 8, 5), diaCobranca: 5,
       motivo: 'Cancelado pelo usuário', pixKey: 'sandra@email.com', historico: [],
     ),

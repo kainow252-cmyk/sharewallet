@@ -788,7 +788,7 @@ class _SuccessStep extends StatelessWidget {
                 _SuccessDetail(
                   icon: Icons.pix_rounded,
                   label: 'Método',
-                  value: 'Pix Automático',
+                  value: 'Pix Recorrente',
                   color: const Color(0xFF32BCAD),
                 ),
                 const Divider(height: 20),

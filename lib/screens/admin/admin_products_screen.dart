@@ -339,7 +339,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _beneficios =
         TextEditingController(text: p?.beneficiosList.join('\n') ?? '');
     _categoria = TextEditingController(text: p?.categoria ?? 'geral');
-    _chargeType = p?.chargeType ?? ChargeType.pixAutomatico;
+    _chargeType = p?.chargeType ?? ChargeType.pixRecorrente;
     _ativo = p?.ativo ?? true;
   }
 
@@ -357,7 +357,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     if (!_formKey.currentState!.validate()) return;
     final svc = context.read<AdminService>();
     final isNew = widget.product == null;
-    final diaCobrancaVal = _chargeType != ChargeType.unico
+    final diaCobrancaVal = _chargeType == ChargeType.pixRecorrente
         ? int.tryParse(_diaCobranca.text)
         : null;
     final beneficiosStr =
@@ -373,7 +373,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       chargeType: _chargeType,
       diaCobranca: diaCobrancaVal,
       periodicidade:
-          _chargeType == ChargeType.unico ? null : 'mensal',
+          _chargeType == ChargeType.pixRecorrente ? 'mensal' : null,
       beneficios: beneficiosStr.isEmpty ? null : beneficiosStr,
       ativo: _ativo,
     );
@@ -444,78 +444,38 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                   controller: controller,
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                   children: [
-                    // ── Tipo de cobrança ─────────────────────────────────
-                    const Text('Tipo de Cobrança',
+                    // ── Tipo de cobrança Pix ─────────────────────────────
+                    const Text('Tipo de Cobrança Pix',
                         style: TextStyle(
                             fontWeight: FontWeight.w700,
+                            fontSize: 14,
                             color: AppColors.textPrimary)),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Todos os produtos usam Pix como forma de pagamento',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.textHint),
+                    ),
+                    const SizedBox(height: 12),
+                    // Opção 1: Pix Recorrente
+                    _PixTypeOption(
+                      selected: _chargeType == ChargeType.pixRecorrente,
+                      icon: Icons.autorenew_rounded,
+                      color: const Color(0xFF0D7A5A),
+                      title: 'Pix Recorrente',
+                      subtitle: 'Cliente autoriza 1x → débito automático todo mês',
+                      badge: 'RECOMENDADO',
+                      onTap: () => setState(() => _chargeType = ChargeType.pixRecorrente),
+                    ),
                     const SizedBox(height: 10),
-                    Row(
-                      children: ChargeType.values.map((ct) {
-                        final selected = _chargeType == ct;
-                        final label = ct == ChargeType.pixAutomatico
-                            ? 'Pix Automático'
-                            : ct == ChargeType.pixAvulso
-                                ? 'Pix Avulso'
-                                : 'Pagamento Único';
-                        final icon = ct == ChargeType.pixAutomatico
-                            ? Icons.autorenew_rounded
-                            : ct == ChargeType.pixAvulso
-                                ? Icons.pix_rounded
-                                : Icons.shopping_bag_rounded;
-                        final color = ct == ChargeType.pixAutomatico
-                            ? const Color(0xFF0D7A5A)
-                            : ct == ChargeType.pixAvulso
-                                ? AppColors.info
-                                : AppColors.warning;
-                        return Expanded(
-                          child: GestureDetector(
-                            onTap: () =>
-                                setState(() => _chargeType = ct),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              margin: const EdgeInsets.only(right: 6),
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 10, horizontal: 4),
-                              decoration: BoxDecoration(
-                                color: selected
-                                    ? color.withValues(alpha: 0.12)
-                                    : AppColors.surfaceVariant,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: selected
-                                      ? color
-                                      : AppColors.cardBorder,
-                                  width: selected ? 1.5 : 1,
-                                ),
-                              ),
-                              child: Column(
-                                children: [
-                                  Icon(icon,
-                                      color: selected
-                                          ? color
-                                          : AppColors.textHint,
-                                      size: 20),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    label,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: selected
-                                          ? FontWeight.w700
-                                          : FontWeight.normal,
-                                      color: selected
-                                          ? color
-                                          : AppColors.textHint,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                    // Opção 2: Pix Único/Avulso
+                    _PixTypeOption(
+                      selected: _chargeType == ChargeType.pixAvulso,
+                      icon: Icons.pix_rounded,
+                      color: const Color(0xFF1976D2),
+                      title: 'Pix Único',
+                      subtitle: 'QR Code gerado a cada cobrança manualmente',
+                      onTap: () => setState(() => _chargeType = ChargeType.pixAvulso),
                     ),
                     const SizedBox(height: 16),
 
@@ -563,7 +523,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    if (_chargeType != ChargeType.unico) ...[
+                    if (_chargeType != ChargeType.pixAvulso) ...[
                       _Field(
                         controller: _diaCobranca,
                         label: 'Dia de Cobrança (ex: 5)',
@@ -594,34 +554,129 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Status ativo
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceVariant,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.cardBorder),
-                      ),
-                      child: SwitchListTile.adaptive(
-                        value: _ativo,
-                        onChanged: (v) => setState(() => _ativo = v),
-                        title: const Text('Produto Ativo',
-                            style: TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text(
-                          _ativo
-                              ? 'Visível para afiliados'
-                              : 'Oculto para afiliados',
-                          style: TextStyle(
-                              color: _ativo
-                                  ? AppColors.success
-                                  : AppColors.error,
-                              fontSize: 12),
+                    // ── Status ativo/inativo ──────────────────────────────
+                    const Text('Status do Produto',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: AppColors.textPrimary)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        // Botão Ativo
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _ativo = true),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 14, horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: _ativo
+                                    ? AppColors.success.withValues(alpha: 0.12)
+                                    : AppColors.surfaceVariant,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _ativo
+                                      ? AppColors.success
+                                      : AppColors.cardBorder,
+                                  width: _ativo ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    color: _ativo
+                                        ? AppColors.success
+                                        : AppColors.textHint,
+                                    size: 26,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Ativo',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: _ativo
+                                          ? AppColors.success
+                                          : AppColors.textHint,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Visível p/ afiliados',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: _ativo
+                                          ? AppColors.success.withValues(alpha: 0.8)
+                                          : AppColors.textHint,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                        activeThumbColor: AppColors.primary,
-                        activeTrackColor: AppColors.primaryLight,
-                        contentPadding: EdgeInsets.zero,
-                      ),
+                        const SizedBox(width: 10),
+                        // Botão Inativo
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _ativo = false),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 14, horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: !_ativo
+                                    ? AppColors.error.withValues(alpha: 0.1)
+                                    : AppColors.surfaceVariant,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: !_ativo
+                                      ? AppColors.error
+                                      : AppColors.cardBorder,
+                                  width: !_ativo ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.cancel_rounded,
+                                    color: !_ativo
+                                        ? AppColors.error
+                                        : AppColors.textHint,
+                                    size: 26,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Inativo',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: !_ativo
+                                          ? AppColors.error
+                                          : AppColors.textHint,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Oculto p/ afiliados',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: !_ativo
+                                          ? AppColors.error.withValues(alpha: 0.8)
+                                          : AppColors.textHint,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 24),
 
@@ -761,6 +816,129 @@ class _Field extends StatelessWidget {
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon, size: 20),
+      ),
+    );
+  }
+}
+
+// ── Opção visual de tipo de Pix ────────────────────────────────────────────────
+class _PixTypeOption extends StatelessWidget {
+  final bool selected;
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final String? badge;
+  final VoidCallback onTap;
+
+  const _PixTypeOption({
+    required this.selected,
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    this.badge,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.08) : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? color : AppColors.cardBorder,
+            width: selected ? 1.8 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Ícone
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: selected
+                    ? color.withValues(alpha: 0.14)
+                    : AppColors.cardBorder.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                color: selected ? color : AppColors.textHint,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Texto
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: selected ? color : AppColors.textPrimary,
+                        ),
+                      ),
+                      if (badge != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            badge!,
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.success,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            // Radio
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? color : AppColors.cardBorder,
+                  width: 2,
+                ),
+                color: selected ? color : Colors.transparent,
+              ),
+              child: selected
+                  ? const Icon(Icons.check_rounded,
+                      color: Colors.white, size: 13)
+                  : null,
+            ),
+          ],
+        ),
       ),
     );
   }

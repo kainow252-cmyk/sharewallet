@@ -104,7 +104,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     color: AppColors.textPrimary)),
             const SizedBox(height: 8),
             Text(
-              'O Pix Automático foi configurado. O débito de ${widget.product.valorFormatado} será realizado todo dia ${widget.product.diaCobranca ?? 5}.',
+              'O Pix Recorrente foi configurado. O débito de ${widget.product.valorFormatado} será realizado todo dia ${widget.product.diaCobranca ?? 5}.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                   color: AppColors.textSecondary, fontSize: 13, height: 1.5),
@@ -242,7 +242,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               // ── Botão confirmar ────────────────────────────────────────────
               PrimaryButton(
                 label: product.isPixAutomatico
-                    ? 'Autorizar Pix Automático'
+                    ? 'Autorizar Pix Recorrente'
                     : 'Confirmar Assinatura',
                 icon: product.isPixAutomatico
                     ? Icons.autorenew_rounded
@@ -511,7 +511,7 @@ class _AuthorizationBox extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Autorizo o débito mensal de ${product.valorFormatado} via Pix Automático, todo dia ${product.diaCobranca ?? 5} de cada mês, referente ao plano "${product.nome}".',
+                  'Autorizo o débito mensal de ${product.valorFormatado} via Pix Recorrente, todo dia ${product.diaCobranca ?? 5} de cada mês, referente ao plano "${product.nome}".',
                   style: const TextStyle(
                       fontSize: 13,
                       color: AppColors.textPrimary,
@@ -548,7 +548,7 @@ class _AuthorizationBox extends StatelessWidget {
                         const TextSpan(
                             text: 'Concordo e autorizo o '),
                         TextSpan(
-                          text: 'Pix Automático',
+                          text: 'Pix Recorrente',
                           style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w700,
@@ -696,7 +696,7 @@ class _HowItWorksCard extends StatelessWidget {
               Icon(Icons.info_outline_rounded,
                   color: Color(0xFF1976D2), size: 16),
               SizedBox(width: 8),
-              Text('Como funciona o Pix Automático',
+              Text('Como funciona o Pix Recorrente',
                   style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF1976D2),

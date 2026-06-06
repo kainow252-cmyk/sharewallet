@@ -253,7 +253,7 @@ class _SubCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    sub.chargeType == ChargeType.pixAutomatico
+                    sub.chargeType == ChargeType.pixRecorrente
                         ? Icons.autorenew_rounded
                         : sub.chargeType == ChargeType.pixAvulso
                             ? Icons.pix_rounded
@@ -427,12 +427,10 @@ class _SubCard extends StatelessWidget {
 
   Color _chargeColor(ChargeType ct) {
     switch (ct) {
-      case ChargeType.pixAutomatico:
+      case ChargeType.pixRecorrente:
         return const Color(0xFF0D7A5A);
       case ChargeType.pixAvulso:
         return AppColors.info;
-      case ChargeType.unico:
-        return AppColors.warning;
     }
   }
 }

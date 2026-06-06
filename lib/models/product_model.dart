@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
-// ── Tipo de cobrança ──────────────────────────────────────────────────────────
+// ── Tipo de cobrança — somente Pix ────────────────────────────────────────────
 enum ChargeType {
-  pixAutomatico, // Pix Automático/Recorrente — autorização única, débito automático
-  pixAvulso,     // QR Code manual a cada cobrança
-  unico,         // Produto de pagamento único (sem recorrência)
+  pixRecorrente, // Pix Recorrente — autoriza uma vez, débito automático mensal
+  pixAvulso,     // Pix Único/Avulso — QR Code gerado a cada cobrança
 }
 
 class ProductModel {
@@ -30,21 +29,28 @@ class ProductModel {
     this.categoria = 'geral',
     this.imagemUrl,
     this.ativo = true,
-    this.chargeType = ChargeType.pixAutomatico,
+    this.chargeType = ChargeType.pixRecorrente,
     this.periodicidade,
     this.diaCobranca,
     this.beneficios,
   });
 
   // Atalhos
-  bool get recorrente => chargeType != ChargeType.unico;
-  bool get isPixAutomatico => chargeType == ChargeType.pixAutomatico;
+  bool get recorrente => chargeType == ChargeType.pixRecorrente;
+  bool get isPixRecorrente => chargeType == ChargeType.pixRecorrente;
   bool get isPixAvulso => chargeType == ChargeType.pixAvulso;
 
+  // Compat legado (usado em alguns widgets ainda)
+  bool get isPixAutomatico => chargeType == ChargeType.pixRecorrente;
+
   factory ProductModel.fromJson(Map<String, dynamic> json) {
-    ChargeType ct = ChargeType.pixAutomatico;
-    if (json['chargeType'] == 'pixAvulso') ct = ChargeType.pixAvulso;
-    if (json['chargeType'] == 'unico') ct = ChargeType.unico;
+    ChargeType ct = ChargeType.pixRecorrente;
+    final raw = json['chargeType']?.toString() ?? '';
+    if (raw == 'pixAvulso') ct = ChargeType.pixAvulso;
+    // legado: pixAutomatico → pixRecorrente
+    if (raw == 'pixAutomatico') ct = ChargeType.pixRecorrente;
+    // legado: unico → pixAvulso (mapeamos para avulso)
+    if (raw == 'unico') ct = ChargeType.pixAvulso;
 
     return ProductModel(
       id: json['id']?.toString() ?? '',
@@ -73,34 +79,37 @@ class ProductModel {
 
   String get chargeTypeLabel {
     switch (chargeType) {
-      case ChargeType.pixAutomatico:
-        return 'Pix Automático';
+      case ChargeType.pixRecorrente:
+        return 'Pix Recorrente';
       case ChargeType.pixAvulso:
-        return 'Pix Avulso';
-      case ChargeType.unico:
-        return 'Pagamento único';
+        return 'Pix Único';
+    }
+  }
+
+  String get chargeTypeDescription {
+    switch (chargeType) {
+      case ChargeType.pixRecorrente:
+        return 'Autoriza 1x • débito automático todo mês';
+      case ChargeType.pixAvulso:
+        return 'QR Code gerado a cada cobrança';
     }
   }
 
   Color get chargeTypeColor {
     switch (chargeType) {
-      case ChargeType.pixAutomatico:
+      case ChargeType.pixRecorrente:
         return const Color(0xFF0D7A5A); // verde escuro
       case ChargeType.pixAvulso:
         return const Color(0xFF1976D2); // azul
-      case ChargeType.unico:
-        return const Color(0xFFE65100); // laranja
     }
   }
 
   IconData get chargeTypeIcon {
     switch (chargeType) {
-      case ChargeType.pixAutomatico:
+      case ChargeType.pixRecorrente:
         return Icons.autorenew_rounded;
       case ChargeType.pixAvulso:
         return Icons.pix_rounded;
-      case ChargeType.unico:
-        return Icons.shopping_bag_rounded;
     }
   }
 
@@ -122,7 +131,7 @@ class ProductModel {
         'beneficios': beneficios,
       };
 
-  // ── Produtos mock ──────────────────────────────────────────────────────────
+  // ── Produtos mock — todos somente Pix ─────────────────────────────────────
   static List<ProductModel> get mockProducts => [
         ProductModel(
           id: '1',
@@ -132,7 +141,8 @@ class ProductModel {
           descricao:
               'Seguro completo para motoboys com cobertura total em acidentes, roubo e assistência 24h.',
           categoria: 'seguros',
-          chargeType: ChargeType.pixAutomatico,
+          ativo: true,
+          chargeType: ChargeType.pixRecorrente,
           periodicidade: 'mensal',
           diaCobranca: 5,
           beneficios:
@@ -146,7 +156,8 @@ class ProductModel {
           descricao:
               'Acesso premium à plataforma Telesena com sorteios diários e benefícios exclusivos.',
           categoria: 'entretenimento',
-          chargeType: ChargeType.pixAutomatico,
+          ativo: true,
+          chargeType: ChargeType.pixRecorrente,
           periodicidade: 'mensal',
           diaCobranca: 5,
           beneficios:
@@ -160,7 +171,8 @@ class ProductModel {
           descricao:
               'Descontos em farmácias, supermercados, restaurantes e muito mais todo mês.',
           categoria: 'beneficios',
-          chargeType: ChargeType.pixAutomatico,
+          ativo: true,
+          chargeType: ChargeType.pixRecorrente,
           periodicidade: 'mensal',
           diaCobranca: 5,
           beneficios:
@@ -174,7 +186,8 @@ class ProductModel {
           descricao:
               'Suporte técnico para sua casa: encanamento, elétrica, chaveiro e muito mais.',
           categoria: 'assistencia',
-          chargeType: ChargeType.pixAutomatico,
+          ativo: true,
+          chargeType: ChargeType.pixRecorrente,
           periodicidade: 'mensal',
           diaCobranca: 5,
           beneficios:
@@ -188,7 +201,8 @@ class ProductModel {
           descricao:
               'Aprenda a organizar suas finanças, investir e conquistar sua independência financeira.',
           categoria: 'cursos',
-          chargeType: ChargeType.unico,
+          ativo: true,
+          chargeType: ChargeType.pixAvulso,
           beneficios:
               'Acesso vitalício|40 horas de conteúdo|Certificado|Suporte do professor|Comunidade exclusiva',
         ),
@@ -200,6 +214,7 @@ class ProductModel {
           descricao:
               'Proteja seus dispositivos eletrônicos contra danos e defeitos com cobertura total.',
           categoria: 'garantias',
+          ativo: true,
           chargeType: ChargeType.pixAvulso,
           periodicidade: 'anual',
           beneficios:

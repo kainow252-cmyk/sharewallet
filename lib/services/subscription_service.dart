@@ -192,7 +192,7 @@ class SubscriptionService extends ChangeNotifier {
           success: true,
           subscriptionId: subId,
           message: product.isPixAutomatico
-              ? 'Autorize o Pix Automático no seu banco para ativar'
+              ? 'Autorize o Pix Recorrente no seu banco para ativar'
               : 'Assinatura criada com sucesso!',
         );
       }
@@ -344,15 +344,15 @@ class SubscriptionService extends ChangeNotifier {
     }
 
     ChargeType ct;
-    switch (j['chargeType'] as String? ?? 'pixAutomatico') {
+    switch (j['chargeType'] as String? ?? 'pixRecorrente') {
       case 'pixAvulso':
         ct = ChargeType.pixAvulso;
         break;
       case 'unico':
-        ct = ChargeType.unico;
+        ct = ChargeType.pixAvulso;
         break;
       default:
-        ct = ChargeType.pixAutomatico;
+        ct = ChargeType.pixRecorrente;
     }
 
     return SubscriptionModel(

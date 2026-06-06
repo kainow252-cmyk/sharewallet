@@ -3,7 +3,7 @@ import 'product_model.dart';
 
 // ── Status da assinatura ──────────────────────────────────────────────────────
 enum SubscriptionStatus {
-  ativa,      // Pix Automático autorizado, pagamentos em dia
+  ativa,      // Pix Recorrente autorizado, pagamentos em dia
   pendente,   // Tentativa de débito falhou (saldo insuficiente, etc.)
   cancelada,  // Usuário cancelou ou plataforma cancelou
   aguardando, // Aguardando autorização do cliente no banco
@@ -170,7 +170,7 @@ class SubscriptionModel {
     if (json['status'] == 'cancelada') st = SubscriptionStatus.cancelada;
     if (json['status'] == 'aguardando') st = SubscriptionStatus.aguardando;
 
-    ChargeType ct = ChargeType.pixAutomatico;
+    ChargeType ct = ChargeType.pixRecorrente;
     if (json['chargeType'] == 'pixAvulso') ct = ChargeType.pixAvulso;
 
     return SubscriptionModel(
@@ -207,7 +207,7 @@ class SubscriptionModel {
           affiliateCode: 'ABC123',
           affiliateNome: 'João Silva',
           status: SubscriptionStatus.ativa,
-          chargeType: ChargeType.pixAutomatico,
+          chargeType: ChargeType.pixRecorrente,
           dataInicio: DateTime.now().subtract(const Duration(days: 95)),
           proximaCobranca: DateTime(
               DateTime.now().year, DateTime.now().month + 1, 5),
@@ -252,7 +252,7 @@ class SubscriptionModel {
           affiliateCode: 'ABC123',
           affiliateNome: 'Maria Souza',
           status: SubscriptionStatus.pendente,
-          chargeType: ChargeType.pixAutomatico,
+          chargeType: ChargeType.pixRecorrente,
           dataInicio: DateTime.now().subtract(const Duration(days: 40)),
           proximaCobranca: DateTime(
               DateTime.now().year, DateTime.now().month + 1, 5),
@@ -266,7 +266,7 @@ class SubscriptionModel {
                   DateTime.now().year, DateTime.now().month, 5),
               valor: 19.90,
               status: PaymentStatus.falhou,
-              motivo: 'Pix Automático recusado — Saldo insuficiente',
+              motivo: 'Pix Recorrente recusado — Saldo insuficiente',
             ),
             SubscriptionPayment(
               id: 'pay_004',

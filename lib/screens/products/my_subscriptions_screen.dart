@@ -474,9 +474,9 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
                     Expanded(
                       child: _InfoRow(
                         label: 'Forma',
-                        value: sub.chargeType == ChargeType.pixAutomatico
-                            ? 'Pix Automático'
-                            : 'Pix Avulso',
+                        value: sub.chargeType == ChargeType.pixRecorrente
+                            ? 'Pix Recorrente'
+                            : 'Pix Único',
                         valueColor: AppColors.primary,
                       ),
                     ),

@@ -502,9 +502,9 @@ class _SubscriptionInfoCard extends StatelessWidget {
           _InfoRow(
             icon: Icons.pix_rounded,
             label: 'Método',
-            value: sub.chargeType == ChargeType.pixAutomatico
-                ? 'Pix Automático'
-                : 'Pix Avulso',
+            value: sub.chargeType == ChargeType.pixRecorrente
+                ? 'Pix Recorrente'
+                : 'Pix Único',
             valueColor: const Color(0xFF32BCAD),
           ),
           _InfoRow(
