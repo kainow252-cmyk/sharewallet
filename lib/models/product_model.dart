@@ -47,24 +47,46 @@ class ProductModel {
     ChargeType ct = ChargeType.pixRecorrente;
     final raw = json['chargeType']?.toString() ?? '';
     if (raw == 'pixAvulso') ct = ChargeType.pixAvulso;
-    // legado: pixAutomatico → pixRecorrente
-    if (raw == 'pixAutomatico') ct = ChargeType.pixRecorrente;
-    // legado: unico → pixAvulso (mapeamos para avulso)
-    if (raw == 'unico') ct = ChargeType.pixAvulso;
+    if (raw == 'pixAutomatico') ct = ChargeType.pixRecorrente; // legado
+    if (raw == 'unico') ct = ChargeType.pixAvulso;             // legado
+
+    // ── Suporte a dois schemas ────────────────────────────────────────────────
+    // Schema novo:  valor / comissao (decimal: 0.20)
+    // Schema antigo: preco / comissao_pct (percentual: 20) + comissao_valor
+    final double valor = (json['valor'] ?? json['preco'] ?? 0).toDouble();
+
+    double comissao;
+    if (json['comissao'] != null) {
+      // Schema novo — já é decimal (0.20)
+      comissao = (json['comissao'] as num).toDouble();
+    } else if (json['comissao_pct'] != null) {
+      // Schema antigo — percentual inteiro (20 → 0.20)
+      comissao = (json['comissao_pct'] as num).toDouble() / 100.0;
+    } else if (json['comissao_valor'] != null && valor > 0) {
+      // Schema antigo alternativo — valor absoluto da comissão
+      comissao = (json['comissao_valor'] as num).toDouble() / valor;
+    } else {
+      comissao = 0.0;
+    }
+
+    // Descrição: campo 'descricao' ou fallback vazio
+    final descricao = (json['descricao'] as String?)?.isNotEmpty == true
+        ? json['descricao'] as String
+        : (json['nome'] ?? '') as String;
 
     return ProductModel(
       id: json['id']?.toString() ?? '',
-      nome: json['nome'] ?? '',
-      valor: (json['valor'] ?? 0).toDouble(),
-      comissao: (json['comissao'] ?? 0).toDouble(),
-      descricao: json['descricao'] ?? '',
-      categoria: json['categoria'] ?? 'geral',
-      imagemUrl: json['imagem_url'],
-      ativo: json['ativo'] ?? true,
+      nome: (json['nome'] ?? '') as String,
+      valor: valor,
+      comissao: comissao,
+      descricao: descricao,
+      categoria: (json['categoria'] ?? 'geral') as String,
+      imagemUrl: json['imagem_url'] as String?,
+      ativo: (json['ativo'] ?? true) as bool,
       chargeType: ct,
-      periodicidade: json['periodicidade'],
-      diaCobranca: json['diaCobranca'],
-      beneficios: json['beneficios'],
+      periodicidade: json['periodicidade'] as String?,
+      diaCobranca: json['diaCobranca'] as int?,
+      beneficios: json['beneficios'] as String?,
     );
   }
 
