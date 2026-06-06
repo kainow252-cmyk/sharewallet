@@ -508,9 +508,212 @@ export default {
       });
     }
 
+    // ── /api/webhook/mp/confirm/:paymentId ─── confirmação manual (admin) ──
+    const mpConfirm = path.match(/^\/api\/webhook\/mp\/confirm\/([^/]+)$/);
+    if (mpConfirm && method === 'POST') {
+      const paymentId = mpConfirm[1];
+      const b = await request.json().catch(() => ({}));
+      const affiliateCode = b.affiliate_code || '';
+      const valor         = b.valor || 0;
+      const comissao      = b.comissao || (valor * 0.20);
+      const produtoId     = b.product_id || '';
+      const produtoNome   = b.product_nome || '';
+      const subId         = b.sub_id || `sub_pix_${paymentId}`;
+
+      // Upsert subscription como 'ativa'
+      const proximaData = new Date();
+      proximaData.setDate(proximaData.getDate() + 30);
+      await DB.prepare(
+        `INSERT INTO subscriptions
+          (id, product_id, product_nome, valor, comissao, affiliate_code,
+           charge_type, status, dia_cobranca, data_inicio, proxima_cobranca)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET status='ativa'`
+      ).bind(
+        subId, produtoId, produtoNome, valor, comissao,
+        affiliateCode, 'pixRecorrente', 'ativa', 5,
+        new Date().toISOString(), proximaData.toISOString()
+      ).run();
+
+      // Creditar comissão
+      if (affiliateCode && comissao > 0) {
+        const aff = await DB.prepare(
+          `SELECT id FROM affiliates WHERE affiliate_code=?`
+        ).bind(affiliateCode).first().catch(() => null);
+        if (aff?.id) {
+          await DB.prepare(
+            `INSERT INTO wallets (user_id, saldo_disponivel, total_recebido)
+             VALUES (?, ?, ?)
+             ON CONFLICT(user_id) DO UPDATE SET
+               saldo_disponivel = saldo_disponivel + ?,
+               total_recebido   = total_recebido   + ?,
+               updated_at       = datetime('now')`
+          ).bind(aff.id, comissao, comissao, comissao, comissao).run();
+          await DB.prepare(
+            `UPDATE affiliates SET
+               total_comissoes   = total_comissoes   + ?,
+               saldo_disponivel  = saldo_disponivel  + ?,
+               total_assinaturas = total_assinaturas + 1
+             WHERE affiliate_code=?`
+          ).bind(comissao, comissao, affiliateCode).run();
+        }
+      }
+
+      const sub = await DB.prepare(`SELECT * FROM subscriptions WHERE id=?`).bind(subId).first();
+      return ok({ confirmed: true, sub });
+    }
+
     // ── /api/health ────────────────────────────────────────────────────────
     if (path === '/api/health') {
       return ok({ status: 'ok', ts: new Date().toISOString() });
+    }
+
+    // ── /api/webhook/mp ────────────────────────────────────────────────────
+    // Recebe notificações do MercadoPago (pagamento aprovado/pendente/etc.)
+    // Docs: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
+    if (path === '/api/webhook/mp' && (method === 'POST' || method === 'GET')) {
+      try {
+        // MercadoPago pode enviar GET (validação) ou POST (notificação real)
+        if (method === 'GET') {
+          return ok({ received: true });
+        }
+
+        const body = await request.json().catch(() => ({}));
+        const url  = new URL(request.url);
+
+        // Extrair payment_id de onde o MP puder enviar
+        let paymentId = body?.data?.id
+          || body?.id
+          || url.searchParams.get('data.id')
+          || url.searchParams.get('id');
+
+        const topic = body?.type || body?.topic || url.searchParams.get('topic') || '';
+
+        // Só processa eventos de payment
+        if (!paymentId || (!topic.includes('payment') && topic !== '')) {
+          return ok({ received: true, skipped: true, topic });
+        }
+
+        paymentId = String(paymentId);
+
+        // Buscar config do MP (access_token) no D1 config
+        const mpCfg = await DB.prepare(
+          `SELECT value FROM config WHERE key='mp_config' LIMIT 1`
+        ).first().catch(() => null);
+
+        let accessToken = null;
+        if (mpCfg?.value) {
+          try {
+            const cfg = JSON.parse(mpCfg.value);
+            accessToken = cfg?.production?.access_token || cfg?.access_token || null;
+          } catch (_) {}
+        }
+
+        // Fallback: token hardcoded de produção
+        if (!accessToken) {
+          accessToken = 'APP_USR-6134195606061357-042317-6774542c427c45a6f274a4e19d7019c3-3235638414';
+        }
+
+        // Consultar API do MercadoPago para obter status real do pagamento
+        const mpResp = await fetch(
+          `https://api.mercadopago.com/v1/payments/${paymentId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type':  'application/json',
+            },
+          }
+        );
+
+        if (!mpResp.ok) {
+          return ok({ received: true, error: `MP API ${mpResp.status}`, paymentId });
+        }
+
+        const payment = await mpResp.json();
+        const status  = payment.status;           // approved | pending | rejected | cancelled
+        const extRef  = payment.external_reference || ''; // PIX_affiliateCode_produtoId_ts
+        const valor   = payment.transaction_amount || 0;
+        const metadata = payment.metadata || {};
+
+        const affiliateCode = metadata.affiliate_code || extRef.split('_')[1] || '';
+        const produtoId     = metadata.produto_id     || extRef.split('_')[2] || '';
+        const comissao      = metadata.comissao       || (valor * 0.20);
+
+        // ── Atualizar subscription no D1 ─────────────────────────────────
+        const subId    = `sub_pix_${paymentId}`;
+        const existSub = await DB.prepare(
+          `SELECT id, status FROM subscriptions WHERE id=?`
+        ).bind(subId).first().catch(() => null);
+
+        if (status === 'approved') {
+          if (existSub) {
+            // Atualizar status para 'ativa'
+            await DB.prepare(
+              `UPDATE subscriptions SET status='ativa' WHERE id=?`
+            ).bind(subId).run();
+          } else {
+            // Subscription não existe ainda (PIX gerado antes do fix) → criar agora
+            const proximaData = new Date();
+            proximaData.setDate(proximaData.getDate() + 30);
+            await DB.prepare(
+              `INSERT INTO subscriptions
+                (id, product_id, product_nome, valor, comissao, affiliate_code,
+                 charge_type, status, dia_cobranca, data_inicio, proxima_cobranca)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(id) DO UPDATE SET status='ativa'`
+            ).bind(
+              subId, produtoId, payment.description || '', valor, comissao,
+              affiliateCode, 'pixRecorrente', 'ativa', 5,
+              new Date().toISOString(), proximaData.toISOString()
+            ).run();
+            // Incrementar total_assinaturas do afiliado
+            if (affiliateCode) {
+              await DB.prepare(
+                `UPDATE affiliates SET total_assinaturas=total_assinaturas+1 WHERE affiliate_code=?`
+              ).bind(affiliateCode).run();
+            }
+          }
+
+          // Creditar comissão na wallet do afiliado
+          if (affiliateCode && comissao > 0) {
+            const aff = await DB.prepare(
+              `SELECT id FROM affiliates WHERE affiliate_code=?`
+            ).bind(affiliateCode).first().catch(() => null);
+            if (aff?.id) {
+              await DB.prepare(
+                `INSERT INTO wallets (user_id, saldo_disponivel, saldo_pendente, total_recebido)
+                 VALUES (?, ?, 0, ?)
+                 ON CONFLICT(user_id) DO UPDATE SET
+                   saldo_disponivel = saldo_disponivel + ?,
+                   total_recebido   = total_recebido   + ?,
+                   updated_at       = datetime('now')`
+              ).bind(aff.id, comissao, comissao, comissao, comissao).run();
+
+              await DB.prepare(
+                `UPDATE affiliates SET
+                   total_comissoes    = total_comissoes    + ?,
+                   saldo_disponivel   = saldo_disponivel   + ?,
+                   total_assinaturas  = total_assinaturas  + 1
+                 WHERE affiliate_code=?`
+              ).bind(comissao, comissao, affiliateCode).run();
+            }
+          }
+
+        } else if (status === 'rejected' || status === 'cancelled') {
+          if (existSub) {
+            await DB.prepare(
+              `UPDATE subscriptions SET status='cancelada', motivo=? WHERE id=?`
+            ).bind(`Pagamento ${status}`, subId).run();
+          }
+        }
+        // status === 'pending' → mantém como 'pendente', não faz nada
+
+        return ok({ received: true, paymentId, status, affiliateCode, subId });
+
+      } catch (e) {
+        // Sempre retorna 200 para o MercadoPago não reenviar infinitamente
+        return ok({ received: true, error: String(e) });
+      }
     }
 
     return err('Rota não encontrada: ' + path, 404);

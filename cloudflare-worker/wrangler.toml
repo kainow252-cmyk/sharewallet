@@ -1,0 +1,8 @@
+name = "sharewallet-api"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sharewallet-db"
+database_id = "499cd0ef-1f82-473e-a791-a087467d2919"
