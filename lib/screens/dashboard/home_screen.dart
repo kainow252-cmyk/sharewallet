@@ -170,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     indicados: wallet.totalIndicados,
                     vendas: wallet.totalVendas,
                     comissoes: wallet.totalComissoes,
+                    comissaoPendente: wallet.saldoPendente,
                   ),
 
                   const SizedBox(height: 20),

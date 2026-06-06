@@ -488,11 +488,17 @@ export default {
 
     // ── /api/metrics ───────────────────────────────────────────────────────
     if (path === '/api/metrics' && method === 'GET') {
-      const [aff, subs, wds, sales] = await Promise.all([
+      const [aff, subs, wds, sales, mrrData, comissoesMes, receitaMes] = await Promise.all([
         DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN status='ativo' THEN 1 ELSE 0 END) as ativos FROM affiliates`).first(),
         DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN status='ativa' THEN 1 ELSE 0 END) as ativas, SUM(CASE WHEN status='pendente' THEN 1 ELSE 0 END) as pendentes FROM subscriptions`).first(),
         DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN status='pendente' THEN 1 ELSE 0 END) as pendentes, SUM(CASE WHEN status='pendente' THEN valor ELSE 0 END) as valor_pendente FROM withdrawals`).first(),
-        DB.prepare(`SELECT SUM(valor) as receita_total, SUM(comissao*valor) as comissoes_total FROM sales WHERE status='aprovado'`).first(),
+        DB.prepare(`SELECT SUM(valor) as receita_total, SUM(comissao) as comissoes_total FROM sales WHERE status='aprovado'`).first(),
+        // MRR = soma dos valores das assinaturas ativas (recorrentes)
+        DB.prepare(`SELECT SUM(valor) as mrr FROM subscriptions WHERE status='ativa' AND (charge_type='pixRecorrente' OR charge_type IS NULL)`).first(),
+        // Comissões do mês atual
+        DB.prepare(`SELECT SUM(comissao) as comissoes_mes FROM sales WHERE status='aprovado' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')`).first(),
+        // Receita do mês atual
+        DB.prepare(`SELECT SUM(valor) as receita_mes FROM sales WHERE status='aprovado' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')`).first(),
       ]);
       return ok({
         totalAfiliados: aff?.total ?? 0,
@@ -503,8 +509,10 @@ export default {
         saquesPendentes: wds?.pendentes ?? 0,
         valorSaquesPendentes: wds?.valor_pendente ?? 0,
         receitaTotal: sales?.receita_total ?? 0,
+        receitaMes: receitaMes?.receita_mes ?? 0,
         comissoesTotal: sales?.comissoes_total ?? 0,
-        mrr: 0,
+        comissoesMes: comissoesMes?.comissoes_mes ?? 0,
+        mrr: mrrData?.mrr ?? 0,
       });
     }
 

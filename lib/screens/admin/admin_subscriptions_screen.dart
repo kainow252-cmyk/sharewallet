@@ -326,6 +326,17 @@ class _SubCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 6,
               children: [
+                // ── Tipo de cobrança bem visível ────────────────────────────
+                _InfoPill(
+                    icon: sub.chargeType == ChargeType.pixRecorrente
+                        ? Icons.autorenew_rounded
+                        : Icons.pix_rounded,
+                    label: sub.chargeType == ChargeType.pixRecorrente
+                        ? 'Mensal'
+                        : 'Valor Único',
+                    color: sub.chargeType == ChargeType.pixRecorrente
+                        ? const Color(0xFF0D7A5A)
+                        : AppColors.info),
                 _InfoPill(
                     icon: Icons.attach_money_rounded,
                     label: fmt.format(sub.valor),
@@ -338,10 +349,11 @@ class _SubCard extends StatelessWidget {
                     icon: Icons.calendar_today_rounded,
                     label: 'Início: ${dtFmt.format(sub.dataInicio)}',
                     color: AppColors.textSecondary),
-                _InfoPill(
-                      icon: Icons.event_repeat_rounded,
-                      label: 'Dia ${sub.diaCobranca}',
-                      color: AppColors.info),
+                if (sub.chargeType == ChargeType.pixRecorrente)
+                  _InfoPill(
+                        icon: Icons.event_repeat_rounded,
+                        label: 'Dia ${sub.diaCobranca}',
+                        color: AppColors.info),
               ],
             ),
 

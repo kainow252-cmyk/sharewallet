@@ -212,40 +212,93 @@ class StatsRow extends StatelessWidget {
   final int indicados;
   final int vendas;
   final double comissoes;
+  final double comissaoPendente; // comissão a receber (saldo_pendente no D1)
 
   const StatsRow({
     super.key,
     required this.indicados,
     required this.vendas,
     required this.comissoes,
+    this.comissaoPendente = 0.0,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
+      child: Column(
         children: [
-          _StatCard(
-            icon: Icons.people_rounded,
-            label: 'Indicados',
-            value: indicados.toString(),
-            color: AppColors.primary,
+          Row(
+            children: [
+              _StatCard(
+                icon: Icons.people_rounded,
+                label: 'Indicados',
+                value: indicados.toString(),
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 10),
+              _StatCard(
+                icon: Icons.shopping_bag_rounded,
+                label: 'Vendas',
+                value: vendas.toString(),
+                color: AppColors.gold,
+              ),
+              const SizedBox(width: 10),
+              _StatCard(
+                icon: Icons.trending_up_rounded,
+                label: 'Comissões',
+                value: 'R\$${comissoes.toStringAsFixed(0)}',
+                color: AppColors.success,
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          _StatCard(
-            icon: Icons.shopping_bag_rounded,
-            label: 'Vendas',
-            value: vendas.toString(),
-            color: AppColors.gold,
-          ),
-          const SizedBox(width: 10),
-          _StatCard(
-            icon: Icons.trending_up_rounded,
-            label: 'Comissões',
-            value: 'R\$${comissoes.toStringAsFixed(0)}',
-            color: AppColors.success,
-          ),
+          // Card "A Receber" — só mostra se há valor pendente
+          if (comissaoPendente > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.gold.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.pending_actions_rounded,
+                        color: AppColors.gold, size: 16),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Comissão a Receber',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary)),
+                        Text(
+                          'R\$ ${comissaoPendente.toStringAsFixed(2).replaceAll('.', ',')}',
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.gold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.info_outline_rounded,
+                      color: AppColors.textHint, size: 14),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
