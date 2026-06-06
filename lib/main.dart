@@ -27,6 +27,7 @@ import 'screens/products/products_screen.dart';
 import 'screens/products/my_subscriptions_screen.dart';
 import 'screens/admin/admin_login_screen.dart';
 import 'screens/admin/admin_nav_screen.dart';
+import 'screens/products/buy_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -97,15 +98,38 @@ class ShareWalletApp extends StatelessWidget {
           '/admin/login': (_) => const AdminLoginScreen(),
           '/admin': (_) => const AdminNavScreen(),
         },
-        // Deep link: /ref/CODE → RegisterScreen com sponsorCode
+        // Deep links dinâmicos
         onGenerateRoute: (settings) {
-          if (settings.name != null &&
-              settings.name!.startsWith('/ref/')) {
-            final code = settings.name!.replaceFirst('/ref/', '');
+          final name = settings.name ?? '';
+
+          // /ref/CODE → registro de afiliado com sponsorCode
+          if (name.startsWith('/ref/')) {
+            final code = name.replaceFirst('/ref/', '');
             return MaterialPageRoute(
               builder: (_) => RegisterScreen(sponsorCode: code),
             );
           }
+
+          // /produto/PRODUCT_ID?ref=AFFILIATE_CODE → tela pública do comprador
+          // Suporta tanto /produto/ID quanto /produto/ID?ref=CODE
+          if (name.startsWith('/produto/')) {
+            final withoutPrefix = name.replaceFirst('/produto/', '');
+            // Separa ID e query string
+            final parts = withoutPrefix.split('?');
+            final productId = parts[0];
+            String affiliateCode = '';
+            if (parts.length > 1) {
+              final query = Uri.splitQueryString(parts[1]);
+              affiliateCode = query['ref'] ?? '';
+            }
+            return MaterialPageRoute(
+              builder: (_) => BuyScreen(
+                productId: productId,
+                affiliateCode: affiliateCode,
+              ),
+            );
+          }
+
           return null;
         },
       ),

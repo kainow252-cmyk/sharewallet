@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../services/product_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/product_model.dart';
 import '../../theme/app_theme.dart';
-import 'subscription_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -603,23 +603,15 @@ class _ProductCardState extends State<_ProductCard> {
 
           const Divider(height: 1, indent: 16, endIndent: 16),
 
-          // ── Ações: somente Divulgar ────────────────────────────────────────
+          // ── Ações: Divulgar link rastreável ─────────────────────────────────
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                // Botão Divulgar — abre SubscriptionScreen diretamente
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SubscriptionScreen(
-                          product: product,
-                          affiliateCode: affiliateCode,
-                        ),
-                      ),
-                    ),
+                    onPressed: () =>
+                        _showShareSheet(context, product, affiliateCode),
                     icon: const Icon(Icons.share_rounded,
                         size: 16, color: Colors.white),
                     label: const Text(
@@ -646,6 +638,221 @@ class _ProductCardState extends State<_ProductCard> {
     );
   }
 
+  // ── Bottom sheet: compartilhar link rastreável ───────────────────────────
+  void _showShareSheet(
+      BuildContext context, ProductModel product, String affiliateCode) {
+    // Link público que o comprador acessa para preencher dados e gerar PIX
+    final link =
+        'https://sharewallet-app.pages.dev/app/#/produto/${product.id}?ref=$affiliateCode';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Cabeçalho
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.greenGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.share_rounded,
+                      color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Compartilhe seu link',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: AppColors.textPrimary),
+                      ),
+                      Text(
+                        'O comprador acessa e gera o PIX',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Comissão em destaque
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.monetization_on_rounded,
+                      color: AppColors.success, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.nome,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: AppColors.textPrimary),
+                        ),
+                        Text(
+                          'Sua comissão: ${product.comissaoFormatada}${product.isPixRecorrente ? '/mês' : ''}  •  ${product.comissaoPercent}%',
+                          style: const TextStyle(
+                              color: AppColors.success,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Icon(product.chargeTypeIcon,
+                          color: product.chargeTypeColor, size: 13),
+                      const SizedBox(width: 4),
+                      Text(
+                        product.chargeTypeLabel,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: product.chargeTypeColor,
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Box do link
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.cardBorder),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.link_rounded,
+                      color: AppColors.primary, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      link,
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.primary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: link));
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('✅ Link copiado! Compartilhe com seu cliente.'),
+                            backgroundColor: AppColors.success),
+                      );
+                    },
+                    icon: const Icon(Icons.copy_rounded,
+                        color: AppColors.primary, size: 18),
+                    tooltip: 'Copiar link',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Instrução
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F7FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFBBDEFB)),
+              ),
+              child: const Text(
+                '💡 Envie este link para seu cliente via WhatsApp ou redes sociais. '
+                'Ele mesmo preenche os dados e gera o PIX diretamente.',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1565C0),
+                    height: 1.5),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Botão copiar link
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: link));
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('✅ Link copiado!'),
+                        backgroundColor: AppColors.success),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12))),
+                icon: const Icon(Icons.copy_all_rounded,
+                    color: Colors.white),
+                label: const Text(
+                  'Copiar link de divulgação',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Badge tipo de cobrança ─────────────────────────────────────────────────────
