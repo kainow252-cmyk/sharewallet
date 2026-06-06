@@ -59,8 +59,6 @@ class UserModel {
 
   String get primeiroNome => nome.split(' ').first;
 
-  String get linkAfiliado => 'sharewallet.com.br/app/#/ref/$affiliateCode';
-
   UserModel copyWith({
     String? id,
     String? nome,

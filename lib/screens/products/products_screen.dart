@@ -808,7 +808,7 @@ class _ProductCardState extends State<_ProductCard> {
   void _showShareSheet(
       BuildContext context, ProductModel product, String affiliateCode) {
     final link =
-        'https://sharewallet.com.br/app/#/ref/$affiliateCode';
+        'https://sharewallet.com.br/app/#/produto/${product.id}?ref=$affiliateCode';
 
     showModalBottomSheet(
       context: context,

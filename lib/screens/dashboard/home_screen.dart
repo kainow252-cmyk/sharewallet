@@ -172,14 +172,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const SizedBox(height: 20),
 
-                  // Link de afiliado
-                  AffiliateLinkCard(
-                    link: user?.linkAfiliado ?? 'sharewallet.com.br/app/#/ref/ABC123',
-                    code: user?.affiliateCode ?? 'ABC123',
-                  ),
-
-                  const SizedBox(height: 20),
-
                   // Últimas Comissões
                   SectionTitle(
                     title: 'Últimas Comissões',

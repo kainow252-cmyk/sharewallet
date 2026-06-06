@@ -148,7 +148,7 @@ class ProfileScreen extends StatelessWidget {
 
                 const SizedBox(height: 12),
 
-                // Link de Afiliado
+                // Código de Afiliado
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
@@ -163,15 +163,22 @@ class ProfileScreen extends StatelessWidget {
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.link_rounded,
+                            Icon(Icons.badge_rounded,
                                 color: AppColors.primary, size: 20),
                             SizedBox(width: 8),
-                            Text('Meu Link de Afiliado',
+                            Text('Meu Código de Afiliado',
                                 style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 15,
                                     color: AppColors.textPrimary)),
                           ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Compartilhe produtos pela aba Produtos',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 12),
                         Container(
@@ -184,11 +191,12 @@ class ProfileScreen extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: Text(
-                                  user?.linkAfiliado ?? '',
+                                  user?.affiliateCode ?? '—',
                                   style: const TextStyle(
                                       color: AppColors.primary,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13),
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 20,
+                                      letterSpacing: 3),
                                 ),
                               ),
                               IconButton(
@@ -196,11 +204,10 @@ class ProfileScreen extends StatelessWidget {
                                     color: AppColors.primary, size: 18),
                                 onPressed: () {
                                   Clipboard.setData(ClipboardData(
-                                      text:
-                                          'https://${user?.linkAfiliado}'));
+                                      text: user?.affiliateCode ?? ''));
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text('Link copiado! ✅'),
+                                      content: Text('Código copiado! ✅'),
                                       backgroundColor: AppColors.success,
                                     ),
                                   );
