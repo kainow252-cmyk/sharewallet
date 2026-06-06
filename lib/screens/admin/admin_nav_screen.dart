@@ -8,6 +8,7 @@ import 'admin_affiliates_screen.dart';
 import 'admin_subscriptions_screen.dart';
 import 'admin_withdrawals_screen.dart';
 import 'admin_mp_settings_screen.dart';
+import 'admin_reports_screen.dart';
 
 class AdminNavScreen extends StatefulWidget {
   const AdminNavScreen({super.key});
@@ -26,6 +27,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     _NavItem(icon: Icons.repeat_rounded, label: 'Assinaturas'),
     _NavItem(icon: Icons.account_balance_wallet_rounded, label: 'Saques'),
     _NavItem(icon: Icons.payment_rounded, label: 'Pagamentos'),
+    _NavItem(icon: Icons.assessment_rounded, label: 'Relatórios'),
   ];
 
   final List<Widget> _screens = const [
@@ -35,6 +37,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     AdminSubscriptionsScreen(),
     AdminWithdrawalsScreen(),
     AdminMpSettingsScreen(),
+    AdminReportsScreen(),
   ];
 
   void _onDestinationSelected(int idx) {
@@ -187,6 +190,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
                 case 2: svc.loadAffiliates(); break;
                 case 3: svc.loadSubscriptions(); break;
                 case 4: svc.loadWithdrawals(); break;
+                case 6: svc.loadAll(); break; // Relatórios usa dados já carregados
                 default: svc.loadAll(); break;
               }
             },

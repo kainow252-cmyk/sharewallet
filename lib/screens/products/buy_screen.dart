@@ -360,7 +360,14 @@ class _BuyScreenState extends State<BuyScreen> {
             // ── QR Code PIX ───────────────────────────────────────────────────
             if (_pixResult != null && _pixResult!.success) ...[
               _PixQrCard(result: _pixResult!, product: product),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+              // Botão SIMULAR (sandbox) — testa fluxo completo
+              _SimularPagamentoButton(
+                product: product,
+                affiliateCode: widget.affiliateCode,
+                pixResult: _pixResult!,
+              ),
+              const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: () => setState(() { _pixResult = null; }),
                 icon: const Icon(Icons.edit_rounded),
@@ -871,6 +878,168 @@ class _PixQrCardState extends State<_PixQrCard> {
                     color: AppColors.textHint)),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ── Botão Simular Pagamento (sandbox) ────────────────────────────────────────
+class _SimularPagamentoButton extends StatefulWidget {
+  final ProductModel product;
+  final String affiliateCode;
+  final MpCheckoutResult pixResult;
+
+  const _SimularPagamentoButton({
+    required this.product,
+    required this.affiliateCode,
+    required this.pixResult,
+  });
+
+  @override
+  State<_SimularPagamentoButton> createState() =>
+      _SimularPagamentoButtonState();
+}
+
+class _SimularPagamentoButtonState
+    extends State<_SimularPagamentoButton> {
+  bool _simulando = false;
+  bool _simulado = false;
+
+  Future<void> _simular() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.science_rounded, color: Color(0xFF1565C0), size: 22),
+            SizedBox(width: 8),
+            Text('Simular Pagamento'),
+          ],
+        ),
+        content: const Text(
+          'Isso simula um pagamento PIX aprovado para testar o fluxo completo '
+          '(comissão, carteira do afiliado, assinatura).\n\n'
+          'Use apenas em ambiente sandbox.',
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1565C0),
+            ),
+            icon: const Icon(Icons.play_circle_rounded, color: Colors.white),
+            label: const Text('Simular',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    setState(() { _simulando = true; });
+
+    final mp = context.read<MercadoPagoService>();
+    final paymentId = widget.pixResult.preferenceId ?? 'SIM_${DateTime.now().millisecondsSinceEpoch}';
+
+    final ok = await mp.simularPagamentoAprovado(
+      userId: paymentId,
+      produtoId: widget.product.id,
+      produtoNome: widget.product.nome,
+      valor: widget.product.valor,
+      affiliateId: widget.affiliateCode,
+      affiliateCode: widget.affiliateCode,
+    );
+
+    if (!mounted) return;
+    setState(() { _simulando = false; _simulado = ok; });
+
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '✅ Pagamento simulado! Comissão creditada ao afiliado.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Color(0xFF2E7D52),
+          duration: Duration(seconds: 5),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Erro ao simular pagamento. Tente novamente.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_simulado) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1565C0).withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: const Color(0xFF1565C0).withValues(alpha: 0.3)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle_rounded,
+                color: Color(0xFF1565C0), size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Pagamento simulado com sucesso!',
+              style: TextStyle(
+                  color: Color(0xFF1565C0), fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _simulando ? null : _simular,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF1565C0),
+          side: BorderSide(
+              color: const Color(0xFF1565C0).withValues(alpha: 0.5)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        icon: _simulando
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Color(0xFF1565C0)),
+              )
+            : const Icon(Icons.science_rounded, size: 18),
+        label: Text(
+          _simulando ? 'Simulando pagamento...' : '🧪 Simular Pagamento Aprovado (Sandbox)',
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
       ),
     );
   }
