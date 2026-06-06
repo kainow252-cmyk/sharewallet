@@ -120,7 +120,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
 
           // Lista
           Expanded(
-            child: svc.isLoading
+            child: svc.isLoadingData
                 ? const Center(child: CircularProgressIndicator())
                 : afiliados.isEmpty
                     ? const Center(

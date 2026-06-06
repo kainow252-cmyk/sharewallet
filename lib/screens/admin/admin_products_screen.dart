@@ -23,7 +23,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final svc = context.read<AdminService>();
       // Recarrega se a lista estiver vazia (pode ser que loadAll ainda não terminou)
-      if (svc.products.isEmpty && !svc.isLoading) {
+      if (svc.products.isEmpty && !svc.isLoadingProducts) {
         svc.loadProducts();
       }
     });
@@ -91,7 +91,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           const Divider(height: 8),
           // Lista
           Expanded(
-            child: svc.isLoading
+            child: svc.isLoadingProducts
                 ? const Center(child: CircularProgressIndicator())
                 : produtos.isEmpty
                     ? const Center(child: Text('Nenhum produto encontrado'))

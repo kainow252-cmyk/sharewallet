@@ -186,7 +186,12 @@ class AdminMetrics {
 
 // ── AdminService ──────────────────────────────────────────────────────────────
 class AdminService extends ChangeNotifier {
+  // _isLoading: usado APENAS para operações de escrita (saveProduct, adminLogin)
+  // _isLoadingData: loading geral de leitura das listas (affiliates, subs, withdrawals)
+  // _isLoadingProducts: loading isolado de produtos — não bloqueia tela de relatórios
   bool _isLoading = false;
+  bool _isLoadingData = false;
+  bool _isLoadingProducts = false;
   String? _error;
   bool _isAdmin = false;
 
@@ -197,6 +202,10 @@ class AdminService extends ChangeNotifier {
   AdminMetrics? _metrics;
 
   bool get isLoading => _isLoading;
+  // isLoadingData: true enquanto affiliates/subs/withdrawals/metrics carregam
+  bool get isLoadingData => _isLoadingData;
+  // isLoadingProducts: true apenas durante loadProducts() — não afeta relatórios
+  bool get isLoadingProducts => _isLoadingProducts;
   String? get error => _error;
   bool get isAdmin => _isAdmin;
   List<AdminAffiliate> get affiliates => _affiliates;
@@ -258,13 +267,20 @@ class AdminService extends ChangeNotifier {
 
   // ── Carregar tudo via D1 (paralelo) ────────────────────────────────────────
   Future<void> loadAll() async {
+    // Inicia loading geral dos dados de relatório
+    _isLoadingData = true;
+    notifyListeners();
     await Future.wait([
       loadMetrics(),
       loadAffiliates(),
       loadSubscriptions(),
       loadWithdrawals(),
-      loadProducts(),
+      // loadProducts com silent=true: não seta _isLoading global
+      // não bloqueia a tela de relatórios enquanto produtos carregam
+      loadProducts(silent: true),
     ]);
+    _isLoadingData = false;
+    notifyListeners();
   }
 
   // ── Métricas via D1 ──────────────────────────────────────────────────────
@@ -404,9 +420,15 @@ class AdminService extends ChangeNotifier {
   }
 
   // ── Produtos (CRUD admin) via D1 ──────────────────────────────────────────
-  Future<void> loadProducts() async {
-    _isLoading = true;
-    notifyListeners();
+  //
+  // silent=true → não toca _isLoading nem _isLoadingProducts
+  //   (usado internamente por loadAll() para não bloquear tela de relatórios)
+  // silent=false (padrão) → seta _isLoadingProducts, usado pela tela de produtos
+  Future<void> loadProducts({bool silent = false}) async {
+    if (!silent) {
+      _isLoadingProducts = true;
+      notifyListeners();
+    }
     try {
       final rows = await CfApiService.getProducts(all: true);
       _products = rows.map((r) => ProductModel.fromJson(_normalizeProd(r))).toList();
@@ -417,8 +439,10 @@ class AdminService extends ChangeNotifier {
       _error = 'Erro ao carregar produtos: $e';
       _products = [];
     }
-    _isLoading = false;
-    notifyListeners();
+    if (!silent) {
+      _isLoadingProducts = false;
+      notifyListeners();
+    }
   }
 
   static Map<String, dynamic> _normalizeProd(Map<String, dynamic> r) => {
@@ -431,6 +455,7 @@ class AdminService extends ChangeNotifier {
   };
 
   Future<bool> saveProduct(ProductModel product, {bool isNew = false}) async {
+    // saveProduct usa _isLoading (escrita) — comportamento original preservado
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -438,7 +463,8 @@ class AdminService extends ChangeNotifier {
       final data = product.toJson();
       final result = await CfApiService.saveProduct(data, isNew: isNew);
       if (result != null) {
-        await loadProducts();
+        // Recarrega produtos em silent para não piscar _isLoadingProducts
+        await loadProducts(silent: true);
         _isLoading = false;
         notifyListeners();
         return true;

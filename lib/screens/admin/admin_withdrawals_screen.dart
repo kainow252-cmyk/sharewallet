@@ -123,7 +123,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
 
           // Conteúdo das tabs
           Expanded(
-            child: svc.isLoading
+            child: svc.isLoadingData
                 ? const Center(child: CircularProgressIndicator())
                 : TabBarView(
                     controller: _tabController,

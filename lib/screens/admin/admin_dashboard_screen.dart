@@ -17,7 +17,7 @@ class AdminDashboardScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: svc.isLoading
+      body: svc.isLoadingData
           ? const Center(child: CircularProgressIndicator())
           : m == null
               ? Center(

@@ -322,7 +322,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
           ),
 
           Expanded(
-            child: svc.isLoading
+            // isLoadingData: true apenas enquanto affiliates/subs/withdrawals carregam
+            // NÃO bloqueia quando só loadProducts() está em execução (silent=true)
+            child: svc.isLoadingData
                 ? const Center(child: CircularProgressIndicator())
                 : TabBarView(
                     controller: _tab,

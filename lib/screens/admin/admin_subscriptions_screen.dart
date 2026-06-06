@@ -99,7 +99,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
 
           // Tabs
           Expanded(
-            child: svc.isLoading
+            child: svc.isLoadingData
                 ? const Center(child: CircularProgressIndicator())
                 : TabBarView(
                     controller: _tabController,
