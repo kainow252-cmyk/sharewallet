@@ -593,7 +593,6 @@ class AdminService extends ChangeNotifier {
     }
 
     // Firestore não disponível — fallback local apenas quando Firebase não inicializado
-    await Future.delayed(const Duration(milliseconds: 600));
     if (isNew) {
       _products.add(product);
     } else {

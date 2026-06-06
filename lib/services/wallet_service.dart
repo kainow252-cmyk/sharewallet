@@ -66,7 +66,6 @@ class WalletService extends ChangeNotifier {
         }
       } else {
         // Modo demo
-        await Future.delayed(const Duration(milliseconds: 800));
         _sales = SaleModel.mockSales;
         _withdraws = WithdrawModel.mockWithdraws;
         _totalIndicados = 53;

@@ -108,7 +108,6 @@ class SubscriptionService extends ChangeNotifier {
 
       // Fallback para mock APENAS em modo demo (sem Firebase)
       if (!_useFirestore) {
-        await Future.delayed(const Duration(milliseconds: 800));
         _subscriptions = SubscriptionModel.mockSubscriptions
             .where((s) => s.affiliateCode == affiliateCode)
             .toList();
@@ -208,8 +207,6 @@ class SubscriptionService extends ChangeNotifier {
       }
 
       // Modo demo sem Firestore
-      await Future.delayed(const Duration(milliseconds: 1500));
-
       final nova = SubscriptionModel(
         id: 'sub_demo_${DateTime.now().millisecondsSinceEpoch}',
         productId: product.id,
@@ -288,7 +285,6 @@ class SubscriptionService extends ChangeNotifier {
       }
 
       // Modo demo
-      await Future.delayed(const Duration(milliseconds: 1500));
       final valorSacado = _saldoDisponivel;
       _totalSacado += valorSacado;
       _saldoDisponivel = 0.0;

@@ -87,7 +87,6 @@ class AuthService extends ChangeNotifier {
       }
 
       // Fallback: modo demo local
-      await Future.delayed(const Duration(milliseconds: 1000));
       if (email.isNotEmpty && senha.length >= 6) {
         _currentUser = _mockUser.copyWith(email: email);
         await _saveLocalFlag();
@@ -158,7 +157,6 @@ class AuthService extends ChangeNotifier {
       }
 
       // Fallback: modo demo
-      await Future.delayed(const Duration(milliseconds: 1500));
       final novoUsuario = UserModel(
         id: 'u_${DateTime.now().millisecondsSinceEpoch}',
         nome: nome,

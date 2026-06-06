@@ -53,7 +53,6 @@ class ProductService extends ChangeNotifier {
 
       if (col == null) {
         // Modo demo — Firebase não inicializado
-        await Future.delayed(const Duration(milliseconds: 600));
         _products = ProductModel.mockProducts;
         if (kDebugMode) debugPrint('[ProductService] Modo demo');
       } else {
@@ -92,8 +91,6 @@ class ProductService extends ChangeNotifier {
     required String affiliateCode,
     required String userId,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 1000));
-
     final product = _products.firstWhere((p) => p.id == productId);
 
     // POST /api/v1/charge no backend com split Woovi
