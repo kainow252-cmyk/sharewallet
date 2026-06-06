@@ -463,13 +463,27 @@ export default {
     // ── /api/ranking ───────────────────────────────────────────────────────
     if (path === '/api/ranking' && method === 'GET') {
       const { results } = await DB.prepare(
-        `SELECT id, nome, affiliate_code, total_assinaturas, total_comissoes, total_indicados
+        `SELECT id, nome, affiliate_code,
+                total_assinaturas,
+                total_assinaturas  AS assinaturas,
+                total_comissoes,
+                total_comissoes    AS comissao_total,
+                total_indicados
          FROM affiliates
          WHERE status='ativo'
          ORDER BY total_comissoes DESC
          LIMIT 50`
       ).all();
-      return ok(results);
+      // Adicionar position e nivel calculado
+      const ranked = results.map((r, i) => {
+        const ass = r.total_assinaturas || 0;
+        let nivel = 'Bronze';
+        if (ass >= 50) nivel = 'Diamante';
+        else if (ass >= 20) nivel = 'Ouro';
+        else if (ass >= 5)  nivel = 'Prata';
+        return { ...r, position: i + 1, nivel };
+      });
+      return ok(ranked);
     }
 
     // ── /api/metrics ───────────────────────────────────────────────────────

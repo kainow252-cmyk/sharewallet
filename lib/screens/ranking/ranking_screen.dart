@@ -25,11 +25,45 @@ class _RankingScreenState extends State<RankingScreen> {
     setState(() => _loading = true);
     try {
       final list = await CfApiService.getRanking();
-      // Garante ordenação por position
-      list.sort((a, b) =>
+
+      // ── Normalizar campos do D1 para o formato esperado pela UI ──────────
+      // Worker retorna: total_assinaturas, total_comissoes
+      // UI espera:      assinaturas, comissao_total, nivel, position
+      final normalized = list.asMap().entries.map((entry) {
+        final pos  = entry.key + 1;
+        final item = entry.value;
+
+        final assinaturas  = (item['total_assinaturas'] as num?)?.toInt() ?? 0;
+        final comissaoTotal = (item['total_comissoes']  as num?)?.toDouble() ?? 0.0;
+
+        // Calcular nível com base nas assinaturas
+        String nivel;
+        if (assinaturas >= 50) {
+          nivel = 'Diamante';
+        } else if (assinaturas >= 20) {
+          nivel = 'Ouro';
+        } else if (assinaturas >= 5) {
+          nivel = 'Prata';
+        } else {
+          nivel = 'Bronze';
+        }
+
+        return {
+          ...item,
+          'position':      pos,
+          'assinaturas':   assinaturas,
+          'comissao_total': comissaoTotal,
+          'nivel':         item['nivel'] ?? nivel,
+        };
+      }).toList();
+
+      // Já vem ordenado por total_comissoes DESC do worker
+      // mas garantimos ordenação por position
+      normalized.sort((a, b) =>
           ((a['position'] as num?)?.toInt() ?? 0)
               .compareTo((b['position'] as num?)?.toInt() ?? 0));
-      setState(() => _ranking = list);
+
+      setState(() => _ranking = normalized);
     } catch (e) {
       debugPrint('[RankingScreen] Erro: $e');
       setState(() => _ranking = []);

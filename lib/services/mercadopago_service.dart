@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'cf_api_service.dart';
 
 // ── Modelos ───────────────────────────────────────────────────────────────────
 
@@ -624,11 +625,24 @@ class MercadoPagoService extends ChangeNotifier {
           if (retryResp.statusCode == 201 || retryResp.statusCode == 200) {
             final json    = jsonDecode(retryResp.body) as Map<String, dynamic>;
             final txData  = json['point_of_interaction']?['transaction_data'];
+            final paymentId = json['id']?.toString();
+
+            // ── Criar subscription no D1 após retry bem-sucedido ──────────
+            await _criarSubscriptionD1(
+              paymentId:     paymentId ?? externalRef,
+              externalRef:   externalRef,
+              produtoId:     produtoId,
+              produtoNome:   produtoNome,
+              valor:         valor,
+              affiliateId:   affiliateId,
+              affiliateCode: affiliateCode,
+            );
+
             _isLoading    = false;
             notifyListeners();
             return MpCheckoutResult(
               success:      true,
-              preferenceId: json['id']?.toString(),
+              preferenceId: paymentId,
               pixCode:      txData?['qr_code']        as String?,
               pixQrBase64:  txData?['qr_code_base64'] as String?,
             );
@@ -651,6 +665,18 @@ class MercadoPagoService extends ChangeNotifier {
         final pixCode  = txData?['qr_code']        as String?;
         final pixQr    = txData?['qr_code_base64'] as String?;
         final paymentId = json['id']?.toString();
+
+        // ── Criar subscription no D1 com status "pendente" ─────────────────
+        // Admin lista assinaturas do D1 → precisa existir aqui
+        await _criarSubscriptionD1(
+          paymentId:     paymentId ?? externalRef,
+          externalRef:   externalRef,
+          produtoId:     produtoId,
+          produtoNome:   produtoNome,
+          valor:         valor,
+          affiliateId:   affiliateId,
+          affiliateCode: affiliateCode,
+        );
 
         _isLoading = false;
         notifyListeners();
@@ -786,7 +812,43 @@ class MercadoPagoService extends ChangeNotifier {
     }
   }
 
-  // ── Helpers privados ──────────────────────────────────────────────────────
+  // ── Criar Subscription no D1 (admin lista do D1!) ────────────────────────
+
+  Future<void> _criarSubscriptionD1({
+    required String paymentId,
+    required String externalRef,
+    required String produtoId,
+    required String produtoNome,
+    required double valor,
+    required String affiliateId,
+    required String affiliateCode,
+  }) async {
+    try {
+      final comissao     = valor * _config.comissaoPercent;
+      final proximaData  = DateTime.now().add(const Duration(days: 30));
+      await CfApiService.createSubscription({
+        'id':              'sub_pix_$paymentId',
+        'product_id':      produtoId,
+        'product_nome':    produtoNome,
+        'valor':           valor,
+        'comissao':        comissao,
+        'affiliate_code':  affiliateCode,
+        'affiliate_nome':  null,
+        'charge_type':     'pixRecorrente',
+        'status':          'pendente',
+        'pix_key':         null,
+        'dia_cobranca':    5,
+        'data_inicio':     DateTime.now().toIso8601String(),
+        'proxima_cobranca': proximaData.toIso8601String(),
+      });
+      if (kDebugMode) debugPrint('[MP] Subscription criada no D1: sub_pix_$paymentId');
+    } catch (e) {
+      // Não bloqueia — PIX já foi gerado com sucesso
+      debugPrint('[MP] Aviso: erro ao criar subscription no D1: $e');
+    }
+  }
+
+  // ── Salvar Preferência no Firestore ──────────────────────────────────────
 
   Future<void> _salvarPreferenciaFirestore({
     required String preferenceId,
