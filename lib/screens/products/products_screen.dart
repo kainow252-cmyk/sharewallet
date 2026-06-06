@@ -14,6 +14,19 @@ class ProductsScreen extends StatefulWidget {
 }
 
 class _ProductsScreenState extends State<ProductsScreen> {
+  // Filtro de tipo de cobrança: 'todos' | 'mensal' | 'unico'
+  String _chargeFilter = 'todos';
+
+  List<ProductModel> _applyChargeFilter(List<ProductModel> products) {
+    switch (_chargeFilter) {
+      case 'mensal':
+        return products.where((p) => p.isPixRecorrente).toList();
+      case 'unico':
+        return products.where((p) => p.isPixAvulso).toList();
+      default:
+        return products;
+    }
+  }
   @override
   void initState() {
     super.initState();
@@ -43,7 +56,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '${ps.products.length}',
+                  '${_applyChargeFilter(ps.filteredProducts).length}',
                   style: const TextStyle(
                       fontSize: 11,
                       color: AppColors.primary,
@@ -61,7 +74,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               onRefresh: () => ps.loadProducts(forceRefresh: true),
               child: CustomScrollView(
               slivers: [
-                // ── Filtro chips ─────────────────────────────────────────
+                // ── Filtro chips — Categoria ─────────────────────────────
                 SliverToBoxAdapter(
                   child: Column(
                     children: [
@@ -125,6 +138,22 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           },
                         ),
                       ),
+
+                      // ── Filtro chips — Tipo de Cobrança ──────────────────
+                      _ChargeFilterBar(
+                        selected: _chargeFilter,
+                        onSelect: (v) => setState(() => _chargeFilter = v),
+                        counts: {
+                          'todos': ps.filteredProducts.length,
+                          'mensal': ps.filteredProducts
+                              .where((p) => p.isPixRecorrente)
+                              .length,
+                          'unico': ps.filteredProducts
+                              .where((p) => p.isPixAvulso)
+                              .length,
+                        },
+                      ),
+
                       const Divider(height: 1),
                     ],
                   ),
@@ -164,16 +193,18 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 // ── Lista por categoria ou filtrada ──────────────────────
                 if (ps.selectedCategory == 'todos')
                   // Modo "Todos": agrupa por categoria com cabeçalhos
-                  ..._buildCategorySections(ps)
+                  ..._buildCategorySections(ps, _applyChargeFilter(ps.products))
                 else
                   // Modo filtrado: lista simples
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
-                        (ctx, i) =>
-                            _ProductCard(product: ps.filteredProducts[i]),
-                        childCount: ps.filteredProducts.length,
+                        (ctx, i) => _ProductCard(
+                            product: _applyChargeFilter(
+                                ps.filteredProducts)[i]),
+                        childCount: _applyChargeFilter(
+                            ps.filteredProducts).length,
                       ),
                     ),
                   ),
@@ -184,9 +215,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   // ── Seções por categoria ──────────────────────────────────────────────────
-  List<Widget> _buildCategorySections(ProductService ps) {
+  List<Widget> _buildCategorySections(
+      ProductService ps, List<ProductModel> baseList) {
     final Map<String, List<ProductModel>> grouped = {};
-    for (final p in ps.products) {
+    for (final p in baseList) {
       grouped.putIfAbsent(p.categoria, () => []).add(p);
     }
 
@@ -254,6 +286,110 @@ class _ProductsScreenState extends State<ProductsScreen> {
       case 'cursos': return const Color(0xFF2E7D32);
       default: return AppColors.primary;
     }
+  }
+}
+
+// ── Barra de filtro por tipo de cobrança ──────────────────────────────────────
+class _ChargeFilterBar extends StatelessWidget {
+  final String selected;
+  final void Function(String) onSelect;
+  final Map<String, int> counts;
+
+  const _ChargeFilterBar({
+    required this.selected,
+    required this.onSelect,
+    required this.counts,
+  });
+
+  static const _items = [
+    {'key': 'todos',  'label': 'Todos',  'icon': Icons.apps_rounded,         'emoji': '🏷️'},
+    {'key': 'mensal', 'label': 'Mensal', 'icon': Icons.autorenew_rounded,     'emoji': '🔄'},
+    {'key': 'unico',  'label': 'Único',  'icon': Icons.qr_code_2_rounded,     'emoji': '⚡'},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.background,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Row(
+        children: _items.map((item) {
+          final key    = item['key'] as String;
+          final label  = item['label'] as String;
+          final emoji  = item['emoji'] as String;
+          final count  = counts[key] ?? 0;
+          final isSel  = selected == key;
+
+          // Cor por tipo
+          Color chipColor;
+          switch (key) {
+            case 'mensal': chipColor = AppColors.primary; break;
+            case 'unico':  chipColor = const Color(0xFFE65100); break;
+            default:       chipColor = AppColors.textSecondary; break;
+          }
+
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onSelect(key),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSel
+                      ? chipColor
+                      : AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSel
+                        ? chipColor
+                        : AppColors.cardBorder,
+                    width: isSel ? 2 : 1,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(emoji, style: const TextStyle(fontSize: 16)),
+                    const SizedBox(height: 2),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: isSel ? Colors.white : AppColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight:
+                            isSel ? FontWeight.w800 : FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: isSel
+                            ? Colors.white.withValues(alpha: 0.25)
+                            : AppColors.cardBorder,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: TextStyle(
+                          color: isSel
+                              ? Colors.white
+                              : AppColors.textHint,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 }
 
