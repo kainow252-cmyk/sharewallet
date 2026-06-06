@@ -40,6 +40,8 @@ class MainNavScreen extends StatefulWidget {
 
 class _MainNavScreenState extends State<MainNavScreen> {
   final _ctrl = MainNavController();
+  // Rastreia quais abas já foram visitadas (lazy loading)
+  final Set<int> _visitadas = {0}; // começa só com Home
 
   final List<Widget> _screens = const [
     HomeScreen(),
@@ -95,7 +97,10 @@ class _MainNavScreenState extends State<MainNavScreen> {
     super.dispose();
   }
 
-  void _onNavChange() => setState(() {});
+  void _onNavChange() {
+    // Marca aba como visitada ao navegar
+    setState(() => _visitadas.add(_ctrl.index));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,12 +109,21 @@ class _MainNavScreenState extends State<MainNavScreen> {
     return Scaffold(
       body: IndexedStack(
         index: idx,
-        children: _screens,
+        children: List.generate(_screens.length, (i) {
+          // Lazy: só monta a tela quando for visitada pela 1ª vez
+          if (!_visitadas.contains(i)) {
+            return const SizedBox.shrink();
+          }
+          return _screens[i];
+        }),
       ),
       bottomNavigationBar: _BottomNav(
         currentIndex: idx,
         items: _navItems,
-        onTap: _ctrl.goTo,
+        onTap: (i) {
+          _visitadas.add(i);
+          _ctrl.goTo(i);
+        },
       ),
     );
   }

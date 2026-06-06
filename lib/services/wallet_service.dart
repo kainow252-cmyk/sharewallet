@@ -46,16 +46,17 @@ class WalletService extends ChangeNotifier {
 
   // ── Carregar dados ────────────────────────────────────────────────────────
 
-  Future<void> loadData({String? userId}) async {
+  Future<void> loadData({String? userId, bool forceRefresh = false}) async {
+    // Cache: não recarrega se já tem dados e não é refresh forçado
+    if (!forceRefresh && (_sales.isNotEmpty || _saldoCarteira > 0)) return;
+
     _isLoading = true;
     notifyListeners();
 
     try {
       if (ApiService.hasToken) {
-        // Modo real via API NestJS
         await Future.wait([_loadSales(), _loadWithdrawals(), _loadDashboard()]);
       } else if (FirestoreService.isAvailable) {
-        // Modo Firestore direto — usa UID do Firebase Auth ou userId passado
         final uid = userId ?? FirebaseAuth.instance.currentUser?.uid;
         if (uid != null) {
           await Future.wait([
@@ -65,15 +66,13 @@ class WalletService extends ChangeNotifier {
           ]);
         }
       } else {
-        // Modo demo
+        // Modo demo sem Firebase
         _sales = SaleModel.mockSales;
         _withdraws = WithdrawModel.mockWithdraws;
-        _totalIndicados = 53;
+        _totalIndicados = 0;
       }
     } catch (e) {
-      _sales = SaleModel.mockSales;
-      _withdraws = WithdrawModel.mockWithdraws;
-      _totalIndicados = 53;
+      // Erro real — não injeta dados falsos
       if (kDebugMode) debugPrint('WalletService erro: $e');
     }
 

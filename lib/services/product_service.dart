@@ -44,7 +44,10 @@ class ProductService extends ChangeNotifier {
   };
 
   // ── Carregar produtos ─────────────────────────────────────────────────────
-  Future<void> loadProducts() async {
+  Future<void> loadProducts({bool forceRefresh = false}) async {
+    // Cache: não recarrega se já tem produtos e não é refresh forçado
+    if (!forceRefresh && _products.isNotEmpty) return;
+
     _isLoading = true;
     notifyListeners();
 
@@ -56,7 +59,6 @@ class ProductService extends ChangeNotifier {
         _products = ProductModel.mockProducts;
         if (kDebugMode) debugPrint('[ProductService] Modo demo');
       } else {
-        // Ler apenas produtos ativos — query simples (sem composite index)
         final snapshot = await col.get();
         final all = snapshot.docs.map((doc) {
           final data = doc.data();
@@ -64,7 +66,7 @@ class ProductService extends ChangeNotifier {
           return ProductModel.fromJson(data);
         }).toList();
 
-        // Filtrar ativos em memória (evita index composto)
+        // Filtrar ativos em memória
         _products = all.where((p) => p.ativo).toList();
 
         if (kDebugMode) {
@@ -73,8 +75,6 @@ class ProductService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('[ProductService] Erro ao carregar produtos: $e');
-      // Fallback para mock em caso de erro
-      _products = ProductModel.mockProducts;
     }
 
     _isLoading = false;

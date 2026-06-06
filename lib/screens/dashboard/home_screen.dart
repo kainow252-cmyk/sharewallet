@@ -25,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final uid = FirebaseAuth.instance.currentUser?.uid;
+      // Cache: só carrega se ainda não tem dados
       context.read<WalletService>().loadData(userId: uid);
       context.read<ProductService>().loadProducts();
     });
@@ -41,7 +42,8 @@ class _HomeScreenState extends State<HomeScreen> {
       body: RefreshIndicator(
         onRefresh: () async {
           final uid = FirebaseAuth.instance.currentUser?.uid;
-          await context.read<WalletService>().loadData(userId: uid);
+          // Pull-to-refresh: força recarregamento
+          await context.read<WalletService>().loadData(userId: uid, forceRefresh: true);
         },
         color: AppColors.primary,
         child: CustomScrollView(
