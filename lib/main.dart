@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_core/firebase_core.dart';
+
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'services/auth_service.dart';
@@ -59,11 +60,47 @@ void main() async {
     ]);
   }
 
-  runApp(const ShareWalletApp());
+  // ── Detecta deep link na web antes de renderizar ──────────────────────────
+  // URL: https://.../#/produto/ID?ref=CODE
+  // O Flutter hash routing entrega o path sem query string no onGenerateRoute.
+  // Lemos Uri.base (window.location.href) aqui para extrair o ref.
+  String? initialProductId;
+  String? initialAffiliateCode;
+
+  if (kIsWeb) {
+    try {
+      // Uri.base = URL completa do browser (multiplataforma, sem dart:html)
+      // Ex: https://sharewallet-app.pages.dev/app/#/produto/p_123?ref=ABC123
+      final uri = Uri.base;
+      // O fragment é tudo após o # → ex: /produto/p_123?ref=ABC123
+      final fragment = uri.fragment; // /produto/p_123?ref=ABC123
+      if (fragment.startsWith('/produto/')) {
+        final withoutPrefix = fragment.replaceFirst('/produto/', '');
+        final parts = withoutPrefix.split('?');
+        initialProductId = parts[0];
+        if (parts.length > 1) {
+          final query = Uri.splitQueryString(parts[1]);
+          initialAffiliateCode = query['ref'] ?? '';
+        }
+      }
+    } catch (_) {}
+  }
+
+  runApp(ShareWalletApp(
+    initialProductId: initialProductId,
+    initialAffiliateCode: initialAffiliateCode,
+  ));
 }
 
 class ShareWalletApp extends StatelessWidget {
-  const ShareWalletApp({super.key});
+  final String? initialProductId;
+  final String? initialAffiliateCode;
+
+  const ShareWalletApp({
+    super.key,
+    this.initialProductId,
+    this.initialAffiliateCode,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +117,9 @@ class ShareWalletApp extends StatelessWidget {
         title: 'ShareWallet',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.theme,
-        initialRoute: '/',
+        initialRoute: (initialProductId != null && initialProductId!.isNotEmpty)
+            ? '/produto/$initialProductId?ref=${initialAffiliateCode ?? ""}'
+            : '/',
         routes: {
           '/': (_) => const SplashScreen(),
           '/landing': (_) => const LandingScreen(),
@@ -111,16 +150,15 @@ class ShareWalletApp extends StatelessWidget {
           }
 
           // /produto/PRODUCT_ID?ref=AFFILIATE_CODE → tela pública do comprador
-          // Suporta tanto /produto/ID quanto /produto/ID?ref=CODE
           if (name.startsWith('/produto/')) {
             final withoutPrefix = name.replaceFirst('/produto/', '');
-            // Separa ID e query string
             final parts = withoutPrefix.split('?');
             final productId = parts[0];
-            String affiliateCode = '';
+            String affiliateCode = initialAffiliateCode ?? '';
             if (parts.length > 1) {
               final query = Uri.splitQueryString(parts[1]);
-              affiliateCode = query['ref'] ?? '';
+              final refFromRoute = query['ref'] ?? '';
+              if (refFromRoute.isNotEmpty) affiliateCode = refFromRoute;
             }
             return MaterialPageRoute(
               builder: (_) => BuyScreen(
