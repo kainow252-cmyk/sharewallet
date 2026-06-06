@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Color;
 import '../models/product_model.dart';
@@ -209,32 +210,32 @@ class AdminService extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    // Aceita credenciais demo localmente (sem backend)
-    if (email == _adminEmail && password == _adminPassword) {
-      _isAdmin = true;
-      await loadAll();
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    }
-
-    // Tentar via API real
+    // Autenticar no Firebase Auth para ter request.auth nas regras Firestore
     try {
-      final resp = await ApiService.post('/admin/auth/login', {
-        'email': email,
-        'password': password,
-      });
-      _isLoading = false;
-      if (resp.success) {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      // Verifica se é o email admin autorizado
+      if (email == _adminEmail) {
         _isAdmin = true;
-        await ApiService.setToken(resp.data['token']);
         await loadAll();
+        _isLoading = false;
         notifyListeners();
         return true;
+      } else {
+        // Logou mas não é admin — deslogar
+        await FirebaseAuth.instance.signOut();
+        _error = 'Acesso negado: não é conta admin';
+        _isLoading = false;
+        notifyListeners();
+        return false;
       }
-    } catch (_) {}
+    } on FirebaseAuthException catch (e) {
+      debugPrint('[AdminService] Erro auth: ${e.code} — ${e.message}');
+    } catch (e) {
+      debugPrint('[AdminService] Erro inesperado: $e');
+    }
 
     _error = 'Credenciais inválidas';
     _isLoading = false;
