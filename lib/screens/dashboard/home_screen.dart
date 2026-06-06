@@ -48,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
           slivers: [
             // App Bar Verde
             SliverAppBar(
-              expandedHeight: 120,
+              expandedHeight: 72,
               pinned: true,
               backgroundColor: AppColors.primary,
               elevation: 0,
@@ -61,42 +61,76 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: SafeArea(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                          horizontal: 16, vertical: 0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Row(
-                            children: [
-                              const AppLogo(size: 32),
-                              const Spacer(),
-                              IconButton(
-                                onPressed: () {},
-                                icon: const Icon(Icons.notifications_rounded,
-                                    color: Colors.white70),
-                              ),
-                              GestureDetector(
-                                onTap: () => MainNavController().goProfile(),
-                                child: CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor:
-                                      AppColors.gold.withValues(alpha: 0.3),
-                                  child: Text(
-                                    user?.primeiroNome.substring(0, 1) ?? 'U',
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700),
+                          // ── Logo ícone (sem texto) ──────────────────────
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.gold,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.account_balance_wallet_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // ── ShareWallet + saudação ──────────────────────
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'ShareWallet',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.3,
+                                    height: 1.1,
                                   ),
                                 ),
-                              ),
-                            ],
+                                Text(
+                                  'Olá, ${user?.primeiroNome ?? 'Afiliado'}! 👋',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Olá, ${user?.primeiroNome ?? 'Afiliado'}! 👋',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
+                          // ── Notificação + Avatar ────────────────────────
+                          IconButton(
+                            onPressed: () {},
+                            icon: const Icon(Icons.notifications_rounded,
+                                color: Colors.white70),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 36, minHeight: 36),
+                          ),
+                          const SizedBox(width: 4),
+                          GestureDetector(
+                            onTap: () => MainNavController().goProfile(),
+                            child: CircleAvatar(
+                              radius: 18,
+                              backgroundColor:
+                                  AppColors.gold.withValues(alpha: 0.3),
+                              child: Text(
+                                user?.primeiroNome.substring(0, 1) ?? 'U',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14),
+                              ),
                             ),
                           ),
                         ],
