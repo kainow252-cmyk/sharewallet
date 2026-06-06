@@ -77,6 +77,42 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     // ── Layout Desktop (NavigationRail) ──────────────────────────────────────
     if (isWide) {
       return Scaffold(
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF071A10),
+          automaticallyImplyLeading: false,
+          title: Row(
+            children: [
+              const Icon(Icons.admin_panel_settings_rounded,
+                  color: AppColors.gold, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                _items[_selectedIndex].label,
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
+              tooltip: 'Atualizar dados',
+              onPressed: () {
+                final s = context.read<AdminService>();
+                switch (_selectedIndex) {
+                  case 1: s.loadProducts(); break;
+                  case 2: s.loadAffiliates(); break;
+                  case 3: s.loadSubscriptions(); break;
+                  case 4: s.loadWithdrawals(); break;
+                  default: s.loadAll(); break;
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.logout_rounded, color: Colors.white70),
+              tooltip: 'Sair',
+              onPressed: () => _logout(context),
+            ),
+          ],
+        ),
         body: Row(
           children: [
             // Sidebar

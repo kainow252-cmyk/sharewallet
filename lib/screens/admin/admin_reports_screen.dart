@@ -22,6 +22,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
   bool _exporting = false;
+  bool _refreshing = false;
 
   // Filtros de data
   DateTime? _de;
@@ -34,6 +35,16 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
   void initState() {
     super.initState();
     _tab = TabController(length: 3, vsync: this);
+    // Recarregar dados sempre que a tela for montada
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminService>().loadAll();
+    });
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _refreshing = true);
+    await context.read<AdminService>().loadAll();
+    if (mounted) setState(() => _refreshing = false);
   }
 
   @override
@@ -202,27 +213,47 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
       backgroundColor: AppColors.background,
       body: Column(
         children: [
+          // ── Header com botão refresh ─────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
+            child: Row(
+              children: [
+                const Icon(Icons.filter_alt_rounded,
+                    color: AppColors.primary, size: 18),
+                const SizedBox(width: 6),
+                const Expanded(
+                  child: Text(
+                    'Filtrar por período',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: AppColors.textPrimary),
+                  ),
+                ),
+                // Botão Atualizar
+                TextButton.icon(
+                  onPressed: _refreshing ? null : _refresh,
+                  icon: _refreshing
+                      ? const SizedBox(
+                          width: 14, height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.refresh_rounded, size: 16),
+                  label: Text(_refreshing ? 'Atualizando...' : 'Atualizar'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // ── Filtro de datas ──────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.filter_alt_rounded,
-                        color: AppColors.primary, size: 18),
-                    SizedBox(width: 6),
-                    Text(
-                      'Filtrar por período',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          color: AppColors.textPrimary),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
