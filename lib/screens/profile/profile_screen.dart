@@ -78,13 +78,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         pixKey: _pixCtrl.text.trim(),
       );
 
-      // Sincroniza no D1 (Worker) — erro não bloqueia o save
+      // Sincroniza no D1 (Worker) — upsert: cria o registro se não existir
       // ignore: unawaited_futures
       CfApiService.updateAffiliate(uid, {
         'nome': _nomeCtrl.text.trim(),
+        'email': auth.currentUser?.email ?? '',
         'telefone': _telefoneCtrl.text.trim(),
         'cpf': _cpfCtrl.text.trim(),
         'pix_key': _pixCtrl.text.trim(),
+        'affiliate_code': auth.currentUser?.affiliateCode ?? '',
       }).catchError((_) => null);
 
       await auth.refreshProfile();
