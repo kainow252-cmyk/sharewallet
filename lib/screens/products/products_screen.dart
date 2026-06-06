@@ -643,7 +643,7 @@ class _ProductCardState extends State<_ProductCard> {
       BuildContext context, ProductModel product, String affiliateCode) {
     // Link público que o comprador acessa para preencher dados e gerar PIX
     final link =
-        'https://sharewallet-app.pages.dev/#/produto/${product.id}?ref=$affiliateCode';
+        'https://sharewallet.com.br/app/#/produto/${product.id}?ref=$affiliateCode';
 
     showModalBottomSheet(
       context: context,
