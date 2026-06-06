@@ -100,7 +100,7 @@ class ProductService extends ChangeNotifier {
     return {
       'success': true,
       'charge_id': 'charge_${DateTime.now().millisecondsSinceEpoch}',
-      'link': 'plataforma.com/comprar/${product.id}?ref=$affiliateCode',
+      'link': 'sharewallet.com.br/app/#/ref/$affiliateCode',
       'pix_code': '00020101021226990014br.gov.bcb.pix...',
       'valor': product.valor,
       'comissao': product.valorComissao,

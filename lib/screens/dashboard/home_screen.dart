@@ -174,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // Link de afiliado
                   AffiliateLinkCard(
-                    link: user?.linkAfiliado ?? 'plataforma.com/ref/ABC123',
+                    link: user?.linkAfiliado ?? 'sharewallet.com.br/app/#/ref/ABC123',
                     code: user?.affiliateCode ?? 'ABC123',
                   ),
 
