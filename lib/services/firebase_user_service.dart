@@ -274,19 +274,26 @@ class FirebaseUserService {
     required String telefone,
     required String cpf,
     required String pixKey,
+    String? email,
+    String? affiliateCode,
   }) async {
     try {
       final db = _getDb();
       if (db == null) return;
 
       // set+merge: cria o documento se não existir, atualiza se já existir
-      await db.collection('affiliates').doc(uid).set({
+      final data = <String, dynamic>{
         'nome': nome,
         'telefone': telefone,
         'cpf': cpf,
         'pix_key': pixKey,
         'updated_at': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      };
+      // Só atualiza email/affiliate_code se fornecidos (evita sobrescrever com null)
+      if (email != null && email.isNotEmpty) data['email'] = email;
+      if (affiliateCode != null && affiliateCode.isNotEmpty) data['affiliate_code'] = affiliateCode;
+
+      await db.collection('affiliates').doc(uid).set(data, SetOptions(merge: true));
 
       if (kDebugMode) debugPrint('[FirebaseUserService] ✅ Perfil atualizado: $uid');
     } catch (e) {
@@ -516,11 +523,20 @@ class FirebaseUserService {
       // Verifica se já existe no D1 pelo email
       final existing = await CfApiService.getAffiliateByEmail(email);
       if (existing != null) {
-        if (kDebugMode) debugPrint('[FirebaseUserService] D1: afiliado já existe ($email)');
+        // Afiliado já existe → atualizar campos de perfil com dados mais recentes
+        await CfApiService.updateAffiliate(uid, {
+          'nome': nome,
+          'email': email,
+          'cpf': cpf,
+          'telefone': telefone,
+          'pix_key': pixKey.isNotEmpty ? pixKey : email,
+          'affiliate_code': affiliateCode,
+        });
+        if (kDebugMode) debugPrint('[FirebaseUserService] D1: perfil sincronizado ($email)');
         return;
       }
 
-      // Cria no D1
+      // Não existe no D1 → criar registro completo
       final result = await CfApiService.createAffiliate({
         'id': uid,
         'nome': nome,

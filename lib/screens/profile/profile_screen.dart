@@ -76,6 +76,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         telefone: _telefoneCtrl.text.trim(),
         cpf: _cpfCtrl.text.trim(),
         pixKey: _pixCtrl.text.trim(),
+        email: auth.currentUser?.email ?? '',
+        affiliateCode: auth.currentUser?.affiliateCode ?? '',
       );
 
       // Sincroniza no D1 (Worker) — upsert: cria o registro se não existir
