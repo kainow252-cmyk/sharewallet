@@ -4,8 +4,8 @@ import 'package:provider/provider.dart';
 import '../../services/mercadopago_service.dart';
 import '../../theme/app_theme.dart';
 
-// Cor oficial do Mercado Pago
-const _mpBlue = Color(0xFF009EE3);
+const _mpBlue  = Color(0xFF009EE3);
+const _mpGreen = Color(0xFF00C851);
 
 class AdminMpSettingsScreen extends StatefulWidget {
   const AdminMpSettingsScreen({super.key});
@@ -22,7 +22,6 @@ class _AdminMpSettingsScreenState extends State<AdminMpSettingsScreen>
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
-    // Carregar config ao abrir
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MercadoPagoService>().loadConfig();
     });
@@ -45,7 +44,6 @@ class _AdminMpSettingsScreenState extends State<AdminMpSettingsScreen>
           }
           return Column(
             children: [
-              // TabBar integrada ao body
               Container(
                 color: const Color(0xFF071A10),
                 child: TabBar(
@@ -54,7 +52,7 @@ class _AdminMpSettingsScreenState extends State<AdminMpSettingsScreen>
                   unselectedLabelColor: Colors.white70,
                   indicatorColor: AppColors.gold,
                   tabs: const [
-                    Tab(icon: Icon(Icons.tune_rounded), text: 'Modo & Credenciais'),
+                    Tab(icon: Icon(Icons.key_rounded), text: 'Credenciais'),
                     Tab(icon: Icon(Icons.settings_rounded), text: 'Configurações'),
                   ],
                 ),
@@ -63,7 +61,7 @@ class _AdminMpSettingsScreenState extends State<AdminMpSettingsScreen>
                 child: TabBarView(
                   controller: _tab,
                   children: [
-                    _ModeTab(svc: svc),
+                    _CredenciaisTab(svc: svc),
                     _SettingsTab(svc: svc),
                   ],
                 ),
@@ -76,257 +74,130 @@ class _AdminMpSettingsScreenState extends State<AdminMpSettingsScreen>
   }
 }
 
-// ── Aba 1: Modo + Credenciais ─────────────────────────────────────────────────
+// ── Aba 1: Credenciais de Produção ────────────────────────────────────────────
 
-class _ModeTab extends StatelessWidget {
+class _CredenciaisTab extends StatelessWidget {
   final MercadoPagoService svc;
-  const _ModeTab({required this.svc});
+  const _CredenciaisTab({required this.svc});
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ── Seletor de modo ───────────────────────────────────────────────
-        _SectionHeader(icon: Icons.swap_horiz_rounded, title: 'Modo Ativo'),
-        const SizedBox(height: 12),
-        _ModeSelector(svc: svc),
-        const SizedBox(height: 24),
 
-        // ── Credenciais Sandbox ───────────────────────────────────────────
-        _SectionHeader(
-          icon: Icons.science_rounded,
-          title: 'Credenciais Sandbox',
-          badge: svc.config.mode == 'sandbox' ? 'ATIVO' : null,
-          badgeColor: AppColors.success,
-        ),
-        const SizedBox(height: 12),
-        _CredentialsCard(
-          mode: 'sandbox',
-          creds: svc.config.sandbox,
-          isSandbox: true,
-          svc: svc,
-        ),
-        const SizedBox(height: 24),
-
-        // ── Credenciais Produção ──────────────────────────────────────────
-        _SectionHeader(
-          icon: Icons.rocket_launch_rounded,
-          title: 'Credenciais Produção',
-          badge: svc.config.mode == 'production' ? 'ATIVO' : null,
-          badgeColor: AppColors.error,
-        ),
-        const SizedBox(height: 12),
-        _CredentialsCard(
-          mode: 'production',
-          creds: svc.config.production,
-          isSandbox: false,
-          svc: svc,
-        ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-}
-
-// ── Seletor de modo ───────────────────────────────────────────────────────────
-
-class _ModeSelector extends StatefulWidget {
-  final MercadoPagoService svc;
-  const _ModeSelector({required this.svc});
-
-  @override
-  State<_ModeSelector> createState() => _ModeSelectorState();
-}
-
-class _ModeSelectorState extends State<_ModeSelector> {
-  bool _switching = false;
-
-  Future<void> _switchMode(String newMode) async {
-    if (_switching) return;
-    setState(() => _switching = true);
-
-    final ok = await widget.svc.setMode(newMode);
-    if (!mounted) return;
-    setState(() => _switching = false);
-
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(newMode == 'sandbox'
-            ? '🧪 Modo Sandbox ativado'
-            : '🔴 Modo Produção ativado'),
-        backgroundColor: newMode == 'sandbox'
-            ? AppColors.success
-            : AppColors.error,
-      ));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:
-            Text(widget.svc.lastError ?? 'Erro ao trocar modo'),
-        backgroundColor: AppColors.error,
-        duration: const Duration(seconds: 5),
-      ));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final current = widget.svc.config.mode;
-
-    return Row(
-      children: [
-        Expanded(
-          child: _ModeOption(
-            selected: current == 'sandbox',
-            icon: Icons.science_rounded,
-            color: const Color(0xFFE65100),
-            label: 'Sandbox',
-            sub: 'Pagamentos de teste',
-            onTap: _switching ? null : () => _switchMode('sandbox'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ModeOption(
-            selected: current == 'production',
-            icon: Icons.rocket_launch_rounded,
-            color: AppColors.error,
-            label: 'Produção',
-            sub: 'Pagamentos reais',
-            onTap: _switching ? null : () => _switchMode('production'),
-            locked: widget.svc.config.production.isEmpty,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ModeOption extends StatelessWidget {
-  final bool selected;
-  final IconData icon;
-  final Color color;
-  final String label;
-  final String sub;
-  final VoidCallback? onTap;
-  final bool locked;
-
-  const _ModeOption({
-    required this.selected,
-    required this.icon,
-    required this.color,
-    required this.label,
-    required this.sub,
-    this.onTap,
-    this.locked = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: selected
-              ? color.withValues(alpha: 0.1)
-              : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? color : AppColors.cardBorder,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Stack(
-              children: [
-                Icon(icon,
-                    color: selected ? color : AppColors.textHint, size: 32),
-                if (locked)
-                  Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: AppColors.textHint,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.lock_rounded,
-                          color: Colors.white, size: 10),
-                    ),
-                  ),
+        // ── Banner de modo fixo ───────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                _mpGreen.withValues(alpha: 0.15),
+                _mpBlue.withValues(alpha: 0.10),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(label,
-                style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: selected ? color : AppColors.textPrimary)),
-            const SizedBox(height: 2),
-            Text(sub,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 10, color: AppColors.textSecondary)),
-            if (selected) ...[
-              const SizedBox(height: 6),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _mpGreen.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(6),
+                  color: _mpGreen.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
                 ),
-                child: const Text('ATIVO',
+                child: const Icon(Icons.rocket_launch_rounded,
+                    color: _mpGreen, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Modo Produção Ativo',
+                      style: TextStyle(
+                        color: _mpGreen,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Pagamentos reais via PIX — MercadoPago',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _mpGreen,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text('LIVE',
                     style: TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 9)),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10,
+                        letterSpacing: 1)),
               ),
             ],
-          ],
+          ),
         ),
-      ),
+
+        const SizedBox(height: 24),
+
+        // ── Card de credenciais ───────────────────────────────────────────
+        _SectionHeader(
+          icon: Icons.key_rounded,
+          title: 'Access Token de Produção',
+          badge: svc.config.production.isEmpty ? null : 'CONFIGURADO',
+          badgeColor: _mpGreen,
+        ),
+        const SizedBox(height: 12),
+        _CredenciaisCard(svc: svc),
+        const SizedBox(height: 24),
+
+        // ── Status ────────────────────────────────────────────────────────
+        _SectionHeader(icon: Icons.info_outline_rounded, title: 'Status Atual'),
+        const SizedBox(height: 12),
+        _StatusCard(svc: svc),
+        const SizedBox(height: 24),
+      ],
     );
   }
 }
 
-// ── Card de credenciais ───────────────────────────────────────────────────────
+// ── Card de credenciais de produção ──────────────────────────────────────────
 
-class _CredentialsCard extends StatefulWidget {
-  final String mode;
-  final MpCredentials creds;
-  final bool isSandbox;
+class _CredenciaisCard extends StatefulWidget {
   final MercadoPagoService svc;
-
-  const _CredentialsCard({
-    required this.mode,
-    required this.creds,
-    required this.isSandbox,
-    required this.svc,
-  });
+  const _CredenciaisCard({required this.svc});
 
   @override
-  State<_CredentialsCard> createState() => _CredentialsCardState();
+  State<_CredenciaisCard> createState() => _CredenciaisCardState();
 }
 
-class _CredentialsCardState extends State<_CredentialsCard> {
-  bool _editing      = false;
-  bool _verifying    = false;
-  bool _saving       = false;
+class _CredenciaisCardState extends State<_CredenciaisCard> {
+  bool _editing     = false;
+  bool _verifying   = false;
+  bool _saving      = false;
   Map<String, dynamic>? _verifyResult;
 
-  late final _tokenCtrl  = TextEditingController(text: widget.creds.accessToken);
-  late final _pubKeyCtrl = TextEditingController(text: widget.creds.publicKey);
-  late final _userCtrl   = TextEditingController(text: widget.creds.userId);
+  late final _tokenCtrl =
+      TextEditingController(text: widget.svc.config.production.accessToken);
+  late final _userCtrl  =
+      TextEditingController(text: widget.svc.config.production.userId);
 
   @override
   void dispose() {
     _tokenCtrl.dispose();
-    _pubKeyCtrl.dispose();
     _userCtrl.dispose();
     super.dispose();
   }
@@ -334,13 +205,11 @@ class _CredentialsCardState extends State<_CredentialsCard> {
   Future<void> _verify() async {
     if (_tokenCtrl.text.trim().isEmpty) return;
     setState(() => _verifying = true);
-    final result =
-        await widget.svc.verifyCredentials(_tokenCtrl.text.trim());
+    final result = await widget.svc.verifyCredentials(_tokenCtrl.text.trim());
     if (!mounted) return;
     setState(() {
-      _verifying     = false;
-      _verifyResult  = result;
-      // Preencher user_id automaticamente se verificou com sucesso
+      _verifying    = false;
+      _verifyResult = result;
       if (result['valid'] == true && _userCtrl.text.isEmpty) {
         _userCtrl.text = result['user_id'] ?? '';
       }
@@ -348,25 +217,34 @@ class _CredentialsCardState extends State<_CredentialsCard> {
   }
 
   Future<void> _save() async {
+    if (_tokenCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Informe o Access Token de produção'),
+        backgroundColor: AppColors.error,
+      ));
+      return;
+    }
     setState(() => _saving = true);
 
     final newCreds = MpCredentials(
       accessToken: _tokenCtrl.text.trim(),
-      publicKey:   _pubKeyCtrl.text.trim(),
+      publicKey:   '',   // public_key não é necessário para PIX
       userId:      _userCtrl.text.trim(),
       verified:    _verifyResult?['valid'] == true,
     );
 
     final cfg = widget.svc.config;
     final newCfg = MpConfig(
-      mode: cfg.mode,
-      sandbox:    widget.mode == 'sandbox'    ? newCreds : cfg.sandbox,
-      production: widget.mode == 'production' ? newCreds : cfg.production,
+      mode:            'production',   // sempre produção
+      sandbox:         MpCredentials.empty(),
+      production:      newCreds,
       comissaoPercent: cfg.comissaoPercent,
       notificationUrl: cfg.notificationUrl,
       backUrlSuccess:  cfg.backUrlSuccess,
       backUrlFailure:  cfg.backUrlFailure,
       backUrlPending:  cfg.backUrlPending,
+      clientId:        cfg.clientId,
+      clientSecret:    cfg.clientSecret,
     );
 
     final ok = await widget.svc.saveConfig(newCfg);
@@ -378,18 +256,15 @@ class _CredentialsCardState extends State<_CredentialsCard> {
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(ok
-          ? '✅ Credenciais ${widget.isSandbox ? "sandbox" : "produção"} salvas!'
+          ? '✅ Credenciais de produção salvas!'
           : widget.svc.lastError ?? 'Erro ao salvar'),
-      backgroundColor: ok ? AppColors.success : AppColors.error,
+      backgroundColor: ok ? _mpGreen : AppColors.error,
     ));
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.isSandbox
-        ? const Color(0xFFE65100)
-        : AppColors.error;
-    final isEmpty = widget.creds.isEmpty;
+    final isEmpty = widget.svc.config.production.isEmpty;
 
     return Container(
       decoration: BoxDecoration(
@@ -398,13 +273,15 @@ class _CredentialsCardState extends State<_CredentialsCard> {
         border: Border.all(
           color: isEmpty
               ? AppColors.cardBorder
-              : color.withValues(alpha: 0.3),
+              : _mpGreen.withValues(alpha: 0.35),
+          width: isEmpty ? 1 : 1.5,
         ),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Padding(
@@ -412,27 +289,26 @@ class _CredentialsCardState extends State<_CredentialsCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header do card ────────────────────────────────────────────
+
+            // ── Header ────────────────────────────────────────────────────
             Row(
               children: [
                 Icon(
-                  widget.creds.verified
+                  widget.svc.config.production.verified
                       ? Icons.verified_rounded
                       : (isEmpty
                           ? Icons.lock_outline_rounded
                           : Icons.warning_amber_rounded),
-                  color: widget.creds.verified
-                      ? AppColors.success
+                  color: widget.svc.config.production.verified
+                      ? _mpGreen
                       : (isEmpty ? AppColors.textHint : AppColors.warning),
                   size: 20,
                 ),
                 const SizedBox(width: 8),
-                Expanded(
+                const Expanded(
                   child: Text(
-                    widget.isSandbox
-                        ? 'Access Token Sandbox'
-                        : 'Access Token Produção',
-                    style: const TextStyle(
+                    'Access Token (APP_USR-...)',
+                    style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                         color: AppColors.textPrimary),
@@ -441,10 +317,11 @@ class _CredentialsCardState extends State<_CredentialsCard> {
                 if (!isEmpty)
                   TextButton.icon(
                     onPressed: () => setState(() {
-                      _editing       = !_editing;
-                      _verifyResult  = null;
+                      _editing      = !_editing;
+                      _verifyResult = null;
                     }),
-                    icon: Icon(_editing ? Icons.close_rounded : Icons.edit_rounded,
+                    icon: Icon(
+                        _editing ? Icons.close_rounded : Icons.edit_rounded,
                         size: 15),
                     label: Text(_editing ? 'Cancelar' : 'Editar',
                         style: const TextStyle(fontSize: 12)),
@@ -452,39 +329,35 @@ class _CredentialsCardState extends State<_CredentialsCard> {
               ],
             ),
 
-            // ── Exibição resumida (não editando) ──────────────────────────
+            // ── Exibição resumida ─────────────────────────────────────────
             if (!_editing && !isEmpty) ...[
               const SizedBox(height: 12),
               _TokenDisplay(
                   label: 'Access Token',
-                  value: widget.creds.accessToken),
-              const SizedBox(height: 6),
-              _TokenDisplay(
-                  label: 'Public Key',
-                  value: widget.creds.publicKey),
+                  value: widget.svc.config.production.accessToken),
               const SizedBox(height: 6),
               _TokenDisplay(
                   label: 'User ID',
-                  value: widget.creds.userId,
+                  value: widget.svc.config.production.userId,
                   mask: false),
-              if (widget.creds.verified) ...[
+              if (widget.svc.config.production.verified) ...[
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.1),
+                    color: _mpGreen.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.check_circle_rounded,
-                          color: AppColors.success, size: 14),
+                          color: _mpGreen, size: 14),
                       SizedBox(width: 6),
                       Text('Credenciais verificadas',
                           style: TextStyle(
-                              color: AppColors.success,
+                              color: _mpGreen,
                               fontSize: 11,
                               fontWeight: FontWeight.w600)),
                     ],
@@ -502,19 +375,16 @@ class _CredentialsCardState extends State<_CredentialsCard> {
                   color: AppColors.surfaceVariant,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
                     Icon(Icons.info_outline_rounded,
                         color: AppColors.textHint, size: 18),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        widget.isSandbox
-                            ? 'Configure o token sandbox do Mercado Pago para testes'
-                            : 'Configure o token de produção para receber pagamentos reais',
-                        style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary),
+                        'Configure o Access Token de produção para receber pagamentos via PIX',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
                       ),
                     ),
                   ],
@@ -524,13 +394,11 @@ class _CredentialsCardState extends State<_CredentialsCard> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () =>
-                      setState(() => _editing = true),
+                  onPressed: () => setState(() => _editing = true),
                   icon: const Icon(Icons.add_rounded, size: 16),
-                  label: Text(
-                      'Configurar credenciais ${widget.isSandbox ? "sandbox" : "produção"}'),
+                  label: const Text('Configurar credenciais de produção'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: color,
+                    backgroundColor: _mpGreen,
                     foregroundColor: Colors.white,
                   ),
                 ),
@@ -541,60 +409,54 @@ class _CredentialsCardState extends State<_CredentialsCard> {
             if (_editing) ...[
               const SizedBox(height: 16),
 
-              // Guia de onde encontrar as credenciais
-              widget.isSandbox
-                  ? _GuiaCredenciais.sandbox()
-                  : _GuiaCredenciais.producao(),
+              // Guia visual
+              _GuiaProducao(),
 
               // Access Token
               _EditField(
                 controller: _tokenCtrl,
-                label: widget.isSandbox ? 'Access Token (TEST-...)' : 'Access Token (APP_USR-...)',
-                hint: widget.isSandbox ? 'TEST-...' : 'APP_USR-...',
+                label: 'Access Token de Produção',
+                hint: 'APP_USR-...',
                 icon: Icons.key_rounded,
                 obscure: true,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
 
               // Botão verificar
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _verifying ? null : _verify,
-                      icon: _verifying
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2))
-                          : const Icon(Icons.verified_user_rounded,
-                              size: 16),
-                      label: Text(
-                          _verifying ? 'Verificando...' : 'Verificar Token',
-                          style: const TextStyle(fontSize: 12)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: _mpBlue),
-                        foregroundColor: _mpBlue,
-                      ),
-                    ),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _verifying ? null : _verify,
+                  icon: _verifying
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.verified_user_rounded, size: 16),
+                  label: Text(
+                      _verifying ? 'Verificando...' : 'Verificar Token',
+                      style: const TextStyle(fontSize: 13)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: _mpBlue),
+                    foregroundColor: _mpBlue,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                ],
+                ),
               ),
 
               // Resultado da verificação
               if (_verifyResult != null) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: _verifyResult!['valid'] == true
-                        ? AppColors.success.withValues(alpha: 0.1)
-                        : AppColors.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                        ? _mpGreen.withValues(alpha: 0.08)
+                        : AppColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: _verifyResult!['valid'] == true
-                          ? AppColors.success.withValues(alpha: 0.3)
+                          ? _mpGreen.withValues(alpha: 0.3)
                           : AppColors.error.withValues(alpha: 0.3),
                     ),
                   ),
@@ -608,40 +470,43 @@ class _CredentialsCardState extends State<_CredentialsCard> {
                                 ? Icons.check_circle_rounded
                                 : Icons.cancel_rounded,
                             color: _verifyResult!['valid'] == true
-                                ? AppColors.success
+                                ? _mpGreen
                                 : AppColors.error,
-                            size: 16,
+                            size: 18,
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Text(
                             _verifyResult!['valid'] == true
                                 ? 'Token válido!'
                                 : 'Token inválido',
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
+                              fontSize: 14,
                               color: _verifyResult!['valid'] == true
-                                  ? AppColors.success
+                                  ? _mpGreen
                                   : AppColors.error,
-                              fontSize: 13,
                             ),
                           ),
                         ],
                       ),
                       if (_verifyResult!['valid'] == true) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
                           '📧 ${_verifyResult!['email']}\n'
                           '🆔 User ID: ${_verifyResult!['user_id']}\n'
                           '🌎 País: ${_verifyResult!['site_id']}',
                           style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
                               color: AppColors.textSecondary),
                         ),
                       ] else
-                        Text(
-                          _verifyResult!['error'] ?? '',
-                          style: const TextStyle(
-                              fontSize: 11, color: AppColors.error),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            _verifyResult!['error'] ?? '',
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.error),
+                          ),
                         ),
                     ],
                   ),
@@ -650,43 +515,33 @@ class _CredentialsCardState extends State<_CredentialsCard> {
 
               const SizedBox(height: 10),
 
-              // Public Key
-              _EditField(
-                controller: _pubKeyCtrl,
-                label: 'Public Key',
-                hint: 'APP_USR-...',
-                icon: Icons.vpn_key_rounded,
-                obscure: true,
-              ),
-              const SizedBox(height: 10),
-
-              // User ID
+              // User ID (preenchido automaticamente)
               _EditField(
                 controller: _userCtrl,
-                label: 'User ID (preenchido automático ao verificar)',
-                hint: 'ex: 3450457834',
+                label: 'User ID (preenchido ao verificar)',
+                hint: 'ex: 3235638414',
                 icon: Icons.person_rounded,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
               // Botão salvar
               SizedBox(
                 width: double.infinity,
-                height: 48,
+                height: 50,
                 child: ElevatedButton.icon(
                   onPressed: _saving ? null : _save,
                   icon: _saving
                       ? const SizedBox(
-                          width: 16,
-                          height: 16,
+                          width: 18,
+                          height: 18,
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.save_rounded),
-                  label: Text(_saving
-                      ? 'Salvando...'
-                      : 'Salvar Credenciais'),
+                  label: Text(_saving ? 'Salvando...' : 'Salvar Credenciais',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 15)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: color,
+                    backgroundColor: _mpGreen,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -712,15 +567,15 @@ class _SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<_SettingsTab> {
-  late final _notifCtrl   = TextEditingController(
-      text: widget.svc.config.notificationUrl);
-  late final _successCtrl = TextEditingController(
-      text: widget.svc.config.backUrlSuccess);
-  late final _failureCtrl = TextEditingController(
-      text: widget.svc.config.backUrlFailure);
-  late final _pendingCtrl = TextEditingController(
-      text: widget.svc.config.backUrlPending);
-  late double _comissao   = widget.svc.config.comissaoPercent * 100;
+  late final _notifCtrl   =
+      TextEditingController(text: widget.svc.config.notificationUrl);
+  late final _successCtrl =
+      TextEditingController(text: widget.svc.config.backUrlSuccess);
+  late final _failureCtrl =
+      TextEditingController(text: widget.svc.config.backUrlFailure);
+  late final _pendingCtrl =
+      TextEditingController(text: widget.svc.config.backUrlPending);
+  late double _comissao = widget.svc.config.comissaoPercent * 100;
   bool _saving = false;
 
   @override
@@ -736,21 +591,24 @@ class _SettingsTabState extends State<_SettingsTab> {
     setState(() => _saving = true);
     final cfg = widget.svc.config;
     final newCfg = MpConfig(
-      mode:            cfg.mode,
-      sandbox:         cfg.sandbox,
+      mode:            'production',
+      sandbox:         MpCredentials.empty(),
       production:      cfg.production,
       comissaoPercent: _comissao / 100,
       notificationUrl: _notifCtrl.text.trim(),
       backUrlSuccess:  _successCtrl.text.trim(),
       backUrlFailure:  _failureCtrl.text.trim(),
       backUrlPending:  _pendingCtrl.text.trim(),
+      clientId:        cfg.clientId,
+      clientSecret:    cfg.clientSecret,
     );
     final ok = await widget.svc.saveConfig(newCfg);
     if (!mounted) return;
     setState(() => _saving = false);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok ? '✅ Configurações salvas!' : (widget.svc.lastError ?? 'Erro')),
-      backgroundColor: ok ? AppColors.success : AppColors.error,
+      content: Text(
+          ok ? '✅ Configurações salvas!' : (widget.svc.lastError ?? 'Erro')),
+      backgroundColor: ok ? _mpGreen : AppColors.error,
     ));
   }
 
@@ -807,18 +665,17 @@ class _SettingsTabState extends State<_SettingsTab> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('5%',
+                  const Text('5%',
                       style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textHint)),
-                  Text('Exemplo: venda R\$10 → afiliado ganha R\$${(10 * _comissao / 100).toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary)),
-                  Text('50%',
+                          fontSize: 11, color: AppColors.textHint)),
+                  Text(
+                    'Venda R\$10 → afiliado ganha R\$${(10 * _comissao / 100).toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                  const Text('50%',
                       style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textHint)),
+                          fontSize: 11, color: AppColors.textHint)),
                 ],
               ),
             ],
@@ -827,8 +684,7 @@ class _SettingsTabState extends State<_SettingsTab> {
         const SizedBox(height: 24),
 
         // ── URLs ──────────────────────────────────────────────────────────
-        _SectionHeader(
-            icon: Icons.link_rounded, title: 'URLs de Retorno'),
+        _SectionHeader(icon: Icons.link_rounded, title: 'URLs de Retorno'),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
@@ -841,7 +697,7 @@ class _SettingsTabState extends State<_SettingsTab> {
             children: [
               _EditField(
                 controller: _notifCtrl,
-                label: 'Webhook URL',
+                label: 'Webhook URL (notificações MP)',
                 icon: Icons.webhook_rounded,
                 hint: 'https://...',
               ),
@@ -871,7 +727,7 @@ class _SettingsTabState extends State<_SettingsTab> {
         ),
         const SizedBox(height: 24),
 
-        // ── Status atual ──────────────────────────────────────────────────
+        // ── Status ────────────────────────────────────────────────────────
         _SectionHeader(icon: Icons.info_outline_rounded, title: 'Status Atual'),
         const SizedBox(height: 12),
         _StatusCard(svc: widget.svc),
@@ -889,8 +745,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.save_rounded),
-            label: Text(
-                _saving ? 'Salvando...' : 'Salvar Configurações'),
+            label: Text(_saving ? 'Salvando...' : 'Salvar Configurações'),
             style: ElevatedButton.styleFrom(
               backgroundColor: _mpBlue,
               foregroundColor: Colors.white,
@@ -914,7 +769,7 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cfg   = svc.config;
-    final creds = cfg.active;
+    final creds = cfg.production;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -927,22 +782,28 @@ class _StatusCard extends StatelessWidget {
         children: [
           _StatusRow(
             label: 'Modo',
-            value: cfg.isSandbox ? '🧪 Sandbox (Testes)' : '🔴 Produção',
-            color: cfg.isSandbox ? const Color(0xFFE65100) : AppColors.error,
+            value: '🚀 Produção (Pagamentos Reais)',
+            color: _mpGreen,
           ),
           const Divider(height: 16),
           _StatusRow(
             label: 'Access Token',
             value: creds.isEmpty
                 ? '❌ Não configurado'
-                : '✅ ${creds.accessToken.substring(0, 20)}...',
-            color: creds.isEmpty ? AppColors.error : AppColors.success,
+                : '✅ ${creds.accessToken.substring(0, creds.accessToken.length.clamp(0, 20))}...',
+            color: creds.isEmpty ? AppColors.error : _mpGreen,
+          ),
+          const Divider(height: 16),
+          _StatusRow(
+            label: 'User ID',
+            value: creds.userId.isEmpty ? '—' : creds.userId,
+            color: AppColors.textPrimary,
           ),
           const Divider(height: 16),
           _StatusRow(
             label: 'Verificado',
             value: creds.verified ? '✅ Sim' : '⚠️ Não verificado',
-            color: creds.verified ? AppColors.success : AppColors.warning,
+            color: creds.verified ? _mpGreen : AppColors.warning,
           ),
           const Divider(height: 16),
           _StatusRow(
@@ -963,43 +824,85 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-class _StatusRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  final bool small;
+// ── Guia de onde encontrar o Access Token ─────────────────────────────────────
 
-  const _StatusRow({
-    required this.label,
-    required this.value,
-    required this.color,
-    this.small = false,
-  });
+class _GuiaProducao extends StatelessWidget {
+  const _GuiaProducao();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(label,
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary)),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: small ? 11 : 13,
-              fontWeight: FontWeight.w600,
-              color: color,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF4CAF50)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Título
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: const BoxDecoration(
+              color: Color(0xFFC8E6C9),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
             ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 2,
+            child: const Row(
+              children: [
+                Text('🔑', style: TextStyle(fontSize: 16)),
+                SizedBox(width: 8),
+                Text(
+                  'Onde encontrar o Access Token',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    color: Color(0xFF1B5E20),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Passo(n: '1', texto: 'Acesse mercadopago.com.br e faça login'),
+                _Passo(
+                    n: '2',
+                    texto:
+                        'Seu perfil → Seu negócio → Configurações → Gestão e administração → Credenciais'),
+                _Passo(n: '3', texto: 'Clique na aba "Credenciais de produção"'),
+                _Passo(
+                    n: '4',
+                    texto:
+                        'Copie o Access Token (começa com APP_USR-...)'),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    '⚠️ "Chave secreta" e "ID do aplicativo" que aparecem no\n'
+                    'painel de Desenvolvedores NÃO são o Access Token!\n'
+                    'O Access Token correto fica em:\n'
+                    'Configurações → Credenciais de produção.',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF1B5E20),
+                        fontWeight: FontWeight.w600,
+                        height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1040,7 +943,8 @@ class _SectionHeader extends StatelessWidget {
         if (badge != null) ...[
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: (badgeColor ?? AppColors.primary).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(6),
@@ -1102,13 +1006,16 @@ class _TokenDisplayState extends State<_TokenDisplay> {
         if (widget.mask)
           IconButton(
             icon: Icon(
-                _visible ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                _visible
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
                 size: 16,
                 color: AppColors.textHint),
             onPressed: () => setState(() => _visible = !_visible),
           ),
         IconButton(
-          icon: const Icon(Icons.copy_rounded, size: 14, color: AppColors.textHint),
+          icon: const Icon(Icons.copy_rounded,
+              size: 14, color: AppColors.textHint),
           onPressed: () {
             Clipboard.setData(ClipboardData(text: widget.value));
             ScaffoldMessenger.of(context).showSnackBar(
@@ -1171,145 +1078,45 @@ class _EditFieldState extends State<_EditField> {
   }
 }
 
-// ── Guia visual de onde encontrar as credenciais MP ───────────────────────────
-class _GuiaCredenciais extends StatelessWidget {
-  final bool isSandbox;
-  const _GuiaCredenciais({required this.isSandbox});
+class _StatusRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final bool small;
 
-  factory _GuiaCredenciais.sandbox() =>
-      const _GuiaCredenciais(isSandbox: true);
-  factory _GuiaCredenciais.producao() =>
-      const _GuiaCredenciais(isSandbox: false);
+  const _StatusRow({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.small = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: isSandbox
-            ? const Color(0xFFFFF8E1)
-            : const Color(0xFFE8F5E9),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isSandbox
-              ? const Color(0xFFFFCC02)
-              : const Color(0xFF4CAF50),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(label,
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary)),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Título
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSandbox
-                  ? const Color(0xFFFFCC02).withValues(alpha: 0.3)
-                  : const Color(0xFF4CAF50).withValues(alpha: 0.2),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(10)),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: small ? 11 : 13,
+              fontWeight: FontWeight.w600,
+              color: color,
             ),
-            child: Row(
-              children: [
-                Text(isSandbox ? '🧪' : '🔑',
-                    style: const TextStyle(fontSize: 14)),
-                const SizedBox(width: 6),
-                Text(
-                  isSandbox
-                      ? 'Onde encontrar as credenciais TESTE'
-                      : 'Onde encontrar as credenciais de PRODUÇÃO',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                    color: isSandbox
-                        ? const Color(0xFF7B3F00)
-                        : const Color(0xFF1B5E20),
-                  ),
-                ),
-              ],
-            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
           ),
-
-          // Passos
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: isSandbox
-                  ? _passosSandbox()
-                  : _passosProducao(),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-
-  List<Widget> _passosSandbox() => [
-        _Passo(n: '1', texto: 'Acesse mercadopago.com.br e faça login'),
-        _Passo(
-            n: '2',
-            texto: 'Vá em: Seu perfil → Seu negócio → Configurações → Gestão e administração → Credenciais'),
-        _Passo(
-            n: '3',
-            texto: 'Clique na aba "Credenciais de teste"'),
-        _Passo(
-            n: '4',
-            texto: 'Copie o Access Token (começa com TEST-...)'),
-        _Passo(
-            n: '5',
-            texto: 'Copie a Public Key (começa com TEST-...)'),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFF6900).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: const Text(
-            '⚠️ Token sandbox começa com TEST-...\n'
-            'Token APP_USR-... é de PRODUÇÃO e não funciona em modo sandbox!',
-            style: TextStyle(
-                fontSize: 10,
-                color: Color(0xFF7B3F00),
-                fontWeight: FontWeight.w600),
-          ),
-        ),
-      ];
-
-  List<Widget> _passosProducao() => [
-        _Passo(n: '1', texto: 'Acesse mercadopago.com.br e faça login'),
-        _Passo(
-            n: '2',
-            texto: 'Vá em: Seu perfil → Seu negócio → Configurações → Gestão e administração → Credenciais'),
-        _Passo(
-            n: '3',
-            texto: 'Clique na aba "Credenciais de produção"'),
-        _Passo(
-            n: '4',
-            texto: 'Copie o Access Token (começa com APP_USR-...)'),
-        _Passo(
-            n: '5',
-            texto: 'Copie a Public Key (começa com APP_USR-...)'),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: const Text(
-            '💡 Atenção: a "Chave secreta" e o "ID do aplicativo" visíveis\n'
-            'no painel de Desenvolvedores NÃO são o Access Token!\n'
-            'O Access Token fica em: Configurações → Credenciais de produção.',
-            style: TextStyle(
-                fontSize: 10,
-                color: Color(0xFF1B5E20),
-                fontWeight: FontWeight.w600),
-          ),
-        ),
-      ];
 }
 
 class _Passo extends StatelessWidget {
@@ -1320,16 +1127,16 @@ class _Passo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 5),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 18,
-            height: 18,
+            width: 20,
+            height: 20,
             alignment: Alignment.center,
             decoration: const BoxDecoration(
-              color: Color(0xFF009EE3),
+              color: _mpBlue,
               shape: BoxShape.circle,
             ),
             child: Text(n,
@@ -1338,13 +1145,13 @@ class _Passo extends StatelessWidget {
                     fontSize: 10,
                     fontWeight: FontWeight.w800)),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              texto,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary),
-            ),
+            child: Text(texto,
+                style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                    height: 1.4)),
           ),
         ],
       ),

@@ -20,7 +20,8 @@ class MpCredentials {
     required this.verified,
   });
 
-  bool get isEmpty => accessToken.isEmpty || publicKey.isEmpty;
+  // publicKey é opcional para PIX — só accessToken é obrigatório
+  bool get isEmpty => accessToken.isEmpty;
 
   factory MpCredentials.empty() => const MpCredentials(
         accessToken: '', publicKey: '', userId: '', verified: false);
@@ -90,24 +91,31 @@ class MpConfig {
         backUrlPending:  'https://sharewallet.com.br/checkout/pending',
       );
 
-  factory MpConfig.fromFirestore(Map<String, dynamic> d) => MpConfig(
-        mode: d['mode'] as String? ?? 'sandbox',
-        clientId:     d['client_id']     as String? ?? '',
-        clientSecret: d['client_secret'] as String? ?? '',
-        sandbox:    MpCredentials.fromMap(
-            (d['sandbox']    as Map<String, dynamic>?) ?? {}),
-        production: MpCredentials.fromMap(
-            (d['production'] as Map<String, dynamic>?) ?? {}),
-        comissaoPercent: (d['comissao_percent'] as num?)?.toDouble() ?? 0.20,
-        notificationUrl: d['notification_url'] as String? ??
-            'https://sharewallet.com.br/api/webhook/mp',
-        backUrlSuccess: d['back_url_success'] as String? ??
-            'https://sharewallet.com.br/checkout/success',
-        backUrlFailure: d['back_url_failure'] as String? ??
-            'https://sharewallet.com.br/checkout/failure',
-        backUrlPending: d['back_url_pending'] as String? ??
-            'https://sharewallet.com.br/checkout/pending',
-      );
+  factory MpConfig.fromFirestore(Map<String, dynamic> d) {
+    final defaults = MpConfig.defaultConfig();
+
+    // Lê credenciais do Firestore; se token estiver vazio, usa o hardcoded
+    final prodMap  = (d['production'] as Map<String, dynamic>?) ?? {};
+    final prodCred = MpCredentials.fromMap(prodMap);
+    final production = prodCred.isEmpty
+        ? defaults.production  // fallback: token hardcoded do defaultConfig
+        : prodCred;
+
+    final sandMap  = (d['sandbox'] as Map<String, dynamic>?) ?? {};
+
+    return MpConfig(
+      mode:           d['mode']          as String? ?? defaults.mode,
+      clientId:       d['client_id']     as String? ?? defaults.clientId,
+      clientSecret:   d['client_secret'] as String? ?? defaults.clientSecret,
+      sandbox:        MpCredentials.fromMap(sandMap),
+      production:     production,
+      comissaoPercent:(d['comissao_percent'] as num?)?.toDouble() ?? defaults.comissaoPercent,
+      notificationUrl: d['notification_url'] as String? ?? defaults.notificationUrl,
+      backUrlSuccess:  d['back_url_success'] as String? ?? defaults.backUrlSuccess,
+      backUrlFailure:  d['back_url_failure'] as String? ?? defaults.backUrlFailure,
+      backUrlPending:  d['back_url_pending'] as String? ?? defaults.backUrlPending,
+    );
+  }
 }
 
 class MpPreference {
@@ -185,6 +193,12 @@ class MercadoPagoService extends ChangeNotifier {
         app: Firebase.app(),
         databaseId: _databaseId,
       );
+      // Habilita persistência offline — evita erro "client is offline"
+      // quando a rede demora para responder na primeira carga
+      _dbInst!.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
     } catch (_) {}
     return _dbInst;
   }
@@ -195,24 +209,45 @@ class MercadoPagoService extends ChangeNotifier {
 
   Future<void> loadConfig() async {
     try {
-      final snap = await _cfgCollection?.doc('mercadopago').get();
+      DocumentSnapshot<Map<String, dynamic>>? snap;
+
+      // 1. Tenta cache local primeiro (instantâneo, funciona offline)
+      try {
+        snap = await _cfgCollection
+            ?.doc('mercadopago')
+            .get(const GetOptions(source: Source.cache));
+        if (snap != null && snap.exists) {
+          if (kDebugMode) debugPrint('[MP] Config carregada do cache local');
+        } else {
+          snap = null; // cache vazio — vai para rede
+        }
+      } catch (_) {
+        snap = null;
+      }
+
+      // 2. Tenta rede (com timeout de 6s)
+      snap ??= await _cfgCollection
+          ?.doc('mercadopago')
+          .get()
+          .timeout(const Duration(seconds: 6));
+
       if (snap != null && snap.exists) {
         _config = MpConfig.fromFirestore(snap.data()!);
         _isConfigLoaded = true;
         if (kDebugMode) {
           debugPrint('[MP] Config carregada — modo: ${_config.mode}');
-          debugPrint('[MP] Credencial ativa: ${_config.active.accessToken.substring(0, 20)}...');
+          debugPrint('[MP] Token ativo: ${_config.active.accessToken.isNotEmpty ? "${_config.active.accessToken.substring(0, 20)}..." : "(vazio)"}');
         }
         notifyListeners();
       } else {
-        // Documento não existe — criar com defaults
-        await _saveConfigToFirestore(_config);
+        // Documento não existe — criar com defaults e usar defaults
         _isConfigLoaded = true;
         notifyListeners();
+        _saveConfigToFirestore(_config).catchError((_) {});
       }
     } catch (e) {
-      debugPrint('[MP] Erro ao carregar config: $e');
-      // Usa defaults hardcoded como fallback
+      debugPrint('[MP] Erro ao carregar config: $e — usando defaults hardcoded');
+      // Usa defaults hardcoded como fallback (token APP_USR-4493... já está no defaultConfig)
       _isConfigLoaded = true;
       notifyListeners();
     }
