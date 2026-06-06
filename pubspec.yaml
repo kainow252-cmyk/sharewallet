@@ -1,5 +1,5 @@
 name: affiliate_wallet
-description: Plataforma de afiliados com carteira digital e split PIX via Woovi/OpenPix
+description: ShareWallet — plataforma de afiliados com carteira digital e pagamentos via Pix
 publish_to: 'none'
 version: 1.0.0+1
 
