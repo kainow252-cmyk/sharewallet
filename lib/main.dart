@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_core/firebase_core.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:js' as js;
 
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
@@ -33,7 +35,7 @@ import 'screens/products/buy_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── Inicializa Firebase (projeto: affiliate-wallet-75853) ───────────────────
+  // ── Firebase ────────────────────────────────────────────────────────────────
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
@@ -41,7 +43,6 @@ void main() async {
       );
     }
   } catch (e) {
-    // Loga o erro mas não bloqueia o app — UI carrega mesmo se Firebase falhar
     debugPrint('[Firebase] Erro ao inicializar: $e');
   }
 
@@ -52,7 +53,6 @@ void main() async {
     statusBarIconBrightness: Brightness.light,
   ));
 
-  // setPreferredOrientations NÃO é suportado na web — guard obrigatório
   if (!kIsWeb) {
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -60,30 +60,37 @@ void main() async {
     ]);
   }
 
-  // ── Detecta deep link na web antes de renderizar ──────────────────────────
-  // URL: https://.../#/produto/ID?ref=CODE
-  // O Flutter hash routing entrega o path sem query string no onGenerateRoute.
-  // Lemos Uri.base (window.location.href) aqui para extrair o ref.
+  // ── Deep link: lê o fragment gravado pelo JS no index.html ─────────────────
+  // O index.html grava window.location.hash no sessionStorage ANTES do Flutter
+  // carregar. Aqui lemos via dart:js e extraímos productId + affiliateCode.
+  //
+  // URL do afiliado: /app/#/produto/p_xxx?ref=ABC123
+  // hash lido pelo JS: #/produto/p_xxx?ref=ABC123
+  // fragment gravado: /produto/p_xxx?ref=ABC123
   String? initialProductId;
   String? initialAffiliateCode;
 
   if (kIsWeb) {
     try {
-      // Uri.base = URL completa do browser (multiplataforma, sem dart:html)
-      // Ex: https://sharewallet-app.pages.dev/app/#/produto/p_123?ref=ABC123
-      final uri = Uri.base;
-      // O fragment é tudo após o # → ex: /produto/p_123?ref=ABC123
-      final fragment = uri.fragment; // /produto/p_123?ref=ABC123
-      if (fragment.startsWith('/produto/')) {
+      // Lê do sessionStorage o valor gravado pelo script no index.html
+      final fragment = js.context['sessionStorage']
+          .callMethod('getItem', ['flutter_initial_route']) as String?;
+
+      if (fragment != null && fragment.startsWith('/produto/')) {
         final withoutPrefix = fragment.replaceFirst('/produto/', '');
         final parts = withoutPrefix.split('?');
-        initialProductId = parts[0];
+        initialProductId = parts[0].isNotEmpty ? parts[0] : null;
         if (parts.length > 1) {
           final query = Uri.splitQueryString(parts[1]);
           initialAffiliateCode = query['ref'] ?? '';
         }
+        // Limpa após ler para não reutilizar em reloads futuros
+        js.context['sessionStorage']
+            .callMethod('removeItem', ['flutter_initial_route']);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[DeepLink] Erro ao ler sessionStorage: $e');
+    }
   }
 
   runApp(ShareWalletApp(
@@ -104,6 +111,9 @@ class ShareWalletApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasProduto =
+        initialProductId != null && initialProductId!.isNotEmpty;
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
@@ -117,7 +127,8 @@ class ShareWalletApp extends StatelessWidget {
         title: 'ShareWallet',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.theme,
-        initialRoute: (initialProductId != null && initialProductId!.isNotEmpty)
+        // Se veio pelo link de produto, a rota inicial é a tela do comprador
+        initialRoute: hasProduto
             ? '/produto/$initialProductId?ref=${initialAffiliateCode ?? ""}'
             : '/',
         routes: {
@@ -137,11 +148,10 @@ class ShareWalletApp extends StatelessWidget {
           '/admin/login': (_) => const AdminLoginScreen(),
           '/admin': (_) => const AdminNavScreen(),
         },
-        // Deep links dinâmicos
         onGenerateRoute: (settings) {
           final name = settings.name ?? '';
 
-          // /ref/CODE → registro de afiliado com sponsorCode
+          // /ref/CODE → registro de afiliado
           if (name.startsWith('/ref/')) {
             final code = name.replaceFirst('/ref/', '');
             return MaterialPageRoute(
@@ -149,7 +159,7 @@ class ShareWalletApp extends StatelessWidget {
             );
           }
 
-          // /produto/PRODUCT_ID?ref=AFFILIATE_CODE → tela pública do comprador
+          // /produto/ID?ref=CODE → tela pública do comprador (sem login)
           if (name.startsWith('/produto/')) {
             final withoutPrefix = name.replaceFirst('/produto/', '');
             final parts = withoutPrefix.split('?');
@@ -157,8 +167,8 @@ class ShareWalletApp extends StatelessWidget {
             String affiliateCode = initialAffiliateCode ?? '';
             if (parts.length > 1) {
               final query = Uri.splitQueryString(parts[1]);
-              final refFromRoute = query['ref'] ?? '';
-              if (refFromRoute.isNotEmpty) affiliateCode = refFromRoute;
+              final ref = query['ref'] ?? '';
+              if (ref.isNotEmpty) affiliateCode = ref;
             }
             return MaterialPageRoute(
               builder: (_) => BuyScreen(

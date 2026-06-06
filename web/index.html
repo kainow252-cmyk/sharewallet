@@ -36,11 +36,30 @@
 
   <title>Affiliate Wallet</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    Deep link handler: lê o hash da URL ANTES do Flutter carregar
+    e grava no sessionStorage para o Dart ler via dart:js.
+
+    URL esperada: /app/#/produto/p_xxx?ref=CODE
+    window.location.hash → "#/produto/p_xxx?ref=CODE"
+  -->
+  <script>
+    (function() {
+      try {
+        var hash = window.location.hash; // "#/produto/p_xxx?ref=CODE"
+        if (hash && hash.length > 1) {
+          // Remove o "#" inicial
+          var fragment = hash.substring(1); // "/produto/p_xxx?ref=CODE"
+          // Guarda no sessionStorage para o Dart ler
+          sessionStorage.setItem('flutter_initial_route', fragment);
+        }
+      } catch(e) {}
+    })();
+  </script>
 </head>
 <body>
-  <!-- Nenhum Facebook JS SDK necessário -->
   <!-- O login usa Firebase signInWithPopup com OAuth redirect nativo -->
-
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
