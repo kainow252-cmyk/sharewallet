@@ -77,11 +77,11 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
 
       final ativos = subs.where((s) =>
           (s['status']?.toString() ?? 'ativa') == 'ativa').toList();
+      // CORREÇÃO: 'comissao' no D1 já é o valor em R$ (ex: 0.50),
+      // NÃO é percentual. Não multiplicar por 'valor'.
       final comissao = ativos.fold<double>(
           0,
-          (s, r) =>
-              s + ((r['valor'] as num?)?.toDouble() ?? 0) *
-                  ((r['comissao'] as num?)?.toDouble() ?? 0));
+          (s, r) => s + ((r['comissao'] as num?)?.toDouble() ?? 0));
 
       // Adapta ao formato esperado pelo widget _ReferralTile
       final list = subs.map((s) => {
@@ -90,8 +90,8 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
             'status': (s['status']?.toString() ?? 'ativa') == 'ativa'
                 ? 'ATIVO'
                 : 'INATIVO',
-            'comissao_mensal': (s['valor'] as num?)?.toDouble() ?? 0 *
-                ((s['comissao'] as num?)?.toDouble() ?? 0),
+            // CORREÇÃO: comissao no D1 já é R$ — usar diretamente
+            'comissao_mensal': (s['comissao'] as num?)?.toDouble() ?? 0,
             'meses_ativos': 1,
           }).toList();
 

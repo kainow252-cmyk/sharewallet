@@ -406,35 +406,75 @@ class FirebaseUserService {
 
       final affiliateCode = _toStr(aData['affiliate_code'], fallback: _gerarCodigo(uid));
 
+      // ── Merge D1 quando Firestore tem campos vazios ───────────────────────
+      // O D1 é a fonte verdade para dados editáveis (telefone, CPF, PIX)
+      // Se Firestore tiver campos vazios e D1 tiver dados → usa D1
+      String nomeResolvido     = _toStr(aData['nome'], fallback: displayName ?? email.split('@').first);
+      String cpfResolvido      = _toStr(aData['cpf']);
+      String telefoneResolvido = _toStr(aData['telefone']);
+      String pixKeyResolvido   = _toStr(aData['pix_key'], fallback: email);
+      String pixKeyTypeResolvido = _toStr(aData['pix_key_type'], fallback: 'EMAIL');
+
+      final precisaMergD1 = cpfResolvido.isEmpty || telefoneResolvido.isEmpty;
+      if (precisaMergD1) {
+        try {
+          final d1Data = await CfApiService.getAffiliateByEmail(email);
+          if (d1Data != null) {
+            if (cpfResolvido.isEmpty) {
+              cpfResolvido = d1Data['cpf']?.toString() ?? '';
+            }
+            if (telefoneResolvido.isEmpty) {
+              telefoneResolvido = d1Data['telefone']?.toString() ?? '';
+            }
+            if (nomeResolvido.isEmpty || nomeResolvido == email.split('@').first) {
+              final d1Nome = d1Data['nome']?.toString() ?? '';
+              if (d1Nome.isNotEmpty) nomeResolvido = d1Nome;
+            }
+            final d1Pix = d1Data['pix_key']?.toString() ?? '';
+            if (pixKeyResolvido.isEmpty || pixKeyResolvido == email) {
+              if (d1Pix.isNotEmpty) pixKeyResolvido = d1Pix;
+            }
+            // Sincroniza de volta para o Firestore (fill missing fields)
+            if (cpfResolvido.isNotEmpty || telefoneResolvido.isNotEmpty) {
+              db.collection('affiliates').doc(uid).set({
+                if (cpfResolvido.isNotEmpty) 'cpf': cpfResolvido,
+                if (telefoneResolvido.isNotEmpty) 'telefone': telefoneResolvido,
+                if (nomeResolvido.isNotEmpty) 'nome': nomeResolvido,
+                if (d1Pix.isNotEmpty) 'pix_key': d1Pix,
+                'updated_at': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true)).catchError((_) {});
+            }
+          }
+        } catch (_) {}
+      }
+
       // Sincronizar com D1 em background (sem bloquear o login)
       // Garante que afiliados antigos também apareçam no Admin
       _sincronizarD1(
         uid: uid,
-        nome: _toStr(aData['nome'], fallback: displayName ?? email.split('@').first),
+        nome: nomeResolvido,
         email: email,
-        cpf: _toStr(aData['cpf']),
-        telefone: _toStr(aData['telefone']),
+        cpf: cpfResolvido,
+        telefone: telefoneResolvido,
         affiliateCode: affiliateCode,
         sponsorCode: aData['sponsor_code']?.toString(),
-        pixKey: _toStr(aData['pix_key'], fallback: email),
-        pixKeyType: _toStr(aData['pix_key_type'], fallback: 'EMAIL'),
+        pixKey: pixKeyResolvido,
+        pixKeyType: pixKeyTypeResolvido,
       ).catchError((_) {});
 
       return UserModel(
         id: uid,
-        nome: _toStr(aData['nome'],
-            fallback: displayName ?? email.split('@').first),
-        cpf: _toStr(aData['cpf']),
+        nome: nomeResolvido,
+        cpf: cpfResolvido,
         email: email,
-        telefone: _toStr(aData['telefone']),
+        telefone: telefoneResolvido,
         affiliateCode: affiliateCode,
         sponsorId: aData['sponsor_id']?.toString(),
         saldo: saldoDisponivel,
         status: _toStr(aData['status'], fallback: 'ativo'),
         createdAt: _toDateTimeOrNow(aData['created_at']),
-        // pixKey: usa campo salvo; fallback = email
-        pixKey: _toStr(aData['pix_key'], fallback: email),
-        pixKeyType: _toStr(aData['pix_key_type'], fallback: 'EMAIL'),
+        pixKey: pixKeyResolvido,
+        pixKeyType: pixKeyTypeResolvido,
       );
     } catch (e) {
       if (kDebugMode) {
