@@ -65,6 +65,34 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ),
           ],
         ),
+        actions: [
+          // Menu hamburguer de categorias
+          Builder(
+            builder: (ctx) => IconButton(
+              onPressed: () => _showCategoryDrawer(ctx, ps),
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.menu_rounded),
+                  if (ps.selectedCategory != 'todos')
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              tooltip: 'Filtrar por categoria',
+            ),
+          ),
+        ],
       ),
       body: ps.isLoading
           ? const Center(
@@ -261,6 +289,170 @@ class _ProductsScreenState extends State<ProductsScreen> {
     // Espaço no final
     widgets.add(const SliverToBoxAdapter(child: SizedBox(height: 80)));
     return widgets;
+  }
+
+  // ── Drawer de categoria (menu hamburguer) ────────────────────────────────
+  void _showCategoryDrawer(BuildContext context, ProductService ps) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            // Título
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.category_rounded,
+                      color: AppColors.primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Filtrar por Categoria',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: AppColors.textPrimary)),
+                    Text('Selecione uma categoria',
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 12)),
+                  ],
+                ),
+                const Spacer(),
+                if (ps.selectedCategory != 'todos')
+                  TextButton(
+                    onPressed: () {
+                      ps.setCategory('todos');
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Limpar',
+                        style: TextStyle(color: AppColors.error, fontSize: 12)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            // Lista de categorias
+            ...ps.categories.map((cat) {
+              final label = ProductService.categoryLabels[cat] ?? cat;
+              final icon = _catIcon(cat);
+              final color = _catColor(cat);
+              final isSelected = cat == ps.selectedCategory;
+              final count = cat == 'todos'
+                  ? ps.products.length
+                  : ps.products.where((p) => p.categoria == cat).length;
+
+              return InkWell(
+                onTap: () {
+                  ps.setCategory(cat);
+                  Navigator.pop(context);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? color.withValues(alpha: 0.1)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: isSelected
+                        ? Border.all(color: color.withValues(alpha: 0.4))
+                        : null,
+                  ),
+                  child: Row(
+                    children: [
+                      // Ícone
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Center(
+                          child: Text(icon, style: const TextStyle(fontSize: 20)),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      // Label
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: isSelected
+                                ? FontWeight.w800
+                                : FontWeight.w500,
+                            color: isSelected
+                                ? color
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      // Contagem
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? color.withValues(alpha: 0.15)
+                              : AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isSelected ? color : AppColors.textHint,
+                          ),
+                        ),
+                      ),
+                      if (isSelected) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.check_circle_rounded,
+                            color: color, size: 20),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   String _catIcon(String cat) {
@@ -778,9 +970,17 @@ class _ProductCardState extends State<_ProductCard> {
   // ── Bottom sheet: compartilhar link rastreável ───────────────────────────
   void _showShareSheet(
       BuildContext context, ProductModel product, String affiliateCode) {
-    // Link público que o comprador acessa para preencher dados e gerar PIX
     final link =
         'https://sharewallet.com.br/app/#/produto/${product.id}?ref=$affiliateCode';
+
+    // Textos específicos por tipo de produto
+    final isRecorrente = product.isPixRecorrente;
+    final comissaoLabel = isRecorrente
+        ? 'Comissão: ${product.comissaoFormatada}/mês  •  ${product.comissaoPercent}%'
+        : 'Comissão por venda: ${product.comissaoFormatada}  •  ${product.comissaoPercent}%';
+    final instrucaoText = isRecorrente
+        ? '💡 Envie este link para seu cliente. Ele preenche os dados e autoriza o débito automático mensal via PIX.'
+        : '💡 Envie este link para seu cliente. Ele preenche os dados e gera o PIX para pagamento único.';
 
     showModalBottomSheet(
       context: context,
@@ -822,18 +1022,42 @@ class _ProductCardState extends State<_ProductCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Compartilhe seu link',
+                        'Divulgar produto',
                         style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 16,
                             color: AppColors.textPrimary),
                       ),
                       Text(
-                        'O comprador acessa e gera o PIX',
+                        isRecorrente
+                            ? 'Assinatura mensal — débito automático PIX'
+                            : 'Pagamento único — QR Code PIX',
                         style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.textSecondary),
+                            color: product.chargeTypeColor,
+                            fontWeight: FontWeight.w600),
                       ),
+                    ],
+                  ),
+                ),
+                // Badge tipo
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: product.chargeTypeColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: product.chargeTypeColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(product.chargeTypeIcon, color: product.chargeTypeColor, size: 13),
+                      const SizedBox(width: 4),
+                      Text(product.chargeTypeLabel,
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: product.chargeTypeColor,
+                              fontWeight: FontWeight.w700)),
                     ],
                   ),
                 ),
@@ -868,7 +1092,7 @@ class _ProductCardState extends State<_ProductCard> {
                               color: AppColors.textPrimary),
                         ),
                         Text(
-                          'Sua comissão: ${product.comissaoFormatada}${product.isPixRecorrente ? '/mês' : ''}  •  ${product.comissaoPercent}%',
+                          comissaoLabel,
                           style: const TextStyle(
                               color: AppColors.success,
                               fontSize: 12,
@@ -876,20 +1100,6 @@ class _ProductCardState extends State<_ProductCard> {
                         ),
                       ],
                     ),
-                  ),
-                  Row(
-                    children: [
-                      Icon(product.chargeTypeIcon,
-                          color: product.chargeTypeColor, size: 13),
-                      const SizedBox(width: 4),
-                      Text(
-                        product.chargeTypeLabel,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: product.chargeTypeColor,
-                            fontWeight: FontWeight.w700),
-                      ),
-                    ],
                   ),
                 ],
               ),
@@ -936,21 +1146,27 @@ class _ProductCardState extends State<_ProductCard> {
             ),
             const SizedBox(height: 8),
 
-            // Instrução
+            // Instrução contextual por tipo
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF0F7FF),
+                color: isRecorrente
+                    ? AppColors.primary.withValues(alpha: 0.06)
+                    : const Color(0xFFFFF3E0),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFBBDEFB)),
+                border: Border.all(
+                    color: isRecorrente
+                        ? AppColors.primary.withValues(alpha: 0.2)
+                        : const Color(0xFFFFCC02).withValues(alpha: 0.5)),
               ),
-              child: const Text(
-                '💡 Envie este link para seu cliente via WhatsApp ou redes sociais. '
-                'Ele mesmo preenche os dados e gera o PIX diretamente.',
+              child: Text(
+                instrucaoText,
                 style: TextStyle(
                     fontSize: 12,
-                    color: Color(0xFF1565C0),
+                    color: isRecorrente
+                        ? AppColors.primary
+                        : const Color(0xFF6D4C00),
                     height: 1.5),
               ),
             ),

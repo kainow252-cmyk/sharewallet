@@ -28,15 +28,19 @@ class _RankingScreenState extends State<RankingScreen> {
 
       // ── Normalizar campos do D1 para o formato esperado pela UI ──────────
       // Worker retorna: total_assinaturas, total_comissoes
-      // UI espera:      assinaturas, comissao_total, nivel, position
+      // UI mostra APENAS: código do afiliado + posição (sem nome completo)
       final normalized = list.asMap().entries.map((entry) {
         final pos  = entry.key + 1;
         final item = entry.value;
 
-        final assinaturas  = (item['total_assinaturas'] as num?)?.toInt() ?? 0;
-        final comissaoTotal = (item['total_comissoes']  as num?)?.toDouble() ?? 0.0;
+        final assinaturas   = (item['total_assinaturas'] as num?)?.toInt() ?? 0;
+        final comissaoTotal = (item['total_comissoes']   as num?)?.toDouble() ?? 0.0;
+        // Código do afiliado (preserva privacidade — não exibe nome completo)
+        final codigo = item['affiliate_code']?.toString()
+            ?? item['code']?.toString()
+            ?? '#${pos.toString().padLeft(3, '0')}';
 
-        // Calcular nível com base nas assinaturas
+        // Calcula nível com base nas assinaturas
         String nivel;
         if (assinaturas >= 50) {
           nivel = 'Diamante';
@@ -50,10 +54,11 @@ class _RankingScreenState extends State<RankingScreen> {
 
         return {
           ...item,
-          'position':      pos,
-          'assinaturas':   assinaturas,
+          'position':       pos,
+          'assinaturas':    assinaturas,
           'comissao_total': comissaoTotal,
-          'nivel':         item['nivel'] ?? nivel,
+          'nivel':          item['nivel'] ?? nivel,
+          'codigo':         codigo,  // exibido no lugar do nome
         };
       }).toList();
 
@@ -197,7 +202,7 @@ class _RankingScreenState extends State<RankingScreen> {
                                 final item = entry.value;
                             return _RankingTile(
                               position: pos,
-                              nome: item['nome']?.toString() ?? '',
+                              codigo: item['codigo']?.toString() ?? item['affiliate_code']?.toString() ?? '#${pos.toString().padLeft(3,"0")}',
                               assinaturas: (item['assinaturas'] as num?)?.toInt() ?? 0,
                               comissaoTotal: (item['comissao_total'] as num?)?.toDouble() ?? 0,
                               nivel: item['nivel']?.toString() ?? 'Bronze',
@@ -252,7 +257,7 @@ class _Podium extends StatelessWidget {
               Expanded(
                 child: _PodiumItem(
                   position: 2,
-                  nome: top3[1]['nome']?.toString() ?? '',
+                  codigo: top3[1]['codigo']?.toString() ?? top3[1]['affiliate_code']?.toString() ?? '#002',
                   assinaturas: (top3[1]['assinaturas'] as num?)?.toInt() ?? 0,
                   height: 90,
                   medalColor: const Color(0xFFBDBDBD),
@@ -263,7 +268,7 @@ class _Podium extends StatelessWidget {
               Expanded(
                 child: _PodiumItem(
                   position: 1,
-                  nome: top3[0]['nome']?.toString() ?? '',
+                  codigo: top3[0]['codigo']?.toString() ?? top3[0]['affiliate_code']?.toString() ?? '#001',
                   assinaturas: (top3[0]['assinaturas'] as num?)?.toInt() ?? 0,
                   height: 120,
                   medalColor: const Color(0xFFFFD740),
@@ -274,7 +279,7 @@ class _Podium extends StatelessWidget {
               Expanded(
                 child: _PodiumItem(
                   position: 3,
-                  nome: top3[2]['nome']?.toString() ?? '',
+                  codigo: top3[2]['codigo']?.toString() ?? top3[2]['affiliate_code']?.toString() ?? '#003',
                   assinaturas: (top3[2]['assinaturas'] as num?)?.toInt() ?? 0,
                   height: 70,
                   medalColor: const Color(0xFFCD7F32),
@@ -291,7 +296,7 @@ class _Podium extends StatelessWidget {
 
 class _PodiumItem extends StatelessWidget {
   final int position;
-  final String nome;
+  final String codigo;   // código do afiliado (preserva privacidade)
   final int assinaturas;
   final double height;
   final Color medalColor;
@@ -299,7 +304,7 @@ class _PodiumItem extends StatelessWidget {
 
   const _PodiumItem({
     required this.position,
-    required this.nome,
+    required this.codigo,
     required this.assinaturas,
     required this.height,
     required this.medalColor,
@@ -308,14 +313,13 @@ class _PodiumItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firstName = nome.split(' ').first;
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Text(emoji, style: const TextStyle(fontSize: 24)),
         const SizedBox(height: 4),
         Text(
-          firstName,
+          codigo,
           textAlign: TextAlign.center,
           style: const TextStyle(
               color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
@@ -353,7 +357,7 @@ class _PodiumItem extends StatelessWidget {
 // ── Tile de ranking (pos 4–10) ────────────────────────────────────────────────
 class _RankingTile extends StatelessWidget {
   final int position;
-  final String nome;
+  final String codigo;   // código do afiliado (preserva privacidade)
   final int assinaturas;
   final double comissaoTotal;
   final String nivel;
@@ -362,7 +366,7 @@ class _RankingTile extends StatelessWidget {
 
   const _RankingTile({
     required this.position,
-    required this.nome,
+    required this.codigo,
     required this.assinaturas,
     required this.comissaoTotal,
     required this.nivel,
@@ -395,23 +399,23 @@ class _RankingTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          // Avatar
+          // Avatar com inicial do código
           CircleAvatar(
             radius: 20,
             backgroundColor: nivelColor.withValues(alpha: 0.15),
             child: Text(
-              nome.isNotEmpty ? nome[0].toUpperCase() : '?',
+              codigo.isNotEmpty ? codigo[0].toUpperCase() : '?',
               style: TextStyle(
                   color: nivelColor, fontWeight: FontWeight.w800),
             ),
           ),
           const SizedBox(width: 12),
-          // Nome e nível
+          // Código e nível
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(nome,
+                Text(codigo,
                     style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 14,

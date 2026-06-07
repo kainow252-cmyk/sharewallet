@@ -150,8 +150,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 16),
 
                   // ── Card Minha Carteira ─────────────────────────────
+                  // Usa SEMPRE wallet.saldoCarteira (D1/Cloudflare) como fonte
+                  // única de verdade — sincroniza dashboard com performance
                   _WalletSummaryCard(
-                    saldo: user?.saldo ?? wallet.saldoCarteira,
+                    saldo: wallet.saldoCarteira,
                     isVisible: _saldoVisible,
                     onToggleVisibility: () =>
                         setState(() => _saldoVisible = !_saldoVisible),
@@ -316,6 +318,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildMonthlyPerformance(WalletService wallet) {
+    // Performance usa mesma fonte D1 — wallet.comissoesEsteMes
+    // e wallet.saldoCarteira — garantindo consistência com dashboard
+    final comissoesMes = wallet.comissoesEsteMes;
+    final saldoDisp    = wallet.saldoCarteira;
+    final totalReceb   = wallet.totalRecebido;
+    const meta = 500.0;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -356,20 +365,28 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Expanded(
                   child: _PerformanceStat(
-                    label: 'Comissões',
-                    value:
-                        'R\$ ${wallet.comissoesEsteMes.toStringAsFixed(2).replaceAll('.', ',')}',
+                    label: 'Comissões/mês',
+                    value: 'R\$ ${comissoesMes.toStringAsFixed(2).replaceAll(".", ",")}',
                     icon: Icons.monetization_on_rounded,
                     color: AppColors.success,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _PerformanceStat(
-                    label: 'Meta mensal',
-                    value: 'R\$ 500,00',
-                    icon: Icons.flag_rounded,
-                    color: AppColors.gold,
+                    label: 'Saldo disponível',
+                    value: 'R\$ ${saldoDisp.toStringAsFixed(2).replaceAll(".", ",")}',
+                    icon: Icons.account_balance_wallet_rounded,
+                    color: const Color(0xFF00E5B4),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _PerformanceStat(
+                    label: 'Total recebido',
+                    value: 'R\$ ${totalReceb.toStringAsFixed(2).replaceAll(".", ",")}',
+                    icon: Icons.trending_up_rounded,
+                    color: AppColors.primary,
                   ),
                 ),
               ],
@@ -378,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
               child: LinearProgressIndicator(
-                value: (wallet.comissoesEsteMes / 500).clamp(0.0, 1.0),
+                value: (comissoesMes / meta).clamp(0.0, 1.0),
                 backgroundColor: AppColors.gold.withValues(alpha: 0.2),
                 valueColor: const AlwaysStoppedAnimation(AppColors.gold),
                 minHeight: 8,
@@ -386,7 +403,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              '${((wallet.comissoesEsteMes / 500) * 100).clamp(0.0, 100.0).toStringAsFixed(0)}% da meta atingida',
+              '${((comissoesMes / meta) * 100).clamp(0.0, 100.0).toStringAsFixed(0)}% da meta mensal de R\$ ${meta.toStringAsFixed(0)} atingida',
               style: const TextStyle(
                   color: AppColors.goldDark,
                   fontSize: 12,
