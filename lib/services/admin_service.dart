@@ -266,21 +266,31 @@ class AdminService extends ChangeNotifier {
   }
 
   // ── Carregar tudo via D1 (paralelo) ────────────────────────────────────────
+  // CRÍTICO: sempre usa try/catch/finally para garantir que _isLoadingData
+  // seja resetado para false mesmo se qualquer sub-chamada lançar exceção.
+  // Sem isso, _isLoadingData ficaria true para sempre → spinner eterno.
   Future<void> loadAll() async {
-    // Inicia loading geral dos dados de relatório
     _isLoadingData = true;
+    _error = null;
     notifyListeners();
-    await Future.wait([
-      loadMetrics(),
-      loadAffiliates(),
-      loadSubscriptions(),
-      loadWithdrawals(),
-      // loadProducts com silent=true: não seta _isLoading global
-      // não bloqueia a tela de relatórios enquanto produtos carregam
-      loadProducts(silent: true),
-    ]);
-    _isLoadingData = false;
-    notifyListeners();
+    try {
+      await Future.wait([
+        loadMetrics(),
+        loadAffiliates(),
+        loadSubscriptions(),
+        loadWithdrawals(),
+        // loadProducts com silent=true: não toca _isLoadingProducts
+        // não bloqueia a tela de relatórios enquanto produtos carregam
+        loadProducts(silent: true),
+      ]);
+    } catch (e) {
+      debugPrint('[AdminService] loadAll erro inesperado: $e');
+      _error = 'Erro ao carregar dados: $e';
+    } finally {
+      // GARANTIA: _isLoadingData sempre volta para false, mesmo em caso de erro
+      _isLoadingData = false;
+      notifyListeners();
+    }
   }
 
   // ── Métricas via D1 ──────────────────────────────────────────────────────

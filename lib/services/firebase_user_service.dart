@@ -523,16 +523,43 @@ class FirebaseUserService {
       // Verifica se já existe no D1 pelo email
       final existing = await CfApiService.getAffiliateByEmail(email);
       if (existing != null) {
-        // Afiliado já existe → atualizar campos de perfil com dados mais recentes
-        await CfApiService.updateAffiliate(uid, {
-          'nome': nome,
-          'email': email,
-          'cpf': cpf,
-          'telefone': telefone,
-          'pix_key': pixKey.isNotEmpty ? pixKey : email,
-          'affiliate_code': affiliateCode,
-        });
-        if (kDebugMode) debugPrint('[FirebaseUserService] D1: perfil sincronizado ($email)');
+        // Afiliado já existe — verifica se o id do D1 é diferente do Firebase UID
+        final d1Id = existing['id']?.toString() ?? '';
+        if (d1Id.isNotEmpty && d1Id != uid) {
+          // IDs diferentes: precisamos atualizar PELO id do D1 (não pelo uid novo)
+          // Mas também criamos uma entrada no D1 com o Firebase UID como id
+          // para que wallets/{uid} funcione corretamente
+          await CfApiService.updateAffiliate(d1Id, {
+            'nome': nome,
+            'email': email,
+            'cpf': cpf,
+            'telefone': telefone,
+            'pix_key': pixKey.isNotEmpty ? pixKey : email,
+            'affiliate_code': affiliateCode,
+          });
+          // Criar registro espelho com Firebase UID (para que wallet seja encontrada)
+          await CfApiService.updateAffiliate(uid, {
+            'nome': nome,
+            'email': email,
+            'cpf': cpf,
+            'telefone': telefone,
+            'affiliate_code': affiliateCode,
+            'sponsor_code': sponsorCode,
+            'pix_key': pixKey.isNotEmpty ? pixKey : email,
+            'status': 'ativo',
+          });
+        } else {
+          // IDs iguais — apenas atualizar campos de perfil
+          await CfApiService.updateAffiliate(uid, {
+            'nome': nome,
+            'email': email,
+            'cpf': cpf,
+            'telefone': telefone,
+            'pix_key': pixKey.isNotEmpty ? pixKey : email,
+            'affiliate_code': affiliateCode,
+          });
+        }
+        if (kDebugMode) debugPrint('[FirebaseUserService] D1: perfil sincronizado ($email / uid=$uid / d1id=$d1Id)');
         return;
       }
 

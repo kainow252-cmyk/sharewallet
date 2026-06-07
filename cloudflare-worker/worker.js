@@ -230,20 +230,61 @@ export default {
       const uid = walletMatch[1];
       let row = await DB.prepare(`SELECT * FROM wallets WHERE user_id=?`).bind(uid).first();
       if (!row) {
-        // Cria carteira zerada automaticamente
-        await DB.prepare(
-          `INSERT OR IGNORE INTO wallets (user_id) VALUES (?)`
-        ).bind(uid).run();
-        row = await DB.prepare(`SELECT * FROM wallets WHERE user_id=?`).bind(uid).first();
+        // Tenta achar wallet pelo affiliate_code se o uid não tem carteira direta
+        // Isso cobre o caso de afiliados criados antes do Firebase UID ser o id do D1
+        const aff = await DB.prepare(
+          `SELECT id, affiliate_code FROM affiliates WHERE id=?`
+        ).bind(uid).first().catch(() => null);
+        if (aff?.affiliate_code) {
+          // Procura wallet pelo id do afiliado no D1 (pode ser código antigo)
+          const affOld = await DB.prepare(
+            `SELECT id FROM affiliates WHERE affiliate_code=? AND id!=?`
+          ).bind(aff.affiliate_code, uid).first().catch(() => null);
+          if (affOld?.id) {
+            row = await DB.prepare(`SELECT * FROM wallets WHERE user_id=?`).bind(affOld.id).first();
+          }
+        }
+        if (!row) {
+          // Cria carteira zerada automaticamente para este uid
+          await DB.prepare(
+            `INSERT OR IGNORE INTO wallets (user_id) VALUES (?)`
+          ).bind(uid).run();
+          row = await DB.prepare(`SELECT * FROM wallets WHERE user_id=?`).bind(uid).first();
+        }
       }
-      // Pega últimas transações
-      const { results: sales } = await DB.prepare(
-        `SELECT * FROM sales WHERE user_id=? ORDER BY created_at DESC LIMIT 50`
-      ).bind(uid).all();
+      // Pega últimas transações — busca pelo uid direto e também pelo affiliate_code
+      const affForSales = await DB.prepare(
+        `SELECT affiliate_code FROM affiliates WHERE id=?`
+      ).bind(uid).first().catch(() => null);
+      const affCode = affForSales?.affiliate_code || '';
+
+      let salesResults = [];
+      if (affCode) {
+        // Busca sales tanto por user_id quanto por affiliate_code (cobre ambos os casos)
+        const { results: s1 } = await DB.prepare(
+          `SELECT * FROM sales WHERE user_id=? ORDER BY created_at DESC LIMIT 50`
+        ).bind(uid).all();
+        const { results: s2 } = await DB.prepare(
+          `SELECT * FROM sales WHERE affiliate_code=? AND user_id!=? ORDER BY created_at DESC LIMIT 50`
+        ).bind(affCode, uid).all();
+        // Merge e deduplica por id
+        const seen = new Set();
+        salesResults = [...s1, ...s2].filter(s => {
+          if (seen.has(s.id)) return false;
+          seen.add(s.id);
+          return true;
+        }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50);
+      } else {
+        const { results } = await DB.prepare(
+          `SELECT * FROM sales WHERE user_id=? ORDER BY created_at DESC LIMIT 50`
+        ).bind(uid).all();
+        salesResults = results;
+      }
+
       const { results: withdrawals } = await DB.prepare(
         `SELECT * FROM withdrawals WHERE user_id=? ORDER BY solicitado_em DESC LIMIT 20`
       ).bind(uid).all();
-      return ok({ wallet: row, sales, withdrawals });
+      return ok({ wallet: row, sales: salesResults, withdrawals });
     }
 
     if (walletMatch && method === 'PATCH') {
@@ -543,27 +584,45 @@ export default {
         new Date().toISOString(), proximaData.toISOString()
       ).run();
 
-      // Creditar comissão
+      // Creditar comissão e registrar venda
       if (affiliateCode && comissao > 0) {
         const aff = await DB.prepare(
           `SELECT id FROM affiliates WHERE affiliate_code=?`
         ).bind(affiliateCode).first().catch(() => null);
         if (aff?.id) {
-          await DB.prepare(
-            `INSERT INTO wallets (user_id, saldo_disponivel, total_recebido)
-             VALUES (?, ?, ?)
-             ON CONFLICT(user_id) DO UPDATE SET
-               saldo_disponivel = saldo_disponivel + ?,
-               total_recebido   = total_recebido   + ?,
-               updated_at       = datetime('now')`
-          ).bind(aff.id, comissao, comissao, comissao, comissao).run();
-          await DB.prepare(
-            `UPDATE affiliates SET
-               total_comissoes   = total_comissoes   + ?,
-               saldo_disponivel  = saldo_disponivel  + ?,
-               total_assinaturas = total_assinaturas + 1
-             WHERE affiliate_code=?`
-          ).bind(comissao, comissao, affiliateCode).run();
+          const affId = aff.id;
+          const saleId = `sale_confirm_${paymentId}`;
+          const existSale = await DB.prepare(
+            `SELECT id FROM sales WHERE id=?`
+          ).bind(saleId).first().catch(() => null);
+
+          if (!existSale) {
+            // Registrar na tabela sales (necessário para métricas e relatórios)
+            await DB.prepare(
+              `INSERT INTO sales
+                (id, user_id, product_id, product_nome, valor, comissao,
+                 affiliate_code, status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'aprovado', datetime('now'))`
+            ).bind(
+              saleId, affId, produtoId, produtoNome, valor, comissao, affiliateCode
+            ).run();
+
+            await DB.prepare(
+              `INSERT INTO wallets (user_id, saldo_disponivel, total_recebido)
+               VALUES (?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                 saldo_disponivel = saldo_disponivel + ?,
+                 total_recebido   = total_recebido   + ?,
+                 updated_at       = datetime('now')`
+            ).bind(affId, comissao, comissao, comissao, comissao).run();
+            await DB.prepare(
+              `UPDATE affiliates SET
+                 total_comissoes   = total_comissoes   + ?,
+                 saldo_disponivel  = saldo_disponivel  + ?,
+                 total_assinaturas = total_assinaturas + 1
+               WHERE affiliate_code=?`
+            ).bind(comissao, comissao, affiliateCode).run();
+          }
         }
       }
 
@@ -654,13 +713,18 @@ export default {
         ).bind(subId).first().catch(() => null);
 
         if (status === 'approved') {
+          // ── Pegar nome do produto via subscription ou descrição do pagamento ──
+          const produtoNome = payment.description || produtoId || '';
+
           if (existSub) {
-            // Atualizar status para 'ativa'
-            await DB.prepare(
-              `UPDATE subscriptions SET status='ativa' WHERE id=?`
-            ).bind(subId).run();
+            // Atualizar status para 'ativa' (se ainda não estiver)
+            if (existSub.status !== 'ativa') {
+              await DB.prepare(
+                `UPDATE subscriptions SET status='ativa' WHERE id=?`
+              ).bind(subId).run();
+            }
           } else {
-            // Subscription não existe ainda (PIX gerado antes do fix) → criar agora
+            // Subscription não existe ainda → criar agora
             const proximaData = new Date();
             proximaData.setDate(proximaData.getDate() + 30);
             await DB.prepare(
@@ -670,40 +734,75 @@ export default {
                VALUES (?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(id) DO UPDATE SET status='ativa'`
             ).bind(
-              subId, produtoId, payment.description || '', valor, comissao,
+              subId, produtoId, produtoNome, valor, comissao,
               affiliateCode, 'pixRecorrente', 'ativa', 5,
               new Date().toISOString(), proximaData.toISOString()
             ).run();
-            // Incrementar total_assinaturas do afiliado
-            if (affiliateCode) {
-              await DB.prepare(
-                `UPDATE affiliates SET total_assinaturas=total_assinaturas+1 WHERE affiliate_code=?`
-              ).bind(affiliateCode).run();
-            }
           }
 
-          // Creditar comissão na wallet do afiliado
+          // ── Creditar comissão na wallet do afiliado ────────────────────────
           if (affiliateCode && comissao > 0) {
-            const aff = await DB.prepare(
+            // Busca TODOS os registros com este affiliate_code (pode haver mais de um:
+            // o id antigo do D1 e o Firebase UID inserido pelo app)
+            const { results: affs } = await DB.prepare(
               `SELECT id FROM affiliates WHERE affiliate_code=?`
-            ).bind(affiliateCode).first().catch(() => null);
-            if (aff?.id) {
-              await DB.prepare(
-                `INSERT INTO wallets (user_id, saldo_disponivel, saldo_pendente, total_recebido)
-                 VALUES (?, ?, 0, ?)
-                 ON CONFLICT(user_id) DO UPDATE SET
-                   saldo_disponivel = saldo_disponivel + ?,
-                   total_recebido   = total_recebido   + ?,
-                   updated_at       = datetime('now')`
-              ).bind(aff.id, comissao, comissao, comissao, comissao).run();
+            ).bind(affiliateCode).all().catch(() => ({ results: [] }));
 
-              await DB.prepare(
-                `UPDATE affiliates SET
-                   total_comissoes    = total_comissoes    + ?,
-                   saldo_disponivel   = saldo_disponivel   + ?,
-                   total_assinaturas  = total_assinaturas  + 1
-                 WHERE affiliate_code=?`
-              ).bind(comissao, comissao, affiliateCode).run();
+            const affId = affs[0]?.id || null;
+
+            if (affId) {
+              // Verificar se esta venda já foi registrada (idempotência)
+              const saleId = `sale_mp_${paymentId}`;
+              const existSale = await DB.prepare(
+                `SELECT id FROM sales WHERE id=?`
+              ).bind(saleId).first().catch(() => null);
+
+              if (!existSale) {
+                // ── INSERT na tabela sales ─────────────────────────────────
+                // CRÍTICO: sem isso receitaTotal e comissoesTotal ficam 0 nos relatórios
+                await DB.prepare(
+                  `INSERT INTO sales
+                    (id, user_id, product_id, product_nome, valor, comissao,
+                     affiliate_code, status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 'aprovado', datetime('now'))`
+                ).bind(
+                  saleId, affId, produtoId, produtoNome,
+                  valor, comissao, affiliateCode
+                ).run();
+
+                // ── Creditar na carteira de TODOS os IDs associados ─────────
+                // Cobre o caso em que há id antigo (D1) e Firebase UID
+                for (const a of affs) {
+                  await DB.prepare(
+                    `INSERT INTO wallets (user_id, saldo_disponivel, saldo_pendente, total_recebido)
+                     VALUES (?, ?, 0, ?)
+                     ON CONFLICT(user_id) DO UPDATE SET
+                       saldo_disponivel = saldo_disponivel + ?,
+                       total_recebido   = total_recebido   + ?,
+                       updated_at       = datetime('now')`
+                  ).bind(a.id, comissao, comissao, comissao, comissao).run();
+                }
+
+                // ── Atualizar totais no registro do afiliado ────────────────
+                const assinaturasIncr = existSub ? 0 : 1;
+                if (assinaturasIncr > 0) {
+                  await DB.prepare(
+                    `UPDATE affiliates SET
+                       total_comissoes   = total_comissoes   + ?,
+                       saldo_disponivel  = saldo_disponivel  + ?,
+                       total_assinaturas = total_assinaturas + 1
+                     WHERE affiliate_code=?`
+                  ).bind(comissao, comissao, affiliateCode).run();
+                } else {
+                  await DB.prepare(
+                    `UPDATE affiliates SET
+                       total_comissoes  = total_comissoes  + ?,
+                       saldo_disponivel = saldo_disponivel + ?
+                     WHERE affiliate_code=?`
+                  ).bind(comissao, comissao, affiliateCode).run();
+                }
+              }
+              // Se existSale: pagamento já processado anteriormente → ignorar (idempotência)
             }
           }
 

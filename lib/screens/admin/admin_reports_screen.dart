@@ -326,9 +326,44 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
             // NÃO bloqueia quando só loadProducts() está em execução (silent=true)
             child: svc.isLoadingData
                 ? const Center(child: CircularProgressIndicator())
-                : TabBarView(
-                    controller: _tab,
-                    children: [
+                : svc.error != null && svc.affiliates.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.wifi_off_rounded,
+                                  color: AppColors.error, size: 48),
+                              const SizedBox(height: 12),
+                              const Text('Erro ao carregar dados',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                      fontSize: 15)),
+                              const SizedBox(height: 8),
+                              Text(
+                                svc.error ?? '',
+                                style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: _refresh,
+                                icon: const Icon(Icons.refresh_rounded, size: 16),
+                                label: const Text('Tentar novamente'),
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : TabBarView(
+                        controller: _tab,
+                        children: [
                       // ── Afiliados ──────────────────────────────────────────
                       _ReportTab<AdminAffiliate>(
                         items: svc.affiliates,
@@ -531,14 +566,15 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                         onExportingChange: (v) =>
                             setState(() => _exporting = v),
                       ),
-                    ],
-                  ),
+                        ],
+                      ),
           ),
         ],
       ),
     );
   }
 }
+
 
 // ── _DateChip ────────────────────────────────────────────────────────────────
 class _DateChip extends StatelessWidget {
