@@ -571,21 +571,32 @@ class MercadoPagoService extends ChangeNotifier {
       final externalRef =
           'PIX_${affiliateCode}_${produtoId}_${DateTime.now().millisecondsSinceEpoch}';
 
+      // ── Sanitização dos dados do pagador ─────────────────────────────────
+      // MercadoPago rejeita com rejected_high_risk se email/CPF forem null ou vazios
+      final nomeTrimmed   = clienteNome.trim();
+      final emailTrimmed  = clienteEmail.trim();
+      final cpfSanitized  = clienteCpf.replaceAll(RegExp(r'\D'), '');
+      final partes        = nomeTrimmed.isNotEmpty ? nomeTrimmed.split(' ') : ['Cliente'];
+      final firstName     = partes.first.isNotEmpty ? partes.first : 'Cliente';
+      final lastName      = partes.length > 1 ? partes.sublist(1).join(' ') : 'ShareWallet';
+      // Email obrigatório: usa o fornecido ou gera um baseado no CPF/código para garantir unicidade
+      final emailFinal    = emailTrimmed.contains('@')
+          ? emailTrimmed
+          : 'cliente.${cpfSanitized.isNotEmpty ? cpfSanitized : affiliateCode}@sharewallet.com.br';
+      // CPF: deve ter 11 dígitos — se inválido usa placeholder (MP aceita para PIX)
+      final cpfFinal      = cpfSanitized.length == 11 ? cpfSanitized : '00000000000';
+
       final body = {
         'transaction_amount': valor,
-        'description':        produtoNome,
+        'description':        produtoNome.isNotEmpty ? produtoNome : 'Produto ShareWallet',
         'payment_method_id':  'pix',
         'payer': {
-          'email': clienteEmail.isNotEmpty
-              ? clienteEmail
-              : 'cliente@sharewallet.com.br',
-          'first_name': clienteNome.split(' ').first,
-          'last_name':  clienteNome.split(' ').length > 1
-              ? clienteNome.split(' ').sublist(1).join(' ')
-              : 'Sobrenome',
+          'email':      emailFinal,
+          'first_name': firstName,
+          'last_name':  lastName,
           'identification': {
             'type':   'CPF',
-            'number': clienteCpf.replaceAll(RegExp(r'\D'), ''),
+            'number': cpfFinal,
           },
         },
         'external_reference': externalRef,
