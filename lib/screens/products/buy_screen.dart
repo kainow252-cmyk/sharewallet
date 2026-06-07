@@ -1,14 +1,35 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
 import '../../services/mercadopago_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
+
+// ─── Chaves para auto-fill ────────────────────────────────────────────────────
+const _kNome     = 'buyer_nome';
+const _kCpf      = 'buyer_cpf';
+const _kEmail    = 'buyer_email';
+const _kCelular  = 'buyer_celular';
+const _kNasc     = 'buyer_nasc';
+const _kCep      = 'buyer_cep';
+const _kRua      = 'buyer_rua';
+const _kNumero   = 'buyer_numero';
+const _kComp     = 'buyer_comp';
+const _kBairro   = 'buyer_bairro';
+const _kCidade   = 'buyer_cidade';
+const _kEstado   = 'buyer_estado';
 
 /// Tela pública acessada pelo COMPRADOR via link rastreável do afiliado.
 /// Não exige login. URL: /#/produto/:id?ref=AFFILIATE_CODE
@@ -65,10 +86,14 @@ class _BuyScreenState extends State<BuyScreen> {
   bool    _paymentApproved = false;
   static const _workerBase = 'https://sharewallet-api.kainow252.workers.dev';
 
+  // ── Controle de tela de parabéns ─────────────────────────────────────────
+  bool _showSuccessScreen = false;
+
   @override
   void initState() {
     super.initState();
     _loadProduct();
+    _carregarDadosSalvos();
   }
 
   @override
@@ -81,6 +106,49 @@ class _BuyScreenState extends State<BuyScreen> {
     _compCtrl.dispose();    _bairroCtrl.dispose();
     _cidadeCtrl.dispose();  _estadoCtrl.dispose();
     super.dispose();
+  }
+
+  // ── Auto-fill: carrega dados salvos ──────────────────────────────────────
+  Future<void> _carregarDadosSalvos() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nome = prefs.getString(_kNome) ?? '';
+      if (nome.isEmpty) return; // Nenhum dado salvo, primeiro acesso
+      if (!mounted) return;
+      setState(() {
+        _nomeCtrl.text    = nome;
+        _cpfCtrl.text     = prefs.getString(_kCpf)     ?? '';
+        _emailCtrl.text   = prefs.getString(_kEmail)   ?? '';
+        _celularCtrl.text = prefs.getString(_kCelular) ?? '';
+        _nascCtrl.text    = prefs.getString(_kNasc)    ?? '';
+        _cepCtrl.text     = prefs.getString(_kCep)     ?? '';
+        _ruaCtrl.text     = prefs.getString(_kRua)     ?? '';
+        _numeroCtrl.text  = prefs.getString(_kNumero)  ?? '';
+        _compCtrl.text    = prefs.getString(_kComp)    ?? '';
+        _bairroCtrl.text  = prefs.getString(_kBairro)  ?? '';
+        _cidadeCtrl.text  = prefs.getString(_kCidade)  ?? '';
+        _estadoCtrl.text  = prefs.getString(_kEstado)  ?? '';
+      });
+    } catch (_) {}
+  }
+
+  // ── Auto-fill: salva dados após compra bem-sucedida ──────────────────────
+  Future<void> _salvarDadosCliente() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kNome,    _nomeCtrl.text.trim());
+      await prefs.setString(_kCpf,     _cpfCtrl.text.trim());
+      await prefs.setString(_kEmail,   _emailCtrl.text.trim());
+      await prefs.setString(_kCelular, _celularCtrl.text.trim());
+      await prefs.setString(_kNasc,    _nascCtrl.text.trim());
+      await prefs.setString(_kCep,     _cepCtrl.text.trim());
+      await prefs.setString(_kRua,     _ruaCtrl.text.trim());
+      await prefs.setString(_kNumero,  _numeroCtrl.text.trim());
+      await prefs.setString(_kComp,    _compCtrl.text.trim());
+      await prefs.setString(_kBairro,  _bairroCtrl.text.trim());
+      await prefs.setString(_kCidade,  _cidadeCtrl.text.trim());
+      await prefs.setString(_kEstado,  _estadoCtrl.text.trim());
+    } catch (_) {}
   }
 
   // ── Carrega produto ───────────────────────────────────────────────────────
@@ -103,6 +171,28 @@ class _BuyScreenState extends State<BuyScreen> {
   }
 
   // ── Busca CEP via ViaCEP ──────────────────────────────────────────────────
+  Future<void> _buscarCep() async {
+    final cep = _cepCtrl.text.replaceAll(RegExp(r'\D'), '');
+    if (cep.length != 8) return;
+    try {
+      final resp = await http
+          .get(Uri.parse('https://viacep.com.br/ws/$cep/json/'))
+          .timeout(const Duration(seconds: 6));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        if (data['erro'] == null) {
+          if (!mounted) return;
+          setState(() {
+            _ruaCtrl.text    = data['logradouro'] ?? '';
+            _bairroCtrl.text = data['bairro']     ?? '';
+            _cidadeCtrl.text = data['localidade'] ?? '';
+            _estadoCtrl.text = data['uf']         ?? '';
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
   // ── Polling de status do pagamento PIX ─────────────────────────────────
   void _iniciarPolling(String paymentId) {
     if (paymentId.isEmpty) return;
@@ -124,71 +214,16 @@ class _BuyScreenState extends State<BuyScreen> {
           if (status == 'approved' && !_paymentApproved) {
             timer.cancel();
             setState(() => _paymentApproved = true);
-            _mostrarSucessoPagamento();
+            // CRÍTICO: Navegar para tela de sucesso PRIMEIRO (não pode falhar)
+            if (mounted) {
+              setState(() => _showSuccessScreen = true);
+            }
+            // Salvar dados em background — falha silenciosa é aceitável
+            _salvarDadosCliente().catchError((_) {});
           }
         }
       } catch (_) {}
     });
-  }
-
-  void _mostrarSucessoPagamento() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 64),
-            ),
-            const SizedBox(height: 16),
-            const Text('PIX Confirmado!',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-            const SizedBox(height: 8),
-            const Text(
-              'Seu pagamento foi recebido!\nAssinatura ativa com sucesso.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _buscarCep() async {
-    final cep = _cepCtrl.text.replaceAll(RegExp(r'\D'), '');
-    if (cep.length != 8) return;
-    try {
-      final resp = await http
-          .get(Uri.parse('https://viacep.com.br/ws/$cep/json/'))
-          .timeout(const Duration(seconds: 6));
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        if (data['erro'] == null) {
-          if (!mounted) return;
-          setState(() {
-            _ruaCtrl.text    = data['logradouro'] ?? '';
-            _bairroCtrl.text = data['bairro']     ?? '';
-            _cidadeCtrl.text = data['localidade'] ?? '';
-            _estadoCtrl.text = data['uf']         ?? '';
-          });
-        }
-      }
-    } catch (_) {}
   }
 
   // ── Gera PIX via Mercado Pago ─────────────────────────────────────────────
@@ -224,9 +259,7 @@ class _BuyScreenState extends State<BuyScreen> {
     setState(() { _isSubmitting = false; _pixResult = result; });
 
     if (result.success) {
-      // Inicia polling de status (a cada 5s verifica se PIX foi pago)
       _iniciarPolling(result.preferenceId ?? '');
-      // Rola para o QR Code
       Future.delayed(const Duration(milliseconds: 300), () {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -251,16 +284,30 @@ class _BuyScreenState extends State<BuyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ── Tela de parabéns (pós-pagamento) ────────────────────────────────────
+    if (_showSuccessScreen && _product != null) {
+      return _PurchaseSuccessScreen(
+        product: _product!,
+        clienteNome: _nomeCtrl.text.trim(),
+        clienteEmail: _emailCtrl.text.trim(),
+        onVoltar: () => setState(() {
+          _showSuccessScreen = false;
+          _pixResult = null;
+          _paymentApproved = false;
+        }),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.account_balance_wallet_rounded,
+            Icon(Icons.account_balance_wallet_rounded,
                 color: AppColors.primary, size: 22),
-            const SizedBox(width: 8),
-            const Text('ShareWallet',
+            SizedBox(width: 8),
+            Text('ShareWallet',
                 style: TextStyle(fontWeight: FontWeight.w800)),
           ],
         ),
@@ -311,6 +358,12 @@ class _BuyScreenState extends State<BuyScreen> {
             // ── Card do produto ──────────────────────────────────────────────
             _ProductCard(product: product),
             const SizedBox(height: 24),
+
+            // ── Banner auto-fill se há dados salvos ──────────────────────────
+            if (_nomeCtrl.text.isNotEmpty) ...[
+              _AutoFillBanner(nome: _nomeCtrl.text),
+              const SizedBox(height: 16),
+            ],
 
             // ── Dados Pessoais ───────────────────────────────────────────────
             _sectionTitle(Icons.person_rounded, 'Dados Pessoais'),
@@ -434,7 +487,6 @@ class _BuyScreenState extends State<BuyScreen> {
 
             // ── QR Code PIX ───────────────────────────────────────────────────
             if (_pixResult != null && _pixResult!.success) ...[
-              // Badge de status do pagamento
               Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -544,6 +596,711 @@ class _BuyScreenState extends State<BuyScreen> {
         ),
         validator: validator,
       );
+}
+
+// ─── Banner de auto-fill ─────────────────────────────────────────────────────
+class _AutoFillBanner extends StatelessWidget {
+  final String nome;
+  const _AutoFillBanner({required this.nome});
+
+  @override
+  Widget build(BuildContext context) {
+    final primeiroNome = nome.split(' ').first;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.person_pin_circle_rounded, color: AppColors.primary, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Olá, $primeiroNome! Seus dados foram preenchidos automaticamente.',
+              style: const TextStyle(
+                  fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Tela de Parabéns pós-pagamento ─────────────────────────────────────────
+class _PurchaseSuccessScreen extends StatefulWidget {
+  final ProductModel product;
+  final String clienteNome;
+  final String clienteEmail;
+  final VoidCallback onVoltar;
+
+  const _PurchaseSuccessScreen({
+    required this.product,
+    required this.clienteNome,
+    required this.clienteEmail,
+    required this.onVoltar,
+  });
+
+  @override
+  State<_PurchaseSuccessScreen> createState() => _PurchaseSuccessScreenState();
+}
+
+class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
+  late Animation<double>   _scaleAnim;
+  late Animation<double>   _fadeAnim;
+
+  final GlobalKey _repaintKey = GlobalKey();
+  bool _baixando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+    _scaleAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.elasticOut);
+    _fadeAnim  = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
+    _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Captura o widget como imagem PNG ──────────────────────────────────────
+  Future<Uint8List?> _capturarImagem() async {
+    try {
+      final boundary = _repaintKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) return null;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ── Download genérico via dart:html (Web) ou Printing (fallback) ──────────
+  Future<void> _downloadArquivo({
+    required String nomeArquivo,
+    required Uint8List bytes,
+    required String mimeType,
+  }) async {
+    if (kIsWeb) {
+      // No Flutter Web: usa âncora HTML com href blob
+      // Usa Printing.sharePdf para Web (base64 não é necessário aqui)
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: nomeArquivo,
+      );
+    } else {
+      await Printing.sharePdf(bytes: bytes, filename: nomeArquivo);
+    }
+  }
+
+  // ── Baixar como PDF ───────────────────────────────────────────────────────
+  Future<void> _baixarPdf() async {
+    setState(() => _baixando = true);
+    try {
+      final imageBytes = await _capturarImagem();
+      final doc = pw.Document();
+      final dataHora = _formatarDataHora(DateTime.now());
+      final primeiroNome = widget.clienteNome.isNotEmpty
+          ? widget.clienteNome.split(' ').first : 'Cliente';
+
+      doc.addPage(pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (ctx) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            // Header
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(24),
+              decoration: pw.BoxDecoration(
+                color: PdfColor.fromHex('#1B5E20'),
+                borderRadius: pw.BorderRadius.circular(16),
+              ),
+              child: pw.Column(
+                children: [
+                  pw.Text('ShareWallet',
+                      style: pw.TextStyle(
+                          fontSize: 24, fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white)),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Comprovante de Compra',
+                      style: pw.TextStyle(fontSize: 14, color: PdfColors.white)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 28),
+            // Mensagem parabéns
+            pw.Text('Parabéns pela sua compra!',
+                style: pw.TextStyle(
+                    fontSize: 22, fontWeight: pw.FontWeight.bold,
+                    color: PdfColor.fromHex('#1B5E20'))),
+            pw.SizedBox(height: 8),
+            pw.Text('Olá, $primeiroNome! Sua compra foi confirmada com sucesso.',
+                style: pw.TextStyle(fontSize: 13, color: PdfColors.grey700),
+                textAlign: pw.TextAlign.center),
+            pw.SizedBox(height: 28),
+            // Detalhes do produto
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(20),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColor.fromHex('#A5D6A7'), width: 2),
+                borderRadius: pw.BorderRadius.circular(12),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Detalhes da Compra',
+                      style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold,
+                          color: PdfColor.fromHex('#1B5E20'))),
+                  pw.Divider(color: PdfColor.fromHex('#A5D6A7')),
+                  pw.SizedBox(height: 8),
+                  _pdfRow('Produto:', widget.product.nome),
+                  _pdfRow('Valor:', widget.product.valorFormatado),
+                  _pdfRow('Tipo:', widget.product.chargeTypeLabel),
+                  if (widget.clienteNome.isNotEmpty)
+                    _pdfRow('Cliente:', widget.clienteNome),
+                  if (widget.clienteEmail.isNotEmpty)
+                    _pdfRow('E-mail:', widget.clienteEmail),
+                  _pdfRow('Data/Hora:', dataHora),
+                  _pdfRow('Status:', 'PIX Confirmado'),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            // Imagem capturada (se disponível)
+            if (imageBytes != null) ...[
+              pw.Text('Comprovante Visual',
+                  style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600)),
+              pw.SizedBox(height: 8),
+              pw.Image(pw.MemoryImage(imageBytes), height: 300),
+            ],
+            pw.Spacer(),
+            // Rodapé
+            pw.Divider(color: PdfColors.grey300),
+            pw.SizedBox(height: 8),
+            pw.Text('Documento gerado em $dataHora — ShareWallet © 2025',
+                style: pw.TextStyle(fontSize: 9, color: PdfColors.grey500),
+                textAlign: pw.TextAlign.center),
+          ],
+        ),
+      ));
+
+      final pdfBytes = await doc.save();
+      await _downloadArquivo(
+        nomeArquivo: 'comprovante_sharewallet.pdf',
+        bytes: pdfBytes,
+        mimeType: 'application/pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao gerar PDF: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _baixando = false);
+    }
+  }
+
+  pw.Widget _pdfRow(String label, String value) => pw.Padding(
+    padding: const pw.EdgeInsets.only(bottom: 6),
+    child: pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(width: 90,
+          child: pw.Text(label,
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.grey700))),
+        pw.Expanded(
+          child: pw.Text(value,
+              style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey900)),
+        ),
+      ],
+    ),
+  );
+
+  // ── Baixar como PNG ────────────────────────────────────────────────────────
+  Future<void> _baixarPng() async {
+    setState(() => _baixando = true);
+    try {
+      final bytes = await _capturarImagem();
+      if (bytes == null) throw Exception('Não foi possível capturar a imagem');
+      await _downloadArquivo(
+        nomeArquivo: 'comprovante_sharewallet.png',
+        bytes: bytes,
+        mimeType: 'image/png',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao salvar PNG: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _baixando = false);
+    }
+  }
+
+  // ── Baixar como JPG ────────────────────────────────────────────────────────
+  Future<void> _baixarJpg() async {
+    setState(() => _baixando = true);
+    // Captura tamanho antes de qualquer await (evita async gap no BuildContext)
+    final screenSize = MediaQuery.of(context).size;
+    try {
+      final boundary = _repaintKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) throw Exception('Falha ao capturar widget');
+      // Gera um PDF de 1 página com a imagem para download via printing
+      final doc = pw.Document();
+      final imgBytes = await _capturarImagem();
+      if (imgBytes == null) throw Exception('Falha na captura');
+      doc.addPage(pw.Page(
+        pageFormat: PdfPageFormat(
+          screenSize.width,
+          screenSize.height,
+        ),
+        margin: pw.EdgeInsets.zero,
+        build: (ctx) => pw.Image(pw.MemoryImage(imgBytes), fit: pw.BoxFit.contain),
+      ));
+      final pdfBytes = await doc.save();
+      await Printing.sharePdf(bytes: pdfBytes, filename: 'comprovante_sharewallet.jpg');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Imagem salva! Escolha "Salvar como imagem" no diálogo.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+      // pngBytes usado via Printing.sharePdf acima
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao salvar JPG: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _baixando = false);
+    }
+  }
+
+  String _formatarDataHora(DateTime dt) {
+    final d = dt.day.toString().padLeft(2, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final y = dt.year.toString();
+    final h = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '$d/$m/$y $h:$min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primeiroNome = widget.clienteNome.isNotEmpty
+        ? widget.clienteNome.split(' ').first : 'Cliente';
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Row(
+          children: [
+            Icon(Icons.account_balance_wallet_rounded,
+                color: AppColors.primary, size: 22),
+            SizedBox(width: 8),
+            Text('ShareWallet', style: TextStyle(fontWeight: FontWeight.w800)),
+          ],
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            // ── Widget capturável para screenshot ────────────────────────────
+            RepaintBoundary(
+              key: _repaintKey,
+              child: _buildComprovanteWidget(primeiroNome),
+            ),
+
+            const SizedBox(height: 28),
+
+            // ── Botões de Download ────────────────────────────────────────────
+            _buildDownloadSection(),
+
+            const SizedBox(height: 20),
+
+            // ── Voltar ────────────────────────────────────────────────────────
+            OutlinedButton.icon(
+              onPressed: widget.onVoltar,
+              icon: const Icon(Icons.shopping_bag_outlined),
+              label: const Text('Comprar outro produto'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Widget do comprovante (também capturado para imagem) ─────────────────
+  Widget _buildComprovanteWidget(String primeiroNome) {
+    return Container(
+      color: AppColors.background,
+      child: Column(
+        children: [
+          // ── Animação de sucesso ──────────────────────────────────────────
+          FadeTransition(
+            opacity: _fadeAnim,
+            child: ScaleTransition(
+              scale: _scaleAnim,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_rounded, color: Colors.white, size: 56),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Título ────────────────────────────────────────────────────────
+          FadeTransition(
+            opacity: _fadeAnim,
+            child: Column(
+              children: [
+                Text(
+                  'Parabéns, $primeiroNome!',
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Sua compra foi confirmada com sucesso!',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Card do produto comprado ───────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: AppColors.darkGreenGradient,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.success.withValues(alpha: 0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(widget.product.chargeTypeIcon,
+                          color: Colors.white, size: 28),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(widget.product.nome,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 17,
+                                  fontWeight: FontWeight.w800)),
+                          Text(widget.product.chargeTypeLabel,
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(widget.product.valorFormatado,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 22,
+                                fontWeight: FontWeight.w900)),
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_rounded,
+                                  color: Colors.white, size: 12),
+                              SizedBox(width: 4),
+                              Text('Confirmado',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                if (widget.product.descricao.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(widget.product.descricao,
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12, height: 1.4)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Info do cliente e data ─────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.cardBorder),
+            ),
+            child: Column(
+              children: [
+                _infoRow(Icons.person_rounded, 'Cliente', widget.clienteNome),
+                if (widget.clienteEmail.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _infoRow(Icons.email_rounded, 'E-mail', widget.clienteEmail),
+                ],
+                const SizedBox(height: 8),
+                _infoRow(Icons.calendar_today_rounded, 'Data', _formatarDataHora(DateTime.now())),
+                const SizedBox(height: 8),
+                _infoRow(Icons.pix_rounded, 'Pagamento', 'PIX — Mercado Pago'),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // ── Rodapé do comprovante ─────────────────────────────────────────
+          Text(
+            '🔒 ShareWallet — Pagamento processado com segurança via PIX',
+            style: TextStyle(
+                fontSize: 10,
+                color: AppColors.textHint.withValues(alpha: 0.8)),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String label, String value) => Row(
+    children: [
+      Icon(icon, color: AppColors.primary, size: 16),
+      const SizedBox(width: 8),
+      Text('$label: ', style: const TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+      Expanded(
+        child: Text(value,
+            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+            overflow: TextOverflow.ellipsis),
+      ),
+    ],
+  );
+
+  // ── Seção de botões de download ───────────────────────────────────────────
+  Widget _buildDownloadSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.download_rounded, color: AppColors.primary, size: 20),
+              SizedBox(width: 8),
+              Text('Salvar Comprovante',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: AppColors.textPrimary)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Baixe uma cópia do seu comprovante de compra:',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          if (_baixando)
+            const Center(
+              child: Column(
+                children: [
+                  CircularProgressIndicator(color: AppColors.primary),
+                  SizedBox(height: 8),
+                  Text('Gerando arquivo...', style: TextStyle(color: AppColors.textSecondary)),
+                ],
+              ),
+            )
+          else
+            Column(
+              children: [
+                // PDF
+                _DownloadButton(
+                  icon: Icons.picture_as_pdf_rounded,
+                  label: 'Baixar como PDF',
+                  subtitle: 'Comprovante completo em PDF',
+                  color: const Color(0xFFD32F2F),
+                  onTap: _baixarPdf,
+                ),
+                const SizedBox(height: 10),
+                // PNG
+                _DownloadButton(
+                  icon: Icons.image_rounded,
+                  label: 'Baixar como PNG',
+                  subtitle: 'Imagem de alta qualidade',
+                  color: const Color(0xFF1565C0),
+                  onTap: _baixarPng,
+                ),
+                const SizedBox(height: 10),
+                // JPG
+                _DownloadButton(
+                  icon: Icons.photo_camera_rounded,
+                  label: 'Baixar como JPG',
+                  subtitle: 'Imagem compacta',
+                  color: const Color(0xFF6A1B9A),
+                  onTap: _baixarJpg,
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Botão de download estilizado ────────────────────────────────────────────
+class _DownloadButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DownloadButton({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: color)),
+                    Text(subtitle,
+                        style: const TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios_rounded, color: color, size: 14),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Card do produto ───────────────────────────────────────────────────────────
@@ -810,7 +1567,6 @@ class _PixQrCardState extends State<_PixQrCard> {
       ),
       child: Column(
         children: [
-          // Header sucesso
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -863,7 +1619,6 @@ class _PixQrCardState extends State<_PixQrCard> {
           ),
           const SizedBox(height: 20),
 
-          // QR Code imagem
           if (r.pixQrBase64 != null && r.pixQrBase64!.isNotEmpty) ...[
             Container(
               padding: const EdgeInsets.all(16),
@@ -895,7 +1650,6 @@ class _PixQrCardState extends State<_PixQrCard> {
             const SizedBox(height: 16),
           ],
 
-          // Código Copia e Cola
           if (r.pixCode != null && r.pixCode!.isNotEmpty) ...[
             const Align(
               alignment: Alignment.centerLeft,
@@ -964,11 +1718,11 @@ class _PixQrCardState extends State<_PixQrCard> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(Icons.timer_rounded, color: AppColors.warning, size: 18),
-                const SizedBox(width: 8),
-                const Expanded(
+                Icon(Icons.timer_rounded, color: AppColors.warning, size: 18),
+                SizedBox(width: 8),
+                Expanded(
                   child: Text(
                     'Este PIX expira em 30 minutos. '
                     'Realize o pagamento pelo app do seu banco.',
