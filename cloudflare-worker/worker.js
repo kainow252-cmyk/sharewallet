@@ -224,6 +224,37 @@ export default {
       return ok(aff);
     }
 
+    // DELETE /api/affiliates/:id — excluir afiliado e dados relacionados
+    if (affMatch && method === 'DELETE') {
+      const id = affMatch[1];
+
+      // Verifica se existe
+      const existing = await DB.prepare(`SELECT id, affiliate_code FROM affiliates WHERE id=?`).bind(id).first();
+      if (!existing) {
+        return new Response(JSON.stringify({ success: false, error: 'Afiliado não encontrado' }), {
+          status: 404, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Remove wallet
+      await DB.prepare(`DELETE FROM wallets WHERE user_id=?`).bind(id).run().catch(() => null);
+
+      // Remove sales
+      await DB.prepare(`DELETE FROM sales WHERE user_id=? OR affiliate_code=?`)
+        .bind(id, existing.affiliate_code).run().catch(() => null);
+
+      // Cancela assinaturas ativas (não deleta — mantém histórico)
+      await DB.prepare(
+        `UPDATE subscriptions SET status='cancelada', motivo='Afiliado excluído'
+         WHERE affiliate_code=? AND status='ativa'`
+      ).bind(existing.affiliate_code).run().catch(() => null);
+
+      // Remove afiliado
+      await DB.prepare(`DELETE FROM affiliates WHERE id=?`).bind(id).run();
+
+      return ok({ deleted: true, id });
+    }
+
     // ── /api/wallet/:userId ────────────────────────────────────────────────
     const walletMatch = path.match(/^\/api\/wallet\/([^/]+)$/);
     if (walletMatch && method === 'GET') {

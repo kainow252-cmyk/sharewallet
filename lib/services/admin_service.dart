@@ -356,6 +356,38 @@ class AdminService extends ChangeNotifier {
     return false;
   }
 
+  Future<bool> editAffiliate(String id, Map<String, dynamic> data) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await CfApiService.updateAffiliate(id, data);
+      await loadAffiliates();
+      return true;
+    } catch (e) {
+      debugPrint('[AdminService] Erro editAffiliate: $e');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteAffiliate(String id) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final ok = await CfApiService.deleteAffiliate(id);
+      if (ok) await loadAffiliates();
+      return ok;
+    } catch (e) {
+      debugPrint('[AdminService] Erro deleteAffiliate: $e');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   // ── Assinaturas via D1 ───────────────────────────────────────────────────
   Future<void> loadSubscriptions() async {
     try {

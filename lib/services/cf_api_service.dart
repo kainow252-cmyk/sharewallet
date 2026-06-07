@@ -143,6 +143,11 @@ class CfApiService {
     return await _patch('/api/affiliates/$id', data);
   }
 
+  static Future<bool> deleteAffiliate(String id) async {
+    final res = await _delete('/api/affiliates/$id');
+    return res != null;
+  }
+
   // ── WALLET ────────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>?> getWallet(String userId) async {

@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/admin_service.dart';
 import '../../models/subscription_model.dart';
-import '../../models/product_model.dart';
 import '../../theme/app_theme.dart';
 
 class AdminAffiliatesScreen extends StatefulWidget {
@@ -15,7 +14,7 @@ class AdminAffiliatesScreen extends StatefulWidget {
 
 class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
   String _search = '';
-  String _filter = 'todos'; // todos, ativo, suspenso
+  String _filter = 'todos';
 
   @override
   Widget build(BuildContext context) {
@@ -132,10 +131,14 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
                         itemCount: afiliados.length,
                         itemBuilder: (ctx, i) => _AffiliateCard(
                           affiliate: afiliados[i],
-                          onToggle: () => _toggleStatus(
-                              context, svc, afiliados[i]),
+                          onToggle: () =>
+                              _toggleStatus(context, svc, afiliados[i]),
                           onDetails: () =>
                               _showDetails(context, afiliados[i]),
+                          onEdit: () =>
+                              _showEditSheet(context, svc, afiliados[i]),
+                          onDelete: () =>
+                              _confirmDelete(context, svc, afiliados[i]),
                         ),
                       ),
           ),
@@ -144,6 +147,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
     );
   }
 
+  // ── Toggle status ativo/suspenso ─────────────────────────────────────────
   Future<void> _toggleStatus(
       BuildContext context, AdminService svc, AdminAffiliate a) async {
     final newStatus = a.status == 'ativo' ? 'suspenso' : 'ativo';
@@ -152,9 +156,9 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('${newStatus == 'ativo' ? 'Ativar' : 'Suspender'} Afiliado'),
-        content: Text(
-            'Tem certeza que deseja $label "${a.nome}"?'),
+        title: Text(
+            '${newStatus == 'ativo' ? 'Ativar' : 'Suspender'} Afiliado'),
+        content: Text('Tem certeza que deseja $label "${a.nome}"?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -162,38 +166,530 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: newStatus == 'ativo'
-                  ? AppColors.success
-                  : AppColors.error,
+              backgroundColor:
+                  newStatus == 'ativo' ? AppColors.success : AppColors.error,
             ),
-            child: Text(
-                newStatus == 'ativo' ? 'Ativar' : 'Suspender'),
+            child: Text(newStatus == 'ativo' ? 'Ativar' : 'Suspender'),
           ),
         ],
       ),
     );
 
-    if (ok == true) {
+    if (ok == true && context.mounted) {
       await svc.updateAffiliateStatus(a.id, newStatus);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Afiliado ${newStatus == 'ativo' ? 'ativado' : 'suspenso'}!'),
-            backgroundColor: newStatus == 'ativo'
-                ? AppColors.success
-                : AppColors.error,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Afiliado ${newStatus == 'ativo' ? 'ativado' : 'suspenso'}!'),
+          backgroundColor:
+              newStatus == 'ativo' ? AppColors.success : AppColors.error,
+        ));
       }
     }
   }
 
+  // ── Detalhes ─────────────────────────────────────────────────────────────
   void _showDetails(BuildContext context, AdminAffiliate a) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AffiliateDetailSheet(affiliate: a, svc: context.read<AdminService>()),
+      builder: (_) => _AffiliateDetailSheet(
+          affiliate: a, svc: context.read<AdminService>()),
+    );
+  }
+
+  // ── Editar ───────────────────────────────────────────────────────────────
+  void _showEditSheet(
+      BuildContext context, AdminService svc, AdminAffiliate a) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditAffiliateSheet(
+        affiliate: a,
+        onSave: (data) async {
+          final ok = await svc.editAffiliate(a.id, data);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(ok
+                  ? 'Afiliado atualizado com sucesso!'
+                  : 'Erro ao atualizar afiliado.'),
+              backgroundColor: ok ? AppColors.success : AppColors.error,
+            ));
+          }
+        },
+      ),
+    );
+  }
+
+  // ── Excluir ──────────────────────────────────────────────────────────────
+  Future<void> _confirmDelete(
+      BuildContext context, AdminService svc, AdminAffiliate a) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded,
+                color: AppColors.error, size: 24),
+            SizedBox(width: 8),
+            Text('Excluir Afiliado',
+                style: TextStyle(color: AppColors.error, fontSize: 17)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(
+                    color: AppColors.textPrimary, fontSize: 14),
+                children: [
+                  const TextSpan(text: 'Tem certeza que deseja excluir '),
+                  TextSpan(
+                    text: a.nome,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const TextSpan(text: '?'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.2)),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Esta ação irá:',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: AppColors.error)),
+                  SizedBox(height: 6),
+                  _BulletItem('Excluir o afiliado permanentemente'),
+                  _BulletItem('Remover carteira e saldo'),
+                  _BulletItem('Cancelar assinaturas ativas'),
+                  _BulletItem('Esta ação não pode ser desfeita'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.delete_rounded, size: 16),
+            label: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true && context.mounted) {
+      final success = await svc.deleteAffiliate(a.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(success
+              ? '${a.nome} excluído com sucesso!'
+              : 'Erro ao excluir afiliado.'),
+          backgroundColor: success ? AppColors.success : AppColors.error,
+        ));
+      }
+    }
+  }
+}
+
+// ── Widget auxiliar para lista de bullets no diálogo ─────────────────────────
+class _BulletItem extends StatelessWidget {
+  final String text;
+  const _BulletItem(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ',
+              style:
+                  TextStyle(color: AppColors.error, fontWeight: FontWeight.w700)),
+          Expanded(
+            child: Text(text,
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Bottom sheet de edição ────────────────────────────────────────────────────
+class _EditAffiliateSheet extends StatefulWidget {
+  final AdminAffiliate affiliate;
+  final Future<void> Function(Map<String, dynamic> data) onSave;
+  const _EditAffiliateSheet(
+      {required this.affiliate, required this.onSave});
+
+  @override
+  State<_EditAffiliateSheet> createState() => _EditAffiliateSheetState();
+}
+
+class _EditAffiliateSheetState extends State<_EditAffiliateSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nomeCtrl;
+  late TextEditingController _emailCtrl;
+  late TextEditingController _cpfCtrl;
+  late TextEditingController _telCtrl;
+  late TextEditingController _pixCtrl;
+  late String _status;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final a = widget.affiliate;
+    _nomeCtrl = TextEditingController(text: a.nome);
+    _emailCtrl = TextEditingController(text: a.email);
+    _cpfCtrl = TextEditingController(text: a.cpf);
+    _telCtrl = TextEditingController(text: a.telefone);
+    _pixCtrl = TextEditingController(text: a.pixKey ?? '');
+    _status = a.status;
+  }
+
+  @override
+  void dispose() {
+    _nomeCtrl.dispose();
+    _emailCtrl.dispose();
+    _cpfCtrl.dispose();
+    _telCtrl.dispose();
+    _pixCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+
+    await widget.onSave({
+      'nome': _nomeCtrl.text.trim(),
+      'email': _emailCtrl.text.trim(),
+      'cpf': _cpfCtrl.text.trim(),
+      'telefone': _telCtrl.text.trim(),
+      'pix_key': _pixCtrl.text.trim(),
+      'status': _status,
+    });
+
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.affiliate;
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (_, ctrl) => Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Container(
+                margin: const EdgeInsets.only(top: 10, bottom: 4),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.cardBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 16, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.edit_rounded,
+                          color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Editar Afiliado',
+                              style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary)),
+                          Text(a.affiliateCode,
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded,
+                          color: AppColors.textHint),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Divider(height: 1),
+
+              // Formulário
+              Expanded(
+                child: Form(
+                  key: _formKey,
+                  child: ListView(
+                    controller: ctrl,
+                    padding: const EdgeInsets.all(20),
+                    children: [
+                      // Nome
+                      _FormField(
+                        label: 'Nome completo',
+                        controller: _nomeCtrl,
+                        icon: Icons.person_rounded,
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty)
+                                ? 'Informe o nome'
+                                : null,
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Email
+                      _FormField(
+                        label: 'E-mail',
+                        controller: _emailCtrl,
+                        icon: Icons.email_rounded,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 14),
+
+                      // CPF
+                      _FormField(
+                        label: 'CPF',
+                        controller: _cpfCtrl,
+                        icon: Icons.badge_rounded,
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Telefone
+                      _FormField(
+                        label: 'Telefone / WhatsApp',
+                        controller: _telCtrl,
+                        icon: Icons.phone_rounded,
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: 14),
+
+                      // PIX
+                      _FormField(
+                        label: 'Chave PIX',
+                        controller: _pixCtrl,
+                        icon: Icons.pix_rounded,
+                        hint: 'CPF, e-mail, telefone ou chave aleatória',
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Status
+                      const Text('Status',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _StatusOption(
+                            label: 'Ativo',
+                            icon: Icons.check_circle_rounded,
+                            color: AppColors.success,
+                            selected: _status == 'ativo',
+                            onTap: () => setState(() => _status = 'ativo'),
+                          ),
+                          const SizedBox(width: 10),
+                          _StatusOption(
+                            label: 'Suspenso',
+                            icon: Icons.block_rounded,
+                            color: AppColors.error,
+                            selected: _status == 'suspenso',
+                            onTap: () => setState(() => _status = 'suspenso'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+
+                      // Botão salvar
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          onPressed: _saving ? null : _save,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          ),
+                          icon: _saving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white))
+                              : const Icon(Icons.save_rounded, size: 18),
+                          label: Text(
+                            _saving ? 'Salvando...' : 'Salvar alterações',
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Campo de formulário reutilizável ─────────────────────────────────────────
+class _FormField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final IconData icon;
+  final TextInputType? keyboardType;
+  final String? hint;
+  final String? Function(String?)? validator;
+
+  const _FormField({
+    required this.label,
+    required this.controller,
+    required this.icon,
+    this.keyboardType,
+    this.hint,
+    this.validator,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary)),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          validator: validator,
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixIcon: Icon(icon, size: 18, color: AppColors.textHint),
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Seletor de status ─────────────────────────────────────────────────────────
+class _StatusOption extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  const _StatusOption({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? color.withValues(alpha: 0.12)
+                : AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? color : AppColors.cardBorder,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  color: selected ? color : AppColors.textHint, size: 18),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: TextStyle(
+                      color: selected ? color : AppColors.textSecondary,
+                      fontWeight: selected
+                          ? FontWeight.w700
+                          : FontWeight.normal,
+                      fontSize: 13)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -203,15 +699,22 @@ class _AffiliateCard extends StatelessWidget {
   final AdminAffiliate affiliate;
   final VoidCallback onToggle;
   final VoidCallback onDetails;
-  const _AffiliateCard(
-      {required this.affiliate,
-      required this.onToggle,
-      required this.onDetails});
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _AffiliateCard({
+    required this.affiliate,
+    required this.onToggle,
+    required this.onDetails,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
     final isActive = affiliate.status == 'ativo';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -236,9 +739,11 @@ class _AffiliateCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Linha principal: avatar + info + saldo + menu ─────────────
               Row(
                 children: [
-                  _AvatarCircle(nome: affiliate.nome, status: affiliate.status),
+                  _AvatarCircle(
+                      nome: affiliate.nome, status: affiliate.status),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -250,14 +755,16 @@ class _AffiliateCard extends StatelessWidget {
                         Text(affiliate.email,
                             style: const TextStyle(
                                 color: AppColors.textSecondary,
-                                fontSize: 12)),
+                                fontSize: 12),
+                            overflow: TextOverflow.ellipsis),
                         Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -275,6 +782,7 @@ class _AffiliateCard extends StatelessWidget {
                       ],
                     ),
                   ),
+                  // Saldo + menu de ações
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -288,11 +796,22 @@ class _AffiliateCard extends StatelessWidget {
                       const Text('saldo',
                           style: TextStyle(
                               color: AppColors.textHint, fontSize: 11)),
+                      const SizedBox(height: 4),
+                      // Menu 3 pontos
+                      _ActionMenu(
+                        onEdit: onEdit,
+                        onDelete: onDelete,
+                        onToggle: onToggle,
+                        isActive: isActive,
+                      ),
                     ],
                   ),
                 ],
               ),
+
               const Divider(height: 16),
+
+              // ── Linha de stats ────────────────────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -308,16 +827,20 @@ class _AffiliateCard extends StatelessWidget {
                       icon: Icons.attach_money_rounded,
                       value: fmt.format(affiliate.totalComissoes),
                       label: 'comissões'),
-                  ElevatedButton(
+                  // Botão suspender/ativar compacto
+                  OutlinedButton(
                     onPressed: onToggle,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor:
                           isActive ? AppColors.error : AppColors.success,
-                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                          color: isActive
+                              ? AppColors.error.withValues(alpha: 0.5)
+                              : AppColors.success.withValues(alpha: 0.5)),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                          horizontal: 10, vertical: 5),
                       textStyle: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700),
+                          fontSize: 11, fontWeight: FontWeight.w700),
                       minimumSize: Size.zero,
                     ),
                     child: Text(isActive ? 'Suspender' : 'Ativar'),
@@ -328,6 +851,77 @@ class _AffiliateCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Menu de ações (3 pontos) ──────────────────────────────────────────────────
+class _ActionMenu extends StatelessWidget {
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onToggle;
+  final bool isActive;
+
+  const _ActionMenu({
+    required this.onEdit,
+    required this.onDelete,
+    required this.onToggle,
+    required this.isActive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      onSelected: (v) {
+        if (v == 'edit') onEdit();
+        if (v == 'delete') onDelete();
+        if (v == 'toggle') onToggle();
+      },
+      icon: const Icon(Icons.more_vert_rounded,
+          color: AppColors.textHint, size: 18),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      itemBuilder: (_) => [
+        const PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit_rounded, size: 16, color: AppColors.primary),
+              SizedBox(width: 10),
+              Text('Editar dados',
+                  style: TextStyle(fontSize: 13)),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'toggle',
+          child: Row(
+            children: [
+              Icon(
+                isActive ? Icons.block_rounded : Icons.check_circle_rounded,
+                size: 16,
+                color: isActive ? AppColors.warning : AppColors.success,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                isActive ? 'Suspender' : 'Ativar',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_rounded, size: 16, color: AppColors.error),
+              SizedBox(width: 10),
+              Text('Excluir afiliado',
+                  style: TextStyle(fontSize: 13, color: AppColors.error)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -355,7 +949,9 @@ class _AvatarCircle extends StatelessWidget {
         child: Text(
           nome.isNotEmpty ? nome[0].toUpperCase() : '?',
           style: const TextStyle(
-              color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -414,7 +1010,8 @@ class _StatChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.15) : AppColors.surface,
+          color:
+              selected ? color.withValues(alpha: 0.15) : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
               color: selected ? color : AppColors.cardBorder, width: 1.5),
@@ -449,8 +1046,8 @@ class _MiniStat extends StatelessWidget {
             style: const TextStyle(
                 fontWeight: FontWeight.w700, fontSize: 12)),
         Text(label,
-            style: const TextStyle(
-                color: AppColors.textHint, fontSize: 10)),
+            style:
+                const TextStyle(color: AppColors.textHint, fontSize: 10)),
       ],
     );
   }
@@ -505,11 +1102,12 @@ class _FinanceItem extends StatelessWidget {
   }
 }
 
-// ── Modal de detalhes do afiliado com abas ─────────────────────────────────────
+// ── Modal de detalhes do afiliado com abas ────────────────────────────────────
 class _AffiliateDetailSheet extends StatefulWidget {
   final AdminAffiliate affiliate;
   final AdminService svc;
-  const _AffiliateDetailSheet({required this.affiliate, required this.svc});
+  const _AffiliateDetailSheet(
+      {required this.affiliate, required this.svc});
 
   @override
   State<_AffiliateDetailSheet> createState() => _AffiliateDetailSheetState();
@@ -525,7 +1123,6 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
-    // Carrega assinaturas do afiliado ao abrir
     _loadSubs();
   }
 
@@ -538,17 +1135,15 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
   Future<void> _loadSubs() async {
     setState(() => _loadingSubs = true);
     try {
-      // Filtra das assinaturas já carregadas pelo admin (sem chamada extra)
       final all = widget.svc.subscriptions;
       _subs = all
           .where((s) => s.affiliateCode == widget.affiliate.affiliateCode)
           .toList();
-      // Ordena: ativas primeiro, depois por data
       _subs.sort((a, b) {
         if (a.status == SubscriptionStatus.ativa &&
-            b.status != SubscriptionStatus.ativa) return -1;
+            b.status != SubscriptionStatus.ativa) { return -1; }
         if (b.status == SubscriptionStatus.ativa &&
-            a.status != SubscriptionStatus.ativa) return 1;
+            a.status != SubscriptionStatus.ativa) { return 1; }
         return b.dataInicio.compareTo(a.dataInicio);
       });
     } catch (e) {
@@ -562,9 +1157,10 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
     final a = widget.affiliate;
     final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
-    // Calcular comissão a receber (pendente) das assinaturas ativas
-    final subsAtivas = _subs.where((s) => s.status == SubscriptionStatus.ativa).toList();
-    final comissaoPendente = subsAtivas.fold(0.0, (sum, s) => sum + s.valorComissao);
+    final subsAtivas =
+        _subs.where((s) => s.status == SubscriptionStatus.ativa).toList();
+    final comissaoPendente =
+        subsAtivas.fold(0.0, (sum, s) => sum + s.valorComissao);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
@@ -588,7 +1184,7 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
               ),
             ),
 
-            // Header com nome e status
+            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
               child: Row(
@@ -601,11 +1197,13 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                       children: [
                         Text(a.nome,
                             style: const TextStyle(
-                                fontSize: 17, fontWeight: FontWeight.w800,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
                                 color: AppColors.textPrimary)),
                         Text(a.email,
                             style: const TextStyle(
-                                color: AppColors.textSecondary, fontSize: 12),
+                                color: AppColors.textSecondary,
+                                fontSize: 12),
                             overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 3),
                         Row(
@@ -613,9 +1211,11 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                             _StatusBadge(status: a.status),
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(a.affiliateCode,
@@ -630,14 +1230,15 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: AppColors.textHint),
+                    icon: const Icon(Icons.close_rounded,
+                        color: AppColors.textHint),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
             ),
 
-            // Cards financeiros rápidos
+            // Cards financeiros
             Container(
               margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               padding: const EdgeInsets.all(14),
@@ -676,7 +1277,6 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                           label: 'Assinaturas',
                           value: a.totalAssinaturas.toString(),
                           icon: Icons.repeat_rounded),
-                      // Comissão a receber calculada das subs ativas
                       _FinanceItem(
                           label: 'A Receber',
                           value: fmt.format(comissaoPendente),
@@ -697,8 +1297,12 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                 unselectedLabelColor: Colors.white54,
                 indicatorColor: AppColors.gold,
                 tabs: const [
-                  Tab(icon: Icon(Icons.person_rounded, size: 16), text: 'Dados'),
-                  Tab(icon: Icon(Icons.history_rounded, size: 16), text: 'Histórico'),
+                  Tab(
+                      icon: Icon(Icons.person_rounded, size: 16),
+                      text: 'Dados'),
+                  Tab(
+                      icon: Icon(Icons.history_rounded, size: 16),
+                      text: 'Histórico'),
                 ],
               ),
             ),
@@ -708,29 +1312,44 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
               child: TabBarView(
                 controller: _tab,
                 children: [
-                  // ── Aba Dados ─────────────────────────────────────────────
+                  // ── Aba Dados ──────────────────────────────────────────────
                   ListView(
                     controller: scrollCtrl,
                     padding: const EdgeInsets.all(20),
                     children: [
-                      _DetailRow(label: 'Código de Afiliado', value: a.affiliateCode),
-                      if (a.sponsorCode != null && a.sponsorCode!.isNotEmpty)
-                        _DetailRow(label: 'Indicado por', value: a.sponsorCode!),
-                      _DetailRow(label: 'CPF', value: a.cpf.isNotEmpty ? a.cpf : '—'),
-                      _DetailRow(label: 'Telefone', value: a.telefone.isNotEmpty ? a.telefone : '—'),
+                      _DetailRow(
+                          label: 'Código de Afiliado',
+                          value: a.affiliateCode),
+                      if (a.sponsorCode != null &&
+                          a.sponsorCode!.isNotEmpty)
+                        _DetailRow(
+                            label: 'Indicado por',
+                            value: a.sponsorCode!),
+                      _DetailRow(
+                          label: 'CPF',
+                          value:
+                              a.cpf.isNotEmpty ? a.cpf : '—'),
+                      _DetailRow(
+                          label: 'Telefone',
+                          value: a.telefone.isNotEmpty
+                              ? a.telefone
+                              : '—'),
                       if (a.pixKey != null && a.pixKey!.isNotEmpty)
-                        _DetailRow(label: 'Chave PIX', value: a.pixKey!),
+                        _DetailRow(
+                            label: 'Chave PIX', value: a.pixKey!),
                       _DetailRow(
                           label: 'Cadastrado em',
-                          value: DateFormat('dd/MM/yyyy').format(a.createdAt)),
+                          value: DateFormat('dd/MM/yyyy')
+                              .format(a.createdAt)),
                       const SizedBox(height: 8),
-                      // Breakdown comissões
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: AppColors.gold.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.gold.withValues(alpha: 0.2)),
+                          border: Border.all(
+                              color: AppColors.gold
+                                  .withValues(alpha: 0.2)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -749,7 +1368,8 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                             ),
                             const SizedBox(height: 8),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
                                   '${subsAtivas.length} assinatura${subsAtivas.length != 1 ? 's' : ''} ativa${subsAtivas.length != 1 ? 's' : ''}',
@@ -768,9 +1388,9 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                             ),
                             if (subsAtivas.isNotEmpty) ...[
                               const SizedBox(height: 6),
-                              Text(
+                              const Text(
                                 'por mês (estimativa)',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 10,
                                     color: AppColors.textHint),
                               ),
@@ -781,20 +1401,24 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                     ],
                   ),
 
-                  // ── Aba Histórico ─────────────────────────────────────────
+                  // ── Aba Histórico ──────────────────────────────────────────
                   _loadingSubs
                       ? const Center(child: CircularProgressIndicator())
                       : _subs.isEmpty
                           ? Center(
                               child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
                                 children: const [
                                   Icon(Icons.inbox_rounded,
-                                      size: 48, color: AppColors.textHint),
+                                      size: 48,
+                                      color: AppColors.textHint),
                                   SizedBox(height: 12),
-                                  Text('Nenhuma assinatura encontrada',
+                                  Text(
+                                      'Nenhuma assinatura encontrada',
                                       style: TextStyle(
-                                          color: AppColors.textSecondary)),
+                                          color:
+                                              AppColors.textSecondary)),
                                 ],
                               ),
                             )
@@ -802,8 +1426,8 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                               controller: scrollCtrl,
                               padding: const EdgeInsets.all(12),
                               itemCount: _subs.length,
-                              itemBuilder: (_, i) =>
-                                  _SubHistoryCard(sub: _subs[i], fmt: fmt),
+                              itemBuilder: (_, i) => _SubHistoryCard(
+                                  sub: _subs[i], fmt: fmt),
                             ),
                 ],
               ),
@@ -815,7 +1439,7 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
   }
 }
 
-// ── Card de assinatura no histórico do afiliado ───────────────────────────────
+// ── Card de assinatura no histórico ──────────────────────────────────────────
 class _SubHistoryCard extends StatelessWidget {
   final SubscriptionModel sub;
   final NumberFormat fmt;
@@ -825,7 +1449,7 @@ class _SubHistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final dtFmt = DateFormat('dd/MM/yyyy');
     final statusColor = sub.statusColor;
-    final isRecorrente = sub.chargeType == ChargeType.pixRecorrente;
+    final isRecorrente = sub.chargeType.name == 'pixRecorrente';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -837,7 +1461,6 @@ class _SubHistoryCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Ícone tipo
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -846,8 +1469,11 @@ class _SubHistoryCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
-              isRecorrente ? Icons.autorenew_rounded : Icons.pix_rounded,
-              color: isRecorrente ? AppColors.primary : AppColors.info,
+              isRecorrente
+                  ? Icons.autorenew_rounded
+                  : Icons.pix_rounded,
+              color:
+                  isRecorrente ? AppColors.primary : AppColors.info,
               size: 16,
             ),
           ),
@@ -866,11 +1492,13 @@ class _SubHistoryCard extends StatelessWidget {
                               color: AppColors.textPrimary),
                           overflow: TextOverflow.ellipsis),
                     ),
-                    // Badge tipo
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: (isRecorrente ? AppColors.primary : AppColors.info)
+                        color: (isRecorrente
+                                ? AppColors.primary
+                                : AppColors.info)
                             .withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
@@ -879,7 +1507,9 @@ class _SubHistoryCard extends StatelessWidget {
                         style: TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
-                            color: isRecorrente ? AppColors.primary : AppColors.info),
+                            color: isRecorrente
+                                ? AppColors.primary
+                                : AppColors.info),
                       ),
                     ),
                   ],
@@ -900,7 +1530,9 @@ class _SubHistoryCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary),
                     ),
-                    const Text(' · ', style: TextStyle(color: AppColors.textHint)),
+                    const Text(' · ',
+                        style:
+                            TextStyle(color: AppColors.textHint)),
                     Text(
                       'Comissão: ${fmt.format(sub.valorComissao)}',
                       style: const TextStyle(
@@ -915,18 +1547,20 @@ class _SubHistoryCard extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 3),
                     child: Text(sub.motivo!,
                         style: const TextStyle(
-                            fontSize: 10, color: AppColors.warning)),
+                            fontSize: 10,
+                            color: AppColors.warning)),
                   ),
               ],
             ),
           ),
-          // Status badge
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+              border: Border.all(
+                  color: statusColor.withValues(alpha: 0.3)),
             ),
             child: Text(sub.statusLabel,
                 style: TextStyle(
