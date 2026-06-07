@@ -322,48 +322,59 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
           ),
 
           Expanded(
-            // isLoadingData: true apenas enquanto affiliates/subs/withdrawals carregam
-            // NÃO bloqueia quando só loadProducts() está em execução (silent=true)
-            child: svc.isLoadingData
-                ? const Center(child: CircularProgressIndicator())
-                : svc.error != null && svc.affiliates.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.wifi_off_rounded,
-                                  color: AppColors.error, size: 48),
-                              const SizedBox(height: 12),
-                              const Text('Erro ao carregar dados',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary,
-                                      fontSize: 15)),
-                              const SizedBox(height: 8),
-                              Text(
-                                svc.error ?? '',
-                                style: const TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 12),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: _refresh,
-                                icon: const Icon(Icons.refresh_rounded, size: 16),
-                                label: const Text('Tentar novamente'),
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : TabBarView(
-                        controller: _tab,
-                        children: [
+            child: _buildBody(svc),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Corpo principal — separado para clareza e garantir height constraint ────
+  Widget _buildBody(AdminService svc) {
+    // Loading
+    if (svc.isLoadingData) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    // Erro de rede (só mostra se lista também está vazia)
+    if (svc.error != null && svc.affiliates.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.wifi_off_rounded,
+                  color: AppColors.error, size: 48),
+              const SizedBox(height: 12),
+              const Text('Erro ao carregar dados',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                      fontSize: 15)),
+              const SizedBox(height: 8),
+              Text(
+                svc.error ?? '',
+                style: const TextStyle(
+                    color: AppColors.textSecondary, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Tentar novamente'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    // Dados carregados — exibe as abas
+    return TabBarView(
+      controller: _tab,
+      children: [
                       // ── Afiliados ──────────────────────────────────────────
                       _ReportTab<AdminAffiliate>(
                         items: svc.affiliates,
@@ -566,11 +577,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                         onExportingChange: (v) =>
                             setState(() => _exporting = v),
                       ),
-                        ],
-                      ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
