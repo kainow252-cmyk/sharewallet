@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -59,6 +60,11 @@ class _BuyScreenState extends State<BuyScreen> {
   // ── Resultado: QR Code gerado ─────────────────────────────────────────────
   MpCheckoutResult? _pixResult;
 
+  // ── Polling de status do pagamento ──────────────────────────────────────
+  Timer?  _pollingTimer;
+  bool    _paymentApproved = false;
+  static const _workerBase = 'https://sharewallet-api.kainow252.workers.dev';
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +73,7 @@ class _BuyScreenState extends State<BuyScreen> {
 
   @override
   void dispose() {
+    _pollingTimer?.cancel();
     _nomeCtrl.dispose();    _cpfCtrl.dispose();
     _emailCtrl.dispose();   _celularCtrl.dispose();
     _nascCtrl.dispose();    _cepCtrl.dispose();
@@ -96,6 +103,72 @@ class _BuyScreenState extends State<BuyScreen> {
   }
 
   // ── Busca CEP via ViaCEP ──────────────────────────────────────────────────
+  // ── Polling de status do pagamento PIX ─────────────────────────────────
+  void _iniciarPolling(String paymentId) {
+    if (paymentId.isEmpty) return;
+    _pollingTimer?.cancel();
+    int tentativas = 0;
+    const maxTentativas = 36;
+
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (!mounted || tentativas >= maxTentativas) { timer.cancel(); return; }
+      tentativas++;
+      try {
+        final r = await http.get(
+          Uri.parse('$_workerBase/api/payment-status/$paymentId'),
+        ).timeout(const Duration(seconds: 8));
+        if (!mounted) { timer.cancel(); return; }
+        if (r.statusCode == 200) {
+          final data = jsonDecode(r.body)['result'] as Map<String, dynamic>?;
+          final status = data?['status'] as String? ?? '';
+          if (status == 'approved' && !_paymentApproved) {
+            timer.cancel();
+            setState(() => _paymentApproved = true);
+            _mostrarSucessoPagamento();
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
+  void _mostrarSucessoPagamento() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 64),
+            ),
+            const SizedBox(height: 16),
+            const Text('PIX Confirmado!',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            const SizedBox(height: 8),
+            const Text(
+              'Seu pagamento foi recebido!\nAssinatura ativa com sucesso.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _buscarCep() async {
     final cep = _cepCtrl.text.replaceAll(RegExp(r'\D'), '');
     if (cep.length != 8) return;
@@ -151,6 +224,8 @@ class _BuyScreenState extends State<BuyScreen> {
     setState(() { _isSubmitting = false; _pixResult = result; });
 
     if (result.success) {
+      // Inicia polling de status (a cada 5s verifica se PIX foi pago)
+      _iniciarPolling(result.preferenceId ?? '');
       // Rola para o QR Code
       Future.delayed(const Duration(milliseconds: 300), () {
         if (_scrollController.hasClients) {
@@ -359,6 +434,47 @@ class _BuyScreenState extends State<BuyScreen> {
 
             // ── QR Code PIX ───────────────────────────────────────────────────
             if (_pixResult != null && _pixResult!.success) ...[
+              // Badge de status do pagamento
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _paymentApproved
+                      ? AppColors.success.withValues(alpha: 0.12)
+                      : AppColors.warning.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(50),
+                  border: Border.all(
+                    color: _paymentApproved ? AppColors.success : AppColors.warning,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_paymentApproved)
+                      const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 18)
+                    else
+                      SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(AppColors.warning),
+                        ),
+                      ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _paymentApproved
+                          ? 'Pagamento confirmado!'
+                          : 'Aguardando pagamento PIX...',
+                      style: TextStyle(
+                        color: _paymentApproved ? AppColors.success : AppColors.warning,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               _PixQrCard(result: _pixResult!, product: product),
               const SizedBox(height: 8),
               OutlinedButton.icon(

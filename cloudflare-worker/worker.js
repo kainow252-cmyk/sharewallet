@@ -588,6 +588,44 @@ export default {
       return ok(updated);
     }
 
+    // ── /api/payment-status/:paymentId ─────────────────────────────────────
+    // Consultado pelo Flutter via polling para saber se o PIX foi pago
+    const payStatusMatch = path.match(/^\/api\/payment-status\/([^/]+)$/);
+    if (payStatusMatch && method === 'GET') {
+      const paymentId = payStatusMatch[1];
+      const subId = `sub_pix_${paymentId}`;
+
+      // Busca status da subscription no D1
+      const sub = await DB.prepare(
+        `SELECT id, status, valor, comissao, affiliate_code, product_nome, created_at
+         FROM subscriptions WHERE id=?`
+      ).bind(subId).first().catch(() => null);
+
+      if (!sub) {
+        return ok({ paymentId, status: 'not_found', subStatus: null });
+      }
+
+      // Mapeia status da sub para status do pagamento
+      const statusMap = {
+        'ativa':     'approved',
+        'pendente':  'pending',
+        'cancelada': 'cancelled',
+        'expirada':  'cancelled',
+      };
+      const payStatus = statusMap[sub.status] ?? 'pending';
+
+      return ok({
+        paymentId,
+        status:      payStatus,       // 'approved' | 'pending' | 'cancelled'
+        subStatus:   sub.status,      // status real da sub no D1
+        valor:       sub.valor,
+        comissao:    sub.comissao,
+        productNome: sub.product_nome,
+        affiliateCode: sub.affiliate_code,
+        processedAt: sub.created_at,
+      });
+    }
+
     // ── /api/sales ─────────────────────────────────────────────────────────
     const salesByUser = path.match(/^\/api\/sales\/by-user\/([^/]+)$/);
     if (salesByUser && method === 'GET') {
