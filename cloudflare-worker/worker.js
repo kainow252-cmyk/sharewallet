@@ -276,11 +276,16 @@ export default {
           }
         }
         if (!row) {
-          // Cria carteira zerada automaticamente para este uid
-          await DB.prepare(
-            `INSERT OR IGNORE INTO wallets (user_id) VALUES (?)`
-          ).bind(uid).run();
-          row = await DB.prepare(`SELECT * FROM wallets WHERE user_id=?`).bind(uid).first();
+          // Só cria carteira zerada se o afiliado ainda existe no D1
+          const affExists = await DB.prepare(
+            `SELECT id FROM affiliates WHERE id=?`
+          ).bind(uid).first().catch(() => null);
+          if (affExists) {
+            await DB.prepare(
+              `INSERT OR IGNORE INTO wallets (user_id) VALUES (?)`
+            ).bind(uid).run();
+            row = await DB.prepare(`SELECT * FROM wallets WHERE user_id=?`).bind(uid).first();
+          }
         }
       }
       // Pega últimas transações — busca pelo uid direto e também pelo affiliate_code
