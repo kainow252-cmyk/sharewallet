@@ -1,6 +1,87 @@
 // ── ShareWallet API Worker ─────────────────────────────────────────────────
 // Cloudflare Worker + D1 (SQLite) — resposta < 50ms global
 
+// ── Firebase Admin — credenciais do service account ──────────────────────────
+const FB_PROJECT_ID    = 'affiliate-wallet-75853';
+const FB_CLIENT_EMAIL  = 'firebase-adminsdk-fbsvc@affiliate-wallet-75853.iam.gserviceaccount.com';
+// Private key PKCS#8 em base64 (sem header/footer/newlines)
+const FB_PRIVATE_KEY_B64 = 'MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDVcuGYySx0vGgvdnqMxmompoo9fVAtRSX4R1WNTY23Z9HMrZGqiOu6UQkddEUz9RthcoNg7LV9owrS9pe/plfLj8vrxvCNmQbiG3dKMfxAjbn9vLpzdbJHq0xHv8rnDnQ31kckAV9g8eeU7dDcDp8LKJoCHbyMp44kGHFjfXoov1ZzryqLEJ0VPFAOjWwLbeD695NYOxtJ/DpS71/FiTr1TWONPKmn9G8yvQY74yXaPGEgIMT4zl+uLeLYrXmahhD84gJ5XXDkLie/o691eizHGwW+7lBbWa+HN0o7FA065yjGaa7pnJDRiZNwmqgF+Kj2OtPQ6B1z46RyuDS6CAJnAgMBAAECggEAMJLeJ+jQBxjBFNv/c33LtlP77ZZQ4pxz0ZZaL7fQYkZsBgoRth9GlbXPPzawcOx8eKaYozv66UZrNisLyX9PR3HH1DYHlBGY8WeSs/3AC+i0xLtoKtJD6e9fgoxw3jf51qMauWTeka87JjcgapOhOebZdVXTDKcsv6YYV628WP0XUBSZr6Fsrw7vBKjT9S4l98S9aSn0DExFBcXnYUpRaNLys7J2JBdEIWmvCy3lXTwNaL9Eee6Uj81PtxsfSEm0KT3eQrkP6nmRS/sup1k1Yb5bWe3AedGEnqA+7r1rI0tdPWC64swGY4qMrVqEYQmiuKQSpn4RNgfXebJitwlSUQKBgQD5W12atWmEERQUNVYZ+bJAYHQfCHVOfz1SJAgq/YYl2YAop3Vqpqcaj65qDjkl4K9Ka4iwhD6BvQgOzcuuNd5FijAzVdWed72lmoU5OciZjKFyfhGamOfr4TnEKb7QO7zoxEWCKQW1nho3FOeLoDBF+v+jSwpzt1xs5QetjwSE5QKBgQDbIp5/742M+aiglIYqluXVcGmeKWcHJiCNuPaQ+LtSBmhpGErWHfGP8qM3rd7/EBTsDbzlKX+Eb8s9Qd1TLdj7bORrmwLZrNoLD7kbutISv6VlYiS6TGrbOxJERjIEgupjAyv2lmHC79ttqYo6cbHwWSUX1G9vGU32eK6QaaphWwKBgGRMjN0i5Vta50GtpoFyP3HHmk21QEIfyhGVLrfkHCZzUyqHGSKaABMeAiDksbX7p2Z+1I9z0hSrbWdO/gOH5W0BRZwQhYllTqIjAj1fccHZoEMGVJxjrr3hbTPrOrZVoQnbkL3nNEW2X4MSZIR0HZa4fEU5dO3Qrlua0DjOkxnFAoGAPgMT+3xdAFH+SEL/nLnLHJWNLfblcv51I+X90JSy3cl2bpczRlh+7Y9qZO1NN7zjTtGsbOVLcrz4NMOY0FsfFjeAhHr/WX4yzgKLDa/Wlvuo4IHfhuDtNFEJIE0FBoXNsmtJW6S+0Z1y6RubRGK8ShnQB2hUiIoOp/sK208rqhUCgYAtx5cb1sNYBWEsKVnObrdYo4szByt1ByRx5xAXacfEcEQJC+he69ALMmsQasa8SNj0vOfcl+5Z2Bp26SovdgzwaHu+r6ZcJ/ANZAYk1nOXPyXB4M16x2cIFzI8B2f8MbF3rVMzp2/ZtqMxdveBidNLUZ2j5nojyPpTsE13ioJ6Kg==';
+
+// ── Helpers JWT/Firebase Auth ─────────────────────────────────────────────────
+
+// Converte base64 padrão para base64url
+function toBase64Url(b64) {
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// Codifica objeto como base64url JSON
+function b64UrlEncode(obj) {
+  return toBase64Url(btoa(JSON.stringify(obj)));
+}
+
+// Gera JWT RS256 assinado com a chave privada do service account
+async function makeFirebaseJWT() {
+  const now = Math.floor(Date.now() / 1000);
+  const header  = b64UrlEncode({ alg: 'RS256', typ: 'JWT' });
+  const payload = b64UrlEncode({
+    iss: FB_CLIENT_EMAIL,
+    sub: FB_CLIENT_EMAIL,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+    scope: 'https://www.googleapis.com/auth/firebase https://www.googleapis.com/auth/identitytoolkit',
+  });
+
+  // Importar chave privada PKCS#8
+  const keyBytes = Uint8Array.from(atob(FB_PRIVATE_KEY_B64), c => c.charCodeAt(0));
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8', keyBytes.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false, ['sign']
+  );
+
+  // Assinar header.payload
+  const data = new TextEncoder().encode(`${header}.${payload}`);
+  const sig  = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, data);
+  const sigB64 = toBase64Url(btoa(String.fromCharCode(...new Uint8Array(sig))));
+
+  return `${header}.${payload}.${sigB64}`;
+}
+
+// Obtém access token OAuth2 para chamar APIs do Firebase/Google
+async function getFirebaseAccessToken() {
+  const jwt = await makeFirebaseJWT();
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+  });
+  const data = await res.json();
+  return data.access_token || null;
+}
+
+// Deleta usuário do Firebase Authentication pelo UID
+async function deleteFirebaseAuthUser(uid) {
+  try {
+    const token = await getFirebaseAccessToken();
+    if (!token) return { ok: false, error: 'Falha ao obter access token Firebase' };
+
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/projects/${FB_PROJECT_ID}/accounts/${uid}`,
+      {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      }
+    );
+    // 200 = deletado, 404 = não existia (ok também)
+    if (res.status === 200 || res.status === 404) return { ok: true };
+    const body = await res.text();
+    return { ok: false, error: `Firebase Auth API ${res.status}: ${body}` };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
@@ -232,27 +313,29 @@ export default {
       const existing = await DB.prepare(`SELECT id, affiliate_code FROM affiliates WHERE id=?`).bind(id).first();
       if (!existing) {
         return new Response(JSON.stringify({ success: false, error: 'Afiliado não encontrado' }), {
-          status: 404, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+          status: 404, headers: { ...CORS, 'Content-Type': 'application/json' }
         });
       }
 
-      // Remove wallet
+      // 1. Remove do Firebase Authentication PRIMEIRO (libera email para novo cadastro)
+      const fbResult = await deleteFirebaseAuthUser(id);
+
+      // 2. Remove wallet do D1
       await DB.prepare(`DELETE FROM wallets WHERE user_id=?`).bind(id).run().catch(() => null);
 
-      // Remove sales
+      // 3. Remove sales do D1
       await DB.prepare(`DELETE FROM sales WHERE user_id=? OR affiliate_code=?`)
         .bind(id, existing.affiliate_code).run().catch(() => null);
 
-      // Cancela assinaturas ativas (não deleta — mantém histórico)
+      // 4. Cancela assinaturas ativas (mantém histórico)
       await DB.prepare(
-        `UPDATE subscriptions SET status='cancelada', motivo='Afiliado excluído'
-         WHERE affiliate_code=? AND status='ativa'`
+        `UPDATE subscriptions SET status='cancelada', motivo='Afiliado excluído' WHERE affiliate_code=? AND status='ativa'`
       ).bind(existing.affiliate_code).run().catch(() => null);
 
-      // Remove afiliado
+      // 5. Remove afiliado do D1 por último
       await DB.prepare(`DELETE FROM affiliates WHERE id=?`).bind(id).run();
 
-      return ok({ deleted: true, id });
+      return ok({ deleted: true, id, firebaseAuth: fbResult });
     }
 
     // ── /api/wallet/:userId ────────────────────────────────────────────────
