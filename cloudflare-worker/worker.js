@@ -61,22 +61,35 @@ async function getFirebaseAccessToken() {
 }
 
 // Deleta usuário do Firebase Authentication pelo UID
+// Endpoint correto: POST /v1/projects/{project}/accounts:delete com { localId }
+// (DELETE /accounts/{uid} não existe na API REST — retorna 404 HTML)
 async function deleteFirebaseAuthUser(uid) {
   try {
     const token = await getFirebaseAccessToken();
     if (!token) return { ok: false, error: 'Falha ao obter access token Firebase' };
 
     const res = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/projects/${FB_PROJECT_ID}/accounts/${uid}`,
+      `https://identitytoolkit.googleapis.com/v1/projects/${FB_PROJECT_ID}/accounts:delete`,
       {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ localId: uid }),
       }
     );
-    // 200 = deletado, 404 = não existia (ok também)
-    if (res.status === 200 || res.status === 404) return { ok: true };
-    const body = await res.text();
-    return { ok: false, error: `Firebase Auth API ${res.status}: ${body}` };
+
+    // 200 = deletado com sucesso
+    if (res.status === 200) return { ok: true };
+
+    const body = await res.json().catch(() => ({}));
+    const msg = body?.error?.message || '';
+
+    // USER_NOT_FOUND = usuário já não existia no Firebase Auth → ok (idempotente)
+    if (msg === 'USER_NOT_FOUND') return { ok: true, note: 'Usuário não existia no Firebase Auth' };
+
+    return { ok: false, error: `Firebase Auth API ${res.status}: ${msg || JSON.stringify(body)}` };
   } catch (e) {
     return { ok: false, error: String(e) };
   }
