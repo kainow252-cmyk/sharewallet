@@ -432,6 +432,9 @@ class FirebaseUserService {
         saldo: saldoDisponivel,
         status: _toStr(aData['status'], fallback: 'ativo'),
         createdAt: _toDateTimeOrNow(aData['created_at']),
+        // pixKey: usa campo salvo; fallback = email
+        pixKey: _toStr(aData['pix_key'], fallback: email),
+        pixKeyType: _toStr(aData['pix_key_type'], fallback: 'EMAIL'),
       );
     } catch (e) {
       if (kDebugMode) {

@@ -42,13 +42,21 @@ class _SaqueScreenState extends State<SaqueScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    // Pré-preenche chave PIX com e-mail do usuário logado
+    // Pré-preenche chave PIX com pixKey salvo no perfil (ou email como fallback)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthService>();
-      final email = auth.currentUser?.email ?? '';
-      if (email.isNotEmpty) {
-        _pixKeyController.text = email;
-        setState(() => _pixKeyType = 'EMAIL');
+      final user = auth.currentUser;
+      if (user != null) {
+        final savedPix = user.pixKey.isNotEmpty ? user.pixKey : user.email;
+        _pixKeyController.text = savedPix;
+        // Detecta tipo da chave automaticamente
+        if (user.pixKeyType.isNotEmpty) {
+          setState(() => _pixKeyType = user.pixKeyType);
+        } else if (savedPix.contains('@')) {
+          setState(() => _pixKeyType = 'EMAIL');
+        } else if (RegExp(r'^\d{11}$').hasMatch(savedPix.replaceAll(RegExp(r'\D'), ''))) {
+          setState(() => _pixKeyType = 'CPF');
+        }
       }
       // Garante histórico carregado
       final uid = auth.currentUser?.id;
@@ -80,7 +88,8 @@ class _SaqueScreenState extends State<SaqueScreen>
     final wallet = context.read<WalletService>();
     final valor =
         double.tryParse(_valorController.text.replaceAll(',', '.')) ?? 0;
-    final saldo = auth.currentUser?.saldo ?? 0;
+    // FONTE DE VERDADE: D1 via WalletService (não Firestore)
+    final saldo = wallet.saldoCarteira;
 
     if (valor < 10) {
       _showSnack('Valor mínimo para saque é R\$ 10,00', AppColors.warning);
@@ -94,18 +103,23 @@ class _SaqueScreenState extends State<SaqueScreen>
 
     setState(() => _isLoading = true);
 
+    // Preenche nome e código do afiliado para o registro no D1
+    final affiliateCode = auth.currentUser?.affiliateCode ?? '';
+    final affiliateNome = auth.currentUser?.nome ?? '';
+
     final result = await wallet.solicitarSaque(
       valor: valor,
       pixKey: _pixKeyController.text.trim(),
       pixKeyType: _pixKeyType,
       saldoAtual: saldo,
+      affiliateCode: affiliateCode,
+      affiliateNome: affiliateNome,
     );
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (result.success) {
-      auth.updateSaldo(saldo - valor);
       _valorController.clear();
       _showSuccessDialog(valor);
     } else {
@@ -198,9 +212,10 @@ class _SaqueScreenState extends State<SaqueScreen>
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthService>();
+    context.watch<AuthService>(); // escuta mudanças de autenticação
     final wallet = context.watch<WalletService>();
-    final saldo = auth.currentUser?.saldo ?? 0;
+    // FONTE DE VERDADE: D1 via WalletService
+    final saldo = wallet.saldoCarteira;
 
     return Scaffold(
       backgroundColor: AppColors.background,

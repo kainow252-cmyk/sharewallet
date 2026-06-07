@@ -10,6 +10,9 @@ class UserModel {
   final double saldo;
   final String status;
   final DateTime createdAt;
+  // Chave PIX cadastrada no perfil (pode ser email, CPF, telefone ou aleatória)
+  final String pixKey;
+  final String pixKeyType;
 
   UserModel({
     required this.id,
@@ -23,6 +26,8 @@ class UserModel {
     this.saldo = 0.0,
     this.status = 'ativo',
     required this.createdAt,
+    this.pixKey = '',
+    this.pixKeyType = 'EMAIL',
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -40,6 +45,8 @@ class UserModel {
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
+      pixKey: json['pix_key']?.toString() ?? json['pixKey']?.toString() ?? '',
+      pixKeyType: json['pix_key_type']?.toString() ?? json['pixKeyType']?.toString() ?? 'EMAIL',
     );
   }
 
@@ -55,6 +62,8 @@ class UserModel {
         'saldo': saldo,
         'status': status,
         'created_at': createdAt.toIso8601String(),
+        'pix_key': pixKey,
+        'pix_key_type': pixKeyType,
       };
 
   String get primeiroNome => nome.split(' ').first;
@@ -71,6 +80,8 @@ class UserModel {
     double? saldo,
     String? status,
     DateTime? createdAt,
+    String? pixKey,
+    String? pixKeyType,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -84,6 +95,8 @@ class UserModel {
       saldo: saldo ?? this.saldo,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      pixKey: pixKey ?? this.pixKey,
+      pixKeyType: pixKeyType ?? this.pixKeyType,
     );
   }
 }

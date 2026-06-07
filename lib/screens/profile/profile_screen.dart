@@ -34,9 +34,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _emailCtrl    = TextEditingController(text: user?.email ?? '');
     _telefoneCtrl = TextEditingController(text: user?.telefone ?? '');
     _cpfCtrl      = TextEditingController(text: user?.cpf ?? '');
-    _pixCtrl      = TextEditingController(text: user?.email ?? '');
+    // pixKey: usa pix_key salvo; se vazio cai pro email como fallback
+    _pixCtrl      = TextEditingController(
+        text: (user?.pixKey.isNotEmpty == true) ? user!.pixKey : (user?.email ?? ''));
 
-    // Recarrega perfil ao abrir (garante dados atualizados)
+    // Recarrega perfil ao abrir (garante dados atualizados do Firestore)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await context.read<AuthService>().refreshProfile();
       if (!mounted) return;
@@ -46,7 +48,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _emailCtrl.text    = u.email;
         _telefoneCtrl.text = u.telefone;
         _cpfCtrl.text      = u.cpf;
-        _pixCtrl.text      = u.email;
+        // pixKey real — nunca mais sobrescreve com email
+        _pixCtrl.text      = u.pixKey.isNotEmpty ? u.pixKey : u.email;
       }
     });
   }
@@ -333,16 +336,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _editMode
                           ? _EditField(
                               ctrl: _pixCtrl,
-                              label: 'Chave PIX (E-mail)',
+                              label: 'Chave PIX',
                               icon: Icons.pix_rounded,
-                              keyboard: TextInputType.emailAddress,
+                              hint: 'E-mail, CPF, telefone ou chave aleatória',
                             )
                           : _InfoRow(
                               icon: Icons.pix_rounded,
                               label: 'Chave PIX',
-                              value: user?.email.isNotEmpty == true
-                                  ? user!.email
-                                  : 'Não configurada',
+                              value: () {
+                                final key = user?.pixKey ?? '';
+                                if (key.isNotEmpty) return key;
+                                if (user?.email.isNotEmpty == true) return user!.email;
+                                return 'Não configurada';
+                              }(),
                             ),
                       const Divider(height: 1, indent: 52),
                       _InfoRow(
