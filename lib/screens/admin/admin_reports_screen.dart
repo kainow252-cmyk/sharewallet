@@ -331,12 +331,12 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
 
   // ── Corpo principal — separado para clareza e garantir height constraint ────
   Widget _buildBody(AdminService svc) {
-    // Loading
-    if (svc.isLoadingData) {
+    // Loading — só mostra spinner se realmente não tem dados ainda
+    if (svc.isLoadingData && svc.affiliates.isEmpty && svc.subscriptions.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     // Erro de rede (só mostra se lista também está vazia)
-    if (svc.error != null && svc.affiliates.isEmpty) {
+    if (svc.error != null && svc.affiliates.isEmpty && svc.subscriptions.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -659,37 +659,37 @@ class _SummaryKpi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.cardBorder),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: color, size: 16),
+    // NÃO usa Expanded aqui — o Row pai no _ReportTab gerencia o layout
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(height: 6),
-            FittedBox(
-              child: Text(value,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                      color: AppColors.textPrimary)),
-            ),
-            Text(label,
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(height: 6),
+          FittedBox(
+            child: Text(value,
                 style: const TextStyle(
-                    fontSize: 10, color: AppColors.textSecondary)),
-          ],
-        ),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    color: AppColors.textPrimary)),
+          ),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10, color: AppColors.textSecondary)),
+        ],
       ),
     );
   }
@@ -776,11 +776,17 @@ class _ReportTab<T> extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Row(
             children: [
-              ...summaryWidgets(rows)
-                  .map((w) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: w,
-                      )),
+              // summaryWidgets retorna widgets simples (sem Expanded)
+              // Cada KPI ocupa espaço igual via Expanded aqui no Row
+              ...summaryWidgets(rows).asMap().entries.map((entry) {
+                final isLast = entry.key == summaryWidgets(rows).length - 1;
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: isLast ? 0 : 8),
+                    child: entry.value,
+                  ),
+                );
+              }),
             ],
           ),
         ),
@@ -861,11 +867,33 @@ class _ReportTab<T> extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.search_off_rounded,
-                          color: AppColors.textHint, size: 48),
-                      const SizedBox(height: 12),
-                      const Text('Nenhum registro no período',
-                          style: TextStyle(color: AppColors.textSecondary)),
+                      Icon(
+                        items.isEmpty
+                            ? Icons.inbox_rounded
+                            : Icons.search_off_rounded,
+                        color: AppColors.textHint,
+                        size: 52,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        items.isEmpty
+                            ? 'Nenhum registro encontrado'
+                            : 'Nenhum registro no período selecionado',
+                        style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (items.isEmpty) ...[
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Os dados aparecerão aqui\nconforme forem gerados no sistema.',
+                          style: TextStyle(
+                              color: AppColors.textHint, fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ],
                   ),
                 )
