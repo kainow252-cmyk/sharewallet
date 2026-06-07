@@ -62,9 +62,11 @@ class SaleModel {
   }
 
   /// Factory para Cloudflare D1 (snake_case, status em minúsculo)
+  /// ATENÇÃO: o campo 'comissao' no D1 já é o valor em reais (ex: 0.50)
+  /// NÃO multiplicar por 'valor' — isso causava 2.5 × 0.5 = 1.25 (errado)
   factory SaleModel.fromD1(Map<String, dynamic> r) {
-    final comissaoValor = (r['valor'] as num? ?? 0).toDouble() *
-        (r['comissao'] as num? ?? 0).toDouble();
+    // comissao já vem em reais direto do D1
+    final comissaoValor = (r['comissao'] as num? ?? 0).toDouble();
     return SaleModel(
       id: r['id']?.toString() ?? '',
       userId: r['user_id']?.toString() ?? '',
