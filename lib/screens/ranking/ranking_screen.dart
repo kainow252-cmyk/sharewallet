@@ -88,8 +88,10 @@ class _RankingScreenState extends State<RankingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // top3 pode ter 1, 2 ou 3 itens — layout adaptativo
     final top3 = _ranking.take(3).toList();
-    final resto = _ranking.skip(3).toList();
+    // resto = itens da posição 4 em diante
+    final resto = _ranking.length > 3 ? _ranking.skip(3).toList() : <Map<String, dynamic>>[];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -191,8 +193,8 @@ class _RankingScreenState extends State<RankingScreen> {
                             children: [
                               const SizedBox(height: 8),
 
-                              // ── Pódio Top 3 ─────────────────────────────
-                              if (top3.length >= 3) _Podium(top3: top3, fmt: _fmt),
+                              // ── Pódio / Destaque Top (1, 2 ou 3 itens) ──
+                              if (top3.isNotEmpty) _Podium(top3: top3, fmt: _fmt),
 
                               const SizedBox(height: 24),
 
@@ -223,15 +225,26 @@ class _RankingScreenState extends State<RankingScreen> {
   }
 }
 
-// ── Pódio ─────────────────────────────────────────────────────────────────────
+// ── Pódio (adaptativo: funciona com 1, 2 ou 3 afiliados) ──────────────────────
 class _Podium extends StatelessWidget {
-  final List<Map<String, dynamic>> top3;
+  final List<Map<String, dynamic>> top3; // pode ter 1, 2 ou 3 itens
   final NumberFormat fmt;
 
   const _Podium({required this.top3, required this.fmt});
 
+  static String _cod(Map<String, dynamic> item, String fallback) =>
+      item['codigo']?.toString().isNotEmpty == true
+          ? item['codigo'].toString()
+          : item['affiliate_code']?.toString() ?? fallback;
+
+  static int _ass(Map<String, dynamic> item) =>
+      (item['assinaturas'] as num?)?.toInt() ?? 0;
+
   @override
   Widget build(BuildContext context) {
+    final count = top3.length;
+    final title = count == 1 ? '🏆 Líder do Mês' : '🏆 Top $count do Mês';
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -244,50 +257,92 @@ class _Podium extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Text('🏆 Top 3 do Mês',
-              style: TextStyle(
+          Text(title,
+              style: const TextStyle(
                   color: Color(0xFFFFD740),
                   fontWeight: FontWeight.w800,
                   fontSize: 16)),
           const SizedBox(height: 20),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              // 2º lugar
-              Expanded(
-                child: _PodiumItem(
-                  position: 2,
-                  codigo: top3[1]['codigo']?.toString() ?? top3[1]['affiliate_code']?.toString() ?? '#002',
-                  assinaturas: (top3[1]['assinaturas'] as num?)?.toInt() ?? 0,
-                  height: 90,
-                  medalColor: const Color(0xFFBDBDBD),
-                  emoji: '🥈',
+
+          // ── Layout: 1 afiliado — card centralizado de destaque ───────────
+          if (count == 1)
+            _PodiumItem(
+              position: 1,
+              codigo: _cod(top3[0], '#001'),
+              assinaturas: _ass(top3[0]),
+              height: 120,
+              medalColor: const Color(0xFFFFD740),
+              emoji: '🥇',
+            ),
+
+          // ── Layout: 2 afiliados — 1º maior, 2º menor ────────────────────
+          if (count == 2)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: _PodiumItem(
+                    position: 1,
+                    codigo: _cod(top3[0], '#001'),
+                    assinaturas: _ass(top3[0]),
+                    height: 120,
+                    medalColor: const Color(0xFFFFD740),
+                    emoji: '🥇',
+                  ),
                 ),
-              ),
-              // 1º lugar (maior)
-              Expanded(
-                child: _PodiumItem(
-                  position: 1,
-                  codigo: top3[0]['codigo']?.toString() ?? top3[0]['affiliate_code']?.toString() ?? '#001',
-                  assinaturas: (top3[0]['assinaturas'] as num?)?.toInt() ?? 0,
-                  height: 120,
-                  medalColor: const Color(0xFFFFD740),
-                  emoji: '🥇',
+                Expanded(
+                  child: _PodiumItem(
+                    position: 2,
+                    codigo: _cod(top3[1], '#002'),
+                    assinaturas: _ass(top3[1]),
+                    height: 90,
+                    medalColor: const Color(0xFFBDBDBD),
+                    emoji: '🥈',
+                  ),
                 ),
-              ),
-              // 3º lugar
-              Expanded(
-                child: _PodiumItem(
-                  position: 3,
-                  codigo: top3[2]['codigo']?.toString() ?? top3[2]['affiliate_code']?.toString() ?? '#003',
-                  assinaturas: (top3[2]['assinaturas'] as num?)?.toInt() ?? 0,
-                  height: 70,
-                  medalColor: const Color(0xFFCD7F32),
-                  emoji: '🥉',
+              ],
+            ),
+
+          // ── Layout: 3+ afiliados — pódio clássico 2°/1°/3° ─────────────
+          if (count >= 3)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // 2º lugar
+                Expanded(
+                  child: _PodiumItem(
+                    position: 2,
+                    codigo: _cod(top3[1], '#002'),
+                    assinaturas: _ass(top3[1]),
+                    height: 90,
+                    medalColor: const Color(0xFFBDBDBD),
+                    emoji: '🥈',
+                  ),
                 ),
-              ),
-            ],
-          ),
+                // 1º lugar (centro, maior)
+                Expanded(
+                  child: _PodiumItem(
+                    position: 1,
+                    codigo: _cod(top3[0], '#001'),
+                    assinaturas: _ass(top3[0]),
+                    height: 120,
+                    medalColor: const Color(0xFFFFD740),
+                    emoji: '🥇',
+                  ),
+                ),
+                // 3º lugar
+                Expanded(
+                  child: _PodiumItem(
+                    position: 3,
+                    codigo: _cod(top3[2], '#003'),
+                    assinaturas: _ass(top3[2]),
+                    height: 70,
+                    medalColor: const Color(0xFFCD7F32),
+                    emoji: '🥉',
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
