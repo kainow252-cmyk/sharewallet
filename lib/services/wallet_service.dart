@@ -148,10 +148,10 @@ class WalletService extends ChangeNotifier {
       );
 
       if (mpResult.success) {
-        // MP processou: marca como 'aprovado' no D1
-        await CfApiService.approveWithdrawal(withdrawalId, txId: mpResult.txId);
-        // Atualiza saldo local
+        // Worker já atualizou D1 para 'aprovado' internamente
+        // Só precisamos atualizar o estado local Flutter
         _saldoCarteira -= valor;
+        _totalSacado += valor;
         final wd = WithdrawModel.fromD1({
           ...result,
           'status': 'aprovado',
@@ -167,7 +167,8 @@ class WalletService extends ChangeNotifier {
           pixKey: pixKey,
         );
       } else {
-        // MP falhou: saque fica pendente para admin processar
+        // MP falhou: saque ficou 'pendente' no D1 (Worker já registrou)
+        // Reflete no estado local
         _saldoCarteira -= valor;
         _saldoPendente += valor;
         final wd = WithdrawModel.fromD1(result);
@@ -259,19 +260,32 @@ class WalletService extends ChangeNotifier {
       ).timeout(const Duration(seconds: 30));
 
       final body = jsonDecode(res.body) as Map<String, dynamic>;
-      if (kDebugMode) debugPrint('[WalletService] Worker /pay response: $body');
+      if (kDebugMode) debugPrint('[WalletService] Worker /pay response (${res.statusCode}): $body');
 
-      if (body['success'] == true) {
-        final txId = body['result']?['id']?.toString()
-            ?? body['result']?['tx_id']?.toString()
+      // HTTP 200 + success:true → PIX enviado com sucesso
+      if (res.statusCode == 200 && body['success'] == true) {
+        final result = body['result'] as Map<String, dynamic>? ?? {};
+        final txId = result['tx_id']?.toString()
+            ?? result['id']?.toString()
             ?? withdrawalId;
         return _MpPixResult(success: true, txId: txId);
-      } else {
+      }
+
+      // HTTP 202 + pending:true → MP falhou mas saque registrado (pendente manual)
+      if (res.statusCode == 202 && body['pending'] == true) {
+        if (kDebugMode) debugPrint('[WalletService] Saque pendente manual: ${body['error']}');
         return _MpPixResult(
           success: false,
-          error: body['error']?.toString() ?? 'Erro no Worker',
+          pending: true,
+          error: body['error']?.toString() ?? 'Processamento pendente',
         );
       }
+
+      // Outros erros
+      return _MpPixResult(
+        success: false,
+        error: body['error']?.toString() ?? 'Erro no Worker (${res.statusCode})',
+      );
     } catch (e) {
       if (kDebugMode) debugPrint('[WalletService] Erro Worker /pay: $e');
       return _MpPixResult(success: false, error: e.toString());
@@ -327,7 +341,13 @@ class WalletService extends ChangeNotifier {
 // ── Resultado interno do PIX MercadoPago ─────────────────────────────────────
 class _MpPixResult {
   final bool success;
+  final bool pending; // true = saque registrado mas MP falhou → admin processa
   final String? txId;
   final String? error;
-  const _MpPixResult({required this.success, this.txId, this.error});
+  const _MpPixResult({
+    required this.success,
+    this.pending = false,
+    this.txId,
+    this.error,
+  });
 }

@@ -263,6 +263,10 @@ class MercadoPagoService extends ChangeNotifier {
     try {
       await _saveConfigToFirestore(newConfig);
       _config = newConfig;
+      // Sincroniza o token MP no D1 (Worker usa D1 para pagamentos automáticos)
+      _syncConfigToD1(newConfig).catchError((e) {
+        if (kDebugMode) debugPrint('[MP] Aviso: falha ao sincronizar D1: $e');
+      });
       _isLoading = false;
       notifyListeners();
       return true;
@@ -272,6 +276,35 @@ class MercadoPagoService extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Sincroniza as credenciais MP no D1 para que o Worker as use.
+  Future<void> _syncConfigToD1(MpConfig cfg) async {
+    try {
+      final mpCfgJson = {
+        'mode': cfg.mode,
+        'production': {
+          'access_token': cfg.production.accessToken,
+          'public_key': cfg.production.publicKey,
+          'user_id': cfg.production.userId,
+        },
+        'sandbox': {
+          'access_token': cfg.sandbox.accessToken,
+          'public_key': cfg.sandbox.publicKey,
+          'user_id': cfg.sandbox.userId,
+        },
+      };
+      final uri = Uri.parse(
+          'https://sharewallet-api.kainow252.workers.dev/api/config');
+      await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'key': 'mp_config', 'value': mpCfgJson}),
+      ).timeout(const Duration(seconds: 10));
+      if (kDebugMode) debugPrint('[MP] ✅ mp_config sincronizado no D1');
+    } catch (e) {
+      if (kDebugMode) debugPrint('[MP] Aviso D1 sync: $e');
     }
   }
 
