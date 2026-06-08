@@ -29,6 +29,24 @@
   <!-- Google Sign-In Web OAuth Client ID -->
   <meta name="google-signin-client_id" content="470218127330-d1tr5j60i6db3ui56jgdqhar039dilvh.apps.googleusercontent.com">
 
+  <!-- MercadoPago.JS V2 SDK — obrigatório para device_id e Secure Fields (PCI Compliance) -->
+  <!-- Requisito do Quality Score MP: SDK do frontend + Identificador do dispositivo -->
+  <script src="https://sdk.mercadopago.com/js/v2"></script>
+  <script>
+    // Inicializa MP SDK com public key de produção para gerar device_id
+    // O device_id é lido pelo Flutter via JS interop e enviado no pagamento
+    (function() {
+      try {
+        var mpPublicKey = 'APP_USR-2e7cff35-b8f2-4448-a7b1-9c15a75bcae4';
+        if (typeof MercadoPago !== 'undefined' && mpPublicKey) {
+          window._mpInstance = new MercadoPago(mpPublicKey, { locale: 'pt-BR' });
+          // device_id ficará disponível em window._mpInstance.getFingerprint()
+          // ou via window.MP_DEVICE_SESSION_ID (gerado automaticamente pelo SDK)
+        }
+      } catch(e) { /* SDK não carregado — continua sem device_id */ }
+    })();
+  </script>
+
   <!-- Favicon -->
   <link rel="icon" type="image/png" sizes="32x32" href="favicon.png"/>
   <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png"/>

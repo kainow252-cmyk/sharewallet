@@ -1,4 +1,6 @@
 import 'dart:convert';
+// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
+import 'dart:html' as html show window;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -166,6 +168,21 @@ class MpCheckoutResult {
 
 class MercadoPagoService extends ChangeNotifier {
   static const String _baseUrl = 'https://api.mercadopago.com';
+
+  /// Lê o device_id gerado pelo MercadoPago.JS V2 SDK (injetado no index.html).
+  /// O SDK grava o session fingerprint em window.MP_DEVICE_SESSION_ID.
+  /// Retorna null se o SDK não estiver disponível ou no mobile.
+  static String? _getMpDeviceId() {
+    if (!kIsWeb) return null;
+    try {
+      final jsObj = html.window.document as dynamic;
+      final val = jsObj['MP_DEVICE_SESSION_ID'] as String?;
+      return (val != null && val.isNotEmpty) ? val : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // Caminho do documento de configuração no Firestore
   // ignore: unused_field
   static const String _configDocPath = 'config/mercadopago';
@@ -471,20 +488,35 @@ class MercadoPagoService extends ChangeNotifier {
       final externalRef =
           'SW_${affiliateCode}_${produtoId}_${DateTime.now().millisecondsSinceEpoch}';
 
+      // ── Sanitização dos dados do pagador ─────────────────────────────────
+      // MP rejeita se email/nome forem vazios — garantir valores válidos
+      final nomeAssinatura   = clienteNome.trim().isNotEmpty ? clienteNome.trim() : 'Cliente';
+      final partesAssinatura = nomeAssinatura.split(' ');
+      final firstNameA       = partesAssinatura.first;
+      final lastNameA        = partesAssinatura.length > 1
+          ? partesAssinatura.sublist(1).join(' ')
+          : 'ShareWallet';                                      // last_name obrigatório
+      final emailAssinatura  = clienteEmail.trim().contains('@')
+          ? clienteEmail.trim()
+          : 'cliente@sharewallet.com.br';                       // payer.email obrigatório
+      final descricaoItem    = produtoDescricao.trim().isNotEmpty
+          ? produtoDescricao.trim()
+          : 'Assinatura $produtoNome — plataforma ShareWallet'; // items.description obrigatório
+
       final body = {
         'items': [{
           'id':          produtoId,
           'title':       produtoNome,
-          'description': produtoDescricao,
+          'description': descricaoItem,          // ✅ items.description obrigatório
           'quantity':    1,
           'currency_id': 'BRL',
           'unit_price':  valor,
+          'category_id': 'services',             // ✅ categoria do item
         }],
         'payer': {
-          'name':  clienteNome,
-          'email': clienteEmail.isNotEmpty
-              ? clienteEmail
-              : 'cliente@sharewallet.com.br',
+          'name':       firstNameA,
+          'surname':    lastNameA,               // ✅ payer.last_name (campo 'surname' no Preferences)
+          'email':      emailAssinatura,         // ✅ payer.email obrigatório
           if (clienteCpf != null && clienteCpf.isNotEmpty)
             'identification': {
               'type':   'CPF',
@@ -510,7 +542,7 @@ class MercadoPagoService extends ChangeNotifier {
         },
         'auto_return':          'approved',
         'notification_url':     '${_config.notificationUrl}?ref=$externalRef',
-        'statement_descriptor': 'SHAREWALLET',
+        'statement_descriptor': 'SHAREWALLET',  // ✅ já existia
         'expires':              false,
       };
 
@@ -525,6 +557,8 @@ class MercadoPagoService extends ChangeNotifier {
           'Authorization':     'Bearer ${creds.accessToken}',
           'Content-Type':      'application/json',
           'X-Idempotency-Key': externalRef,
+          if (_getMpDeviceId() != null)
+            'X-Device-Session-Id': _getMpDeviceId()!,  // ✅ device_id para Quality Score
         },
         body: jsonEncode(body),
       );
@@ -623,10 +657,11 @@ class MercadoPagoService extends ChangeNotifier {
         'transaction_amount': valor,
         'description':        produtoNome.isNotEmpty ? produtoNome : 'Produto ShareWallet',
         'payment_method_id':  'pix',
+        'statement_descriptor': 'SHAREWALLET',       // ✅ fatura do cartão/extrato
         'payer': {
-          'email':      emailFinal,
+          'email':      emailFinal,                  // ✅ obrigatório
           'first_name': firstName,
-          'last_name':  lastName,
+          'last_name':  lastName,                    // ✅ payer.last_name obrigatório
           'identification': {
             'type':   'CPF',
             'number': cpfFinal,
@@ -640,6 +675,18 @@ class MercadoPagoService extends ChangeNotifier {
           'comissao':       valor * _config.comissaoPercent,
         },
         'notification_url': _config.notificationUrl,
+        'additional_info': {                         // ✅ informações extras para anti-fraude
+          'items': [{
+            'id':          produtoId,
+            'title':       produtoNome.isNotEmpty ? produtoNome : 'Produto ShareWallet',
+            'description': produtoNome.isNotEmpty
+                ? 'Pagamento via PIX — $produtoNome — plataforma ShareWallet'
+                : 'Pagamento via PIX — plataforma ShareWallet',
+            'quantity':    1,
+            'unit_price':  valor,
+            'category_id': 'services',
+          }],
+        },
       };
 
       final response = await http.post(
@@ -648,6 +695,8 @@ class MercadoPagoService extends ChangeNotifier {
           'Authorization':     'Bearer ${creds.accessToken}',
           'Content-Type':      'application/json',
           'X-Idempotency-Key': externalRef,
+          if (_getMpDeviceId() != null)
+            'X-Device-Session-Id': _getMpDeviceId()!,  // ✅ device_id para Quality Score
         },
         body: jsonEncode(body),
       );
@@ -664,6 +713,8 @@ class MercadoPagoService extends ChangeNotifier {
               'Authorization':     'Bearer ${newCreds.accessToken}',
               'Content-Type':      'application/json',
               'X-Idempotency-Key': '${externalRef}_retry',
+              if (_getMpDeviceId() != null)
+                'X-Device-Session-Id': _getMpDeviceId()!,  // ✅ device_id no retry
             },
             body: jsonEncode(body),
           );
