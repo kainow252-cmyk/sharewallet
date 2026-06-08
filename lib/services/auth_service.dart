@@ -260,6 +260,27 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  // ── Atualizar campos do perfil diretamente (sem depender do cache Firestore) ─
+
+  void updateCurrentUser({
+    String? nome,
+    String? telefone,
+    String? cpf,
+    String? pixKey,
+    String? pixKeyType,
+  }) {
+    if (_currentUser != null) {
+      _currentUser = _currentUser!.copyWith(
+        nome: nome,
+        telefone: telefone,
+        cpf: cpf,
+        pixKey: pixKey,
+        pixKeyType: pixKeyType,
+      );
+      notifyListeners();
+    }
+  }
+
   // ── Recarregar perfil ─────────────────────────────────────────────────────
 
   Future<void> refreshProfile() async {

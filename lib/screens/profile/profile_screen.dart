@@ -38,18 +38,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _pixCtrl      = TextEditingController(
         text: (user?.pixKey.isNotEmpty == true) ? user!.pixKey : (user?.email ?? ''));
 
-    // Recarrega perfil ao abrir (garante dados atualizados do Firestore)
+    // Recarrega perfil ao abrir — usa D1 como fonte de verdade
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await context.read<AuthService>().refreshProfile();
+      final auth = context.read<AuthService>();
+
+      // 1. Tenta carregar dados frescos do D1 (mais confiável que Firestore cache)
+      try {
+        final email = auth.currentUser?.email ?? '';
+        if (email.isNotEmpty) {
+          final d1Data = await CfApiService.getAffiliateByEmail(email);
+          if (d1Data != null && mounted) {
+            final d1Nome     = d1Data['nome']?.toString() ?? '';
+            final d1Cpf      = d1Data['cpf']?.toString() ?? '';
+            final d1Tel      = d1Data['telefone']?.toString() ?? '';
+            final d1Pix      = d1Data['pix_key']?.toString() ?? '';
+
+            // Atualiza AuthService com dados do D1
+            auth.updateCurrentUser(
+              nome: d1Nome.isNotEmpty ? d1Nome : null,
+              cpf: d1Cpf.isNotEmpty ? d1Cpf : null,
+              telefone: d1Tel.isNotEmpty ? d1Tel : null,
+              pixKey: d1Pix.isNotEmpty ? d1Pix : null,
+            );
+
+            // Atualiza os controllers com dados reais do D1
+            if (d1Nome.isNotEmpty) _nomeCtrl.text = d1Nome;
+            if (d1Cpf.isNotEmpty)  _cpfCtrl.text  = d1Cpf;
+            if (d1Tel.isNotEmpty)  _telefoneCtrl.text = d1Tel;
+            if (d1Pix.isNotEmpty)  _pixCtrl.text  = d1Pix;
+            else if (email.isNotEmpty) _pixCtrl.text = email;
+            if (mounted) setState(() {});
+            return; // D1 carregou com sucesso — não precisa do Firestore
+          }
+        }
+      } catch (_) {}
+
+      // 2. Fallback: Firestore (caso D1 falhe)
+      await auth.refreshProfile();
       if (!mounted) return;
-      final u = context.read<AuthService>().currentUser;
+      final u = auth.currentUser;
       if (u != null) {
         _nomeCtrl.text     = u.nome;
         _emailCtrl.text    = u.email;
         _telefoneCtrl.text = u.telefone;
         _cpfCtrl.text      = u.cpf;
-        // pixKey real — nunca mais sobrescreve com email
         _pixCtrl.text      = u.pixKey.isNotEmpty ? u.pixKey : u.email;
+        setState(() {});
       }
     });
   }
@@ -68,33 +102,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
+    final nome     = _nomeCtrl.text.trim();
+    final telefone = _telefoneCtrl.text.trim();
+    final cpf      = _cpfCtrl.text.trim();
+    final pixKey   = _pixCtrl.text.trim();
+
     try {
       final auth = context.read<AuthService>();
-      final uid = auth.currentUser?.id ?? '';
+      final uid  = auth.currentUser?.id ?? '';
 
-      // Salva no Firestore (set+merge — funciona mesmo sem doc existir)
+      // 1️⃣ Salva no Firestore (set+merge — cria se não existir)
       await FirebaseUserService.atualizarPerfil(
         uid: uid,
-        nome: _nomeCtrl.text.trim(),
-        telefone: _telefoneCtrl.text.trim(),
-        cpf: _cpfCtrl.text.trim(),
-        pixKey: _pixCtrl.text.trim(),
+        nome: nome,
+        telefone: telefone,
+        cpf: cpf,
+        pixKey: pixKey,
         email: auth.currentUser?.email ?? '',
         affiliateCode: auth.currentUser?.affiliateCode ?? '',
       );
 
-      // Sincroniza no D1 (Worker) — upsert: cria o registro se não existir
-      // ignore: unawaited_futures
-      CfApiService.updateAffiliate(uid, {
-        'nome': _nomeCtrl.text.trim(),
+      // 2️⃣ Sincroniza no D1 — aguarda para garantir consistência
+      await CfApiService.updateAffiliate(uid, {
+        'nome': nome,
         'email': auth.currentUser?.email ?? '',
-        'telefone': _telefoneCtrl.text.trim(),
-        'cpf': _cpfCtrl.text.trim(),
-        'pix_key': _pixCtrl.text.trim(),
+        'telefone': telefone,
+        'cpf': cpf,
+        'pix_key': pixKey,
         'affiliate_code': auth.currentUser?.affiliateCode ?? '',
       }).catchError((_) => null);
 
-      await auth.refreshProfile();
+      // 3️⃣ Atualiza o currentUser DIRETAMENTE no AuthService
+      // Evita depender do cache Firestore que pode retornar dados antigos
+      auth.updateCurrentUser(
+        nome: nome,
+        telefone: telefone,
+        cpf: cpf,
+        pixKey: pixKey,
+      );
+
+      // 4️⃣ Tenta refreshProfile em background para sincronizar com servidor
+      auth.refreshProfile().catchError((_) {});
 
       if (!mounted) return;
       setState(() { _editMode = false; _saving = false; });
