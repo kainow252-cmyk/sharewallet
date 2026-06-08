@@ -406,51 +406,20 @@ class FirebaseUserService {
 
       final affiliateCode = _toStr(aData['affiliate_code'], fallback: _gerarCodigo(uid));
 
-      // ── Merge D1 quando Firestore tem campos vazios ───────────────────────
-      // O D1 é a fonte verdade para dados editáveis (telefone, CPF, PIX)
-      // Se Firestore tiver campos vazios e D1 tiver dados → usa D1
-      String nomeResolvido     = _toStr(aData['nome'], fallback: displayName ?? email.split('@').first);
-      String cpfResolvido      = _toStr(aData['cpf']);
-      String telefoneResolvido = _toStr(aData['telefone']);
-      String pixKeyResolvido   = _toStr(aData['pix_key'], fallback: email);
-      String pixKeyTypeResolvido = _toStr(aData['pix_key_type'], fallback: 'EMAIL');
+      // ── Monta campos do perfil sem bloquear no D1 ────────────────────────
+      // OTIMIZAÇÃO DE LOGIN: NÃO fazemos request D1 aqui.
+      // O merge D1 agora acontece em background (após retornar o UserModel),
+      // eliminando 2-3 requests HTTP do caminho crítico do login.
+      final String nomeResolvido     = _toStr(aData['nome'], fallback: displayName ?? email.split('@').first);
+      final String cpfResolvido      = _toStr(aData['cpf']);
+      final String telefoneResolvido = _toStr(aData['telefone']);
+      final String pixKeyResolvido   = _toStr(aData['pix_key'], fallback: email);
+      final String pixKeyTypeResolvido = _toStr(aData['pix_key_type'], fallback: 'EMAIL');
 
-      final precisaMergD1 = cpfResolvido.isEmpty || telefoneResolvido.isEmpty;
-      if (precisaMergD1) {
-        try {
-          final d1Data = await CfApiService.getAffiliateByEmail(email);
-          if (d1Data != null) {
-            if (cpfResolvido.isEmpty) {
-              cpfResolvido = d1Data['cpf']?.toString() ?? '';
-            }
-            if (telefoneResolvido.isEmpty) {
-              telefoneResolvido = d1Data['telefone']?.toString() ?? '';
-            }
-            if (nomeResolvido.isEmpty || nomeResolvido == email.split('@').first) {
-              final d1Nome = d1Data['nome']?.toString() ?? '';
-              if (d1Nome.isNotEmpty) nomeResolvido = d1Nome;
-            }
-            final d1Pix = d1Data['pix_key']?.toString() ?? '';
-            if (pixKeyResolvido.isEmpty || pixKeyResolvido == email) {
-              if (d1Pix.isNotEmpty) pixKeyResolvido = d1Pix;
-            }
-            // Sincroniza de volta para o Firestore (fill missing fields)
-            if (cpfResolvido.isNotEmpty || telefoneResolvido.isNotEmpty) {
-              db.collection('affiliates').doc(uid).set({
-                if (cpfResolvido.isNotEmpty) 'cpf': cpfResolvido,
-                if (telefoneResolvido.isNotEmpty) 'telefone': telefoneResolvido,
-                if (nomeResolvido.isNotEmpty) 'nome': nomeResolvido,
-                if (d1Pix.isNotEmpty) 'pix_key': d1Pix,
-                'updated_at': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true)).catchError((_) {});
-            }
-          }
-        } catch (_) {}
-      }
-
-      // Sincronizar com D1 em background (sem bloquear o login)
-      // Garante que afiliados antigos também apareçam no Admin
-      _sincronizarD1(
+      // Sincronizar com D1 em background — NÃO bloqueia o login
+      // Garante que afiliados apareçam no Admin e mantém D1 atualizado.
+      // O merge D1→Firestore é feito dentro do _sincronizarD1 se campos estiverem vazios.
+      Future.microtask(() => _sincronizarD1(
         uid: uid,
         nome: nomeResolvido,
         email: email,
@@ -460,7 +429,8 @@ class FirebaseUserService {
         sponsorCode: aData['sponsor_code']?.toString(),
         pixKey: pixKeyResolvido,
         pixKeyType: pixKeyTypeResolvido,
-      ).catchError((_) {});
+        db: db,
+      ).catchError((_) {}));
 
       return UserModel(
         id: uid,
@@ -551,6 +521,8 @@ class FirebaseUserService {
 
   /// Sincroniza o afiliado no banco D1 do Cloudflare Worker.
   /// Isso torna o usuário visível no painel Admin (que lê do D1).
+  /// Também faz merge D1→Firestore quando campos estão vazios (ex: CPF, telefone).
+  /// [db] é passado opcionalmente para o merge Firestore; se null, apenas sincroniza D1.
   static Future<void> _sincronizarD1({
     required String uid,
     required String nome,
@@ -561,17 +533,34 @@ class FirebaseUserService {
     String? sponsorCode,
     String pixKey = '',
     String pixKeyType = 'EMAIL',
+    FirebaseFirestore? db,
   }) async {
     try {
       // Verifica se já existe no D1 pelo email
       final existing = await CfApiService.getAffiliateByEmail(email);
       if (existing != null) {
-        // Afiliado já existe — verifica se o id do D1 é diferente do Firebase UID
+        // ── Merge D1→Firestore quando campos Firestore estão vazios ─────────
+        // Feito AQUI (background) ao invés de antes do retorno do UserModel,
+        // eliminando latência de request D1 do caminho crítico do login.
+        if (db != null && (cpf.isEmpty || telefone.isEmpty)) {
+          final d1Cpf  = existing['cpf']?.toString() ?? '';
+          final d1Tel  = existing['telefone']?.toString() ?? '';
+          final d1Pix  = existing['pix_key']?.toString() ?? '';
+          final d1Nome = existing['nome']?.toString() ?? '';
+          if (d1Cpf.isNotEmpty || d1Tel.isNotEmpty) {
+            db.collection('affiliates').doc(uid).set({
+              if (d1Cpf.isNotEmpty && cpf.isEmpty) 'cpf': d1Cpf,
+              if (d1Tel.isNotEmpty && telefone.isEmpty) 'telefone': d1Tel,
+              if (d1Nome.isNotEmpty) 'nome': d1Nome,
+              if (d1Pix.isNotEmpty) 'pix_key': d1Pix,
+              'updated_at': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true)).catchError((_) {});
+          }
+        }
+
         final d1Id = existing['id']?.toString() ?? '';
         if (d1Id.isNotEmpty && d1Id != uid) {
-          // IDs diferentes: precisamos atualizar PELO id do D1 (não pelo uid novo)
-          // Mas também criamos uma entrada no D1 com o Firebase UID como id
-          // para que wallets/{uid} funcione corretamente
+          // IDs diferentes: atualiza pelo id do D1 e cria espelho com Firebase UID
           await CfApiService.updateAffiliate(d1Id, {
             'nome': nome,
             'email': email,
@@ -580,7 +569,6 @@ class FirebaseUserService {
             'pix_key': pixKey.isNotEmpty ? pixKey : email,
             'affiliate_code': affiliateCode,
           });
-          // Criar registro espelho com Firebase UID (para que wallet seja encontrada)
           await CfApiService.updateAffiliate(uid, {
             'nome': nome,
             'email': email,
@@ -664,10 +652,21 @@ class FirebaseUserService {
         app: FirebaseFirestore.instance.app,
         databaseId: _databaseId,
       );
-      _dbInstance!.settings = const Settings(
-        persistenceEnabled: true,
-        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-      );
+      // Web: persistenceEnabled:false evita o IndexedDB lock loop que causa
+      // backoff exponencial (~50s de login). No mobile mantemos true para offline.
+      // webExperimentalAutoDetectLongPolling: fallback automático para long-polling
+      // quando WebChannel falha (resolve o GET Listen/channel loop em redes restritivas).
+      if (kIsWeb) {
+        _dbInstance!.settings = const Settings(
+          persistenceEnabled: false,
+          webExperimentalAutoDetectLongPolling: true,
+        );
+      } else {
+        _dbInstance!.settings = const Settings(
+          persistenceEnabled: true,
+          cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+        );
+      }
       return _dbInstance;
     } catch (_) {
       try {

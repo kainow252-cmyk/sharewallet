@@ -43,11 +43,13 @@ void main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
-    // Configura Firestore para suportar múltiplas abas no Web
-    // sem isso: "Failed to obtain exclusive access to the persistence layer"
+    // Web: desabilita persistência para evitar o IndexedDB lock loop
+    // Com persistenceEnabled:true no Web, múltiplas abas / reloads causam
+    // falhas repetidas no GET Listen/channel → backoff exponencial ~50s de login.
+    // Referência: https://firebase.google.com/docs/firestore/manage-data/enable-offline
     if (kIsWeb) {
       FirebaseFirestore.instance.settings = const Settings(
-        persistenceEnabled: true,
+        persistenceEnabled: false,
       );
     }
   } catch (e) {
