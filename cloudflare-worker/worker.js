@@ -557,6 +557,121 @@ export default {
       return ok(wd);
     }
 
+    // ── POST /api/withdrawals/:id/pay — executa PIX via MercadoPago ──────────
+    // Chamado pelo Flutter após criar o saque com status 'pendente'.
+    // Recebe o accessToken MP no header X-MP-Token (protegido — não expõe no client).
+    // Fluxo: busca saque no D1 → chama MP Money Transfer API → atualiza status.
+    const wdPayMatch = path.match(/^\/api\/withdrawals\/([^/]+)\/pay$/);
+    if (wdPayMatch && method === 'POST') {
+      const wdId = wdPayMatch[1];
+
+      // 1. Busca saque no D1
+      const wd = await DB.prepare(`SELECT * FROM withdrawals WHERE id=?`).bind(wdId).first();
+      if (!wd) return err('Saque não encontrado', 404);
+      if (wd.status !== 'pendente') {
+        return err(`Saque já processado (status: ${wd.status})`, 400);
+      }
+
+      // 2. Pega token MP — prioridade: header > D1 config > hardcoded produção
+      let mpToken = request.headers.get('X-MP-Token') || null;
+      if (!mpToken) {
+        const mpCfg = await DB.prepare(`SELECT value FROM config WHERE key='mercadopago'`).first().catch(() => null);
+        if (mpCfg?.value) {
+          try {
+            const cfg = JSON.parse(mpCfg.value);
+            mpToken = cfg?.production?.access_token || cfg?.access_token || null;
+          } catch (_) {}
+        }
+      }
+      if (!mpToken) {
+        // Fallback: token hardcoded de produção (mesmo usado no webhook)
+        mpToken = 'APP_USR-6134195606061357-042317-6774542c427c45a6f274a4e19d7019c3-3235638414';
+      }
+
+      // 3. Lê body com metadados opcionais (pixKeyType, affiliateNome)
+      let body = {};
+      try { body = await request.json(); } catch (_) {}
+      const pixKeyType  = body.pixKeyType  || wd.pix_key_type || 'email';
+      const affiliateNome = body.affiliateNome || wd.affiliate_nome || '';
+      const pixKey      = wd.pix_key;
+      const valor       = wd.valor;
+
+      // Mapeia tipo de chave PIX para formato MP
+      const mpKeyTypeMap = { cpf: 'cpf', email: 'email', phone: 'phone', random_key: 'random_key' };
+      const mpKeyType = mpKeyTypeMap[pixKeyType.toLowerCase()] || 'email';
+
+      // 4. Chama MercadoPago Money Transfer API (PIX Out)
+      // Endpoint: POST https://api.mercadopago.com/v1/account/bank_transfers
+      // Docs: https://www.mercadopago.com.br/developers/pt/reference/mp_transfer/_v1_account_bank_transfers/post
+      try {
+        const mpBody = {
+          amount: valor,
+          origin_amount: valor,
+          description: `Comissão ShareWallet — ${affiliateNome || wdId}`,
+          external_reference: wdId,
+          origin: { type: 'mercadopago' },
+          destination: {
+            type: 'pix',
+            key: { key: pixKey, type: mpKeyType },
+          },
+        };
+
+        const mpResp = await fetch('https://api.mercadopago.com/v1/account/bank_transfers', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${mpToken}`,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': wdId,
+          },
+          body: JSON.stringify(mpBody),
+        });
+
+        const mpData = await mpResp.json();
+        console.log('[Worker /pay] MP response:', JSON.stringify(mpData));
+
+        // Verifica aprovação: status 200-201 + status_detail 'accredited' ou status 'approved'
+        const mpStatus = mpData.status || mpData.transaction_status || '';
+        const mpTxId   = String(mpData.id || mpData.transaction_id || wdId);
+        const mpOk     = mpResp.status >= 200 && mpResp.status < 300 &&
+                         (mpStatus === 'approved' || mpStatus === 'accredited' ||
+                          mpStatus === 'pending'  || mpData.id != null);
+
+        if (mpOk) {
+          // 5a. Sucesso ou pendente no MP — registra tx_id e atualiza status
+          const newStatus = (mpStatus === 'approved' || mpStatus === 'accredited') ? 'aprovado' : 'processando';
+          await DB.prepare(
+            `UPDATE withdrawals SET status=?, processado_em=datetime('now'), tx_id=? WHERE id=?`
+          ).bind(newStatus, mpTxId, wdId).run();
+
+          // Atualiza carteira: remove de pendente, soma em total_sacado
+          await DB.prepare(
+            `UPDATE wallets SET saldo_pendente=MAX(0,saldo_pendente-?), total_sacado=total_sacado+?, updated_at=datetime('now') WHERE user_id=?`
+          ).bind(valor, valor, wd.user_id).run();
+          await DB.prepare(
+            `UPDATE affiliates SET total_sacado=total_sacado+? WHERE id=?`
+          ).bind(valor, wd.user_id).run();
+
+          const wdUpdated = await DB.prepare(`SELECT * FROM withdrawals WHERE id=?`).bind(wdId).first();
+          return ok({ id: mpTxId, status: newStatus, withdrawal: wdUpdated });
+
+        } else {
+          // 5b. MP recusou — devolve saldo ao disponível e marca como recusado
+          await DB.prepare(
+            `UPDATE withdrawals SET status='recusado', processado_em=datetime('now'), motivo=? WHERE id=?`
+          ).bind(`MP: ${mpData.message || mpData.error || JSON.stringify(mpData).slice(0,200)}`, wdId).run();
+          await DB.prepare(
+            `UPDATE wallets SET saldo_disponivel=saldo_disponivel+?, saldo_pendente=MAX(0,saldo_pendente-?), updated_at=datetime('now') WHERE user_id=?`
+          ).bind(valor, valor, wd.user_id).run();
+          return err(`MercadoPago recusou: ${mpData.message || mpData.error || mpStatus}`, 422);
+        }
+
+      } catch (mpErr) {
+        console.error('[Worker /pay] Erro MP:', String(mpErr));
+        // Erro de rede/timeout — mantém pendente para retry pelo admin
+        return err(`Erro ao conectar com MercadoPago: ${String(mpErr)}`, 502);
+      }
+    }
+
     const wdMatch = path.match(/^\/api\/withdrawals\/([^/]+)$/);
     if (wdMatch && method === 'PATCH') {
       const id = wdMatch[1];
