@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/app/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Affiliate Wallet — Plataforma de afiliados e assinaturas.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Affiliate Wallet">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Google Sign-In Web OAuth Client ID -->
+  <meta name="google-signin-client_id" content="470218127330-d1tr5j60i6db3ui56jgdqhar039dilvh.apps.googleusercontent.com">
+
+  <!-- MercadoPago.JS V2 SDK — obrigatório para device_id e Secure Fields (PCI Compliance) -->
+  <!-- Requisito do Quality Score MP: SDK do frontend + Identificador do dispositivo -->
+  <script src="https://sdk.mercadopago.com/js/v2"></script>
+  <script>
+    // Inicializa MP SDK V2 com public key de produção.
+    // O SDK gera automaticamente um session fingerprint (device_id) logo após a
+    // instanciação. Esse id é lido pelo Flutter via dart:html e enviado no header
+    // X-Device-Session-Id de cada pagamento — campo obrigatório para o Quality Score.
+    (function initMpSdk() {
+      var MP_PUBLIC_KEY = 'APP_USR-2e7cff35-b8f2-4448-a7b1-9c15a75bcae4';
+
+      function tryInit() {
+        if (typeof MercadoPago === 'undefined') return;
+        try {
+          window._mpInstance = new MercadoPago(MP_PUBLIC_KEY, { locale: 'pt-BR' });
+
+          // Aguarda o SDK popular o MP_DEVICE_SESSION_ID (pode levar até 2s)
+          var polls = 0;
+          var timer = setInterval(function() {
+            polls++;
+            var sid = window.MP_DEVICE_SESSION_ID
+                   || (window._mpInstance && window._mpInstance.deviceSessionId);
+            if (sid) {
+              // Normaliza: garante que window.MP_DEVICE_SESSION_ID esteja preenchido
+              window.MP_DEVICE_SESSION_ID = sid;
+              clearInterval(timer);
+            } else if (polls >= 20) {
+              // Timeout de 4s — gera um fallback local para não bloquear o checkout
+              window.MP_DEVICE_SESSION_ID = 'sw_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+              clearInterval(timer);
+            }
+          }, 200);
+        } catch(e) { /* SDK não carregado — checkout funciona sem device_id */ }
+      }
+
+      // Tenta agora; se o script ainda não foi parseado, tenta novamente após load
+      tryInit();
+      if (typeof MercadoPago === 'undefined') {
+        window.addEventListener('load', tryInit);
+      }
+    })();
+  </script>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png"/>
+  <link rel="shortcut icon" href="favicon.png"/>
+
+  <title>Affiliate Wallet</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!--
+    Deep link handler: lê o hash da URL ANTES do Flutter carregar
+    e grava no sessionStorage para o Dart ler via dart:js.
+
+    URL esperada: /app/#/produto/p_xxx?ref=CODE
+    window.location.hash → "#/produto/p_xxx?ref=CODE"
+  -->
+  <script>
+    (function() {
+      try {
+        var hash = window.location.hash; // "#/produto/p_xxx?ref=CODE"
+        if (hash && hash.length > 1) {
+          // Remove o "#" inicial
+          var fragment = hash.substring(1); // "/produto/p_xxx?ref=CODE"
+          // Guarda no sessionStorage para o Dart ler
+          sessionStorage.setItem('flutter_initial_route', fragment);
+        }
+      } catch(e) {}
+    })();
+  </script>
+</head>
+<body>
+  <!-- O login usa Firebase signInWithPopup com OAuth redirect nativo -->
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

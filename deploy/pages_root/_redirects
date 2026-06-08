@@ -1,0 +1,5 @@
+# SPA fallback para Flutter web (hash routing)
+# Arquivos estáticos com extensão são servidos diretamente
+# Qualquer outro path dentro de /app/ retorna o index.html
+/app/*  /app/index.html  200
+/       /app/index.html  301
