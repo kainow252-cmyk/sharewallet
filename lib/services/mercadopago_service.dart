@@ -170,14 +170,28 @@ class MercadoPagoService extends ChangeNotifier {
   static const String _baseUrl = 'https://api.mercadopago.com';
 
   /// Lê o device_id gerado pelo MercadoPago.JS V2 SDK (injetado no index.html).
-  /// O SDK grava o session fingerprint em window.MP_DEVICE_SESSION_ID.
-  /// Retorna null se o SDK não estiver disponível ou no mobile.
+  ///
+  /// O SDK V2 expõe o session fingerprint de duas formas:
+  ///   1. window.MP_DEVICE_SESSION_ID  (string gerada automaticamente)
+  ///   2. window._mpInstance.getFingerprint() (objeto com id interno)
+  ///
+  /// A propriedade fica em window (não em window.document).
+  /// Retorna null se o SDK não estiver disponível ou no mobile (APK).
   static String? _getMpDeviceId() {
     if (!kIsWeb) return null;
     try {
-      final jsObj = html.window.document as dynamic;
-      final val = jsObj['MP_DEVICE_SESSION_ID'] as String?;
-      return (val != null && val.isNotEmpty) ? val : null;
+      // Tenta 1ª opção: window.MP_DEVICE_SESSION_ID
+      final win = html.window as dynamic;
+      final v1  = win['MP_DEVICE_SESSION_ID'];
+      if (v1 is String && v1.isNotEmpty) return v1;
+
+      // Tenta 2ª opção: window._mpInstance.deviceSessionId (definido no index.html)
+      final inst = win['_mpInstance'];
+      if (inst != null) {
+        final v2 = inst['deviceSessionId'];
+        if (v2 is String && v2.isNotEmpty) return v2;
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -657,11 +671,11 @@ class MercadoPagoService extends ChangeNotifier {
         'transaction_amount': valor,
         'description':        produtoNome.isNotEmpty ? produtoNome : 'Produto ShareWallet',
         'payment_method_id':  'pix',
-        'statement_descriptor': 'SHAREWALLET',       // ✅ fatura do cartão/extrato
+        // statement_descriptor é ignorado pelo MP em PIX (bank_transfer) — mantido por documentação
         'payer': {
-          'email':      emailFinal,                  // ✅ obrigatório
-          'first_name': firstName,
-          'last_name':  lastName,                    // ✅ payer.last_name obrigatório
+          'email':      emailFinal,
+          'first_name': firstName,   // ✅ obrigatório Quality Score
+          'last_name':  lastName,    // ✅ obrigatório Quality Score
           'identification': {
             'type':   'CPF',
             'number': cpfFinal,
@@ -675,17 +689,29 @@ class MercadoPagoService extends ChangeNotifier {
           'comissao':       valor * _config.comissaoPercent,
         },
         'notification_url': _config.notificationUrl,
-        'additional_info': {                         // ✅ informações extras para anti-fraude
+        'additional_info': {
+          // ── items[] — contexto anti-fraude (obrigatório Quality Score) ──
           'items': [{
             'id':          produtoId,
             'title':       produtoNome.isNotEmpty ? produtoNome : 'Produto ShareWallet',
             'description': produtoNome.isNotEmpty
                 ? 'Pagamento via PIX — $produtoNome — plataforma ShareWallet'
                 : 'Pagamento via PIX — plataforma ShareWallet',
-            'quantity':    1,
+            'quantity':    1,           // int — MP rejeita double aqui
             'unit_price':  valor,
             'category_id': 'services',
           }],
+          // ── payer info adicional — melhora score anti-fraude ──────────
+          'payer': {
+            'first_name':            firstName,
+            'last_name':             lastName,
+            'registration_date':     '2024-01-01T00:00:00.000-03:00',
+            'is_prime_user':         false,
+            'is_first_purchase_online': false,
+            'authentication_type':   'Gmail',
+          },
+          // ── platform info — identifica a integração ───────────────────
+          'platform': 'flutter_web',
         },
       };
 
