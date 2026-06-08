@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/subscription_model.dart';
+import '../../models/product_model.dart';
 import '../../services/admin_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -173,27 +174,51 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
   }
 
   // ── Gerador CSV — Assinaturas ─────────────────────────────────────────────
+  // Tipo legível: 'Mensal (PIX Recorrente)' ou 'Único (PIX Avulso)'
+  static String _tipoLegivel(ChargeType ct) =>
+      ct == ChargeType.pixRecorrente ? 'Mensal (PIX Recorrente)' : 'Único (PIX Avulso)';
 
   String _csvAssinaturas(List<SubscriptionModel> rows) {
     final buf = StringBuffer();
     buf.writeln(
-        'ID,Produto,Afiliado,Código,Valor,Comissão,Status,'
-        'Tipo,Data Início,Próxima Cobrança,Chave PIX,Motivo');
+        'ID,Produto,Nome Afiliado,Código Afiliado,'
+        'Valor (R\$),Comissão (R\$),Comissão (%),'
+        'Status,Tipo de Cobrança,'
+        'Data Início,Data Cancelamento,Próxima Cobrança,Dia Cobrança,'
+        'Chave PIX Assinante,Motivo,Meses Ativo,Total Comissões Geradas (R\$)');
     for (final s in rows) {
       buf.writeln([
-        _esc(s.id), _esc(s.productNome),
-        _esc(s.affiliateNome ?? ''), _esc(s.affiliateCode),
+        _esc(s.id),
+        _esc(s.productNome),
+        _esc(s.affiliateNome ?? ''),
+        _esc(s.affiliateCode),
         s.valor.toStringAsFixed(2),
-        s.comissao.toStringAsFixed(2),
-        _esc(s.status.name),
-        _esc(s.chargeType.name),
+        s.valorComissao.toStringAsFixed(2),           // R$ correto
+        '${s.comissaoPercent}%',                      // percentual legível
+        _esc(_statusLegivel(s.status)),
+        _esc(_tipoLegivel(s.chargeType)),              // tipo legível
         _dateFmt.format(s.dataInicio),
+        s.dataCancelamento != null
+            ? _dateFmt.format(s.dataCancelamento!) : '',
         _dateFmt.format(s.proximaCobranca),
+        s.chargeType == ChargeType.pixRecorrente
+            ? s.diaCobranca.toString() : 'N/A',
         _esc(s.pixKey ?? ''),
         _esc(s.motivo ?? ''),
+        s.mesesAtivo.toString(),
+        s.totalComissoesGeradas.toStringAsFixed(2),
       ].join(','));
     }
     return buf.toString();
+  }
+
+  static String _statusLegivel(SubscriptionStatus st) {
+    switch (st) {
+      case SubscriptionStatus.ativa:      return 'Ativa';
+      case SubscriptionStatus.pendente:   return 'Pendente';
+      case SubscriptionStatus.cancelada:  return 'Cancelada';
+      case SubscriptionStatus.aguardando: return 'Aguardando';
+    }
   }
 
   static String _esc(String v) {
@@ -519,18 +544,27 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                             .map((s) => {
                                   'id': s.id,
                                   'product_nome': s.productNome,
-                                  'affiliate_nome': s.affiliateNome,
+                                  'affiliate_nome': s.affiliateNome ?? '',
                                   'affiliate_code': s.affiliateCode,
                                   'valor': s.valor,
-                                  'comissao': s.comissao,
-                                  'status': s.status.name,
-                                  'charge_type': s.chargeType.name,
-                                  'data_inicio':
-                                      s.dataInicio.toIso8601String(),
+                                  'valor_comissao': s.valorComissao,
+                                  'comissao_percent': s.comissaoPercent,
+                                  'status': _statusLegivel(s.status),
+                                  'tipo_cobranca': _tipoLegivel(s.chargeType),
+                                  'charge_type_raw': s.chargeType.name,
+                                  'data_inicio': s.dataInicio.toIso8601String(),
+                                  'data_cancelamento':
+                                      s.dataCancelamento?.toIso8601String() ?? '',
                                   'proxima_cobranca':
                                       s.proximaCobranca.toIso8601String(),
+                                  'dia_cobranca': s.chargeType ==
+                                      ChargeType.pixRecorrente
+                                      ? s.diaCobranca : null,
                                   'pix_key': s.pixKey ?? '',
                                   'motivo': s.motivo ?? '',
+                                  'meses_ativo': s.mesesAtivo,
+                                  'total_comissoes_geradas':
+                                      s.totalComissoesGeradas,
                                 })
                             .toList()),
                         filenameBase: 'assinaturas',
@@ -539,6 +573,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                               .where((s) =>
                                   s.status == SubscriptionStatus.ativa)
                               .toList();
+                          final mensais = ativas.where((s) =>
+                              s.chargeType == ChargeType.pixRecorrente).toList();
+                          final unicas = ativas.where((s) =>
+                              s.chargeType == ChargeType.pixAvulso).toList();
                           return [
                             _SummaryKpi(
                               label: 'Total',
@@ -547,24 +585,23 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                               color: AppColors.primary,
                             ),
                             _SummaryKpi(
-                              label: 'Ativas',
-                              value: ativas.length.toString(),
-                              icon: Icons.check_circle_rounded,
+                              label: 'Mensais',
+                              value: mensais.length.toString(),
+                              icon: Icons.autorenew_rounded,
                               color: AppColors.success,
                             ),
                             _SummaryKpi(
+                              label: 'Únicas',
+                              value: unicas.length.toString(),
+                              icon: Icons.pix_rounded,
+                              color: AppColors.info,
+                            ),
+                            _SummaryKpi(
                               label: 'MRR',
-                              value: _fmt.format(ativas.fold(
+                              value: _fmt.format(mensais.fold(
                                   0.0, (s, a) => s + a.valor)),
                               icon: Icons.trending_up_rounded,
                               color: AppColors.gold,
-                            ),
-                            _SummaryKpi(
-                              label: 'Comissões',
-                              value: _fmt.format(ativas.fold(
-                                  0.0, (s, a) => s + a.comissao)),
-                              icon: Icons.handshake_rounded,
-                              color: AppColors.info,
                             ),
                           ];
                         },
@@ -1144,6 +1181,11 @@ class _SubscriptionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final df = DateFormat('dd/MM/yyyy');
+    final isMensal = s.chargeType == ChargeType.pixRecorrente;
+    final tipoColor = isMensal ? const Color(0xFF0D7A5A) : AppColors.info;
+    final tipoLabel = isMensal ? 'Mensal' : 'Único';
+    final tipoIcon  = isMensal ? Icons.autorenew_rounded : Icons.pix_rounded;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1154,15 +1196,36 @@ class _SubscriptionRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: s.statusColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.repeat_rounded, color: s.statusColor, size: 20),
+          // Ícone com badge de tipo
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: s.statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(tipoIcon, color: tipoColor, size: 20),
+              ),
+              Positioned(
+                right: -4, top: -4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: tipoColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(tipoLabel,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1177,19 +1240,40 @@ class _SubscriptionRow extends StatelessWidget {
                               color: AppColors.textPrimary),
                           overflow: TextOverflow.ellipsis),
                     ),
-                    Text(
-                      fmt.format(s.valor),
-                      style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          fmt.format(s.valor),
+                          style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13),
+                        ),
+                        Text(
+                          '+ ${fmt.format(s.valorComissao)} comissão',  // R$ correto
+                          style: const TextStyle(
+                              color: AppColors.gold,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                Text(s.affiliateNome ?? s.affiliateCode,
+                Text(
+                  '${s.affiliateNome ?? s.affiliateCode} · ${s.affiliateCode}',
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (s.pixKey != null && s.pixKey!.isNotEmpty)
+                  Text(
+                    'PIX: ${s.pixKey}',
                     style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary),
-                    overflow: TextOverflow.ellipsis),
+                        fontSize: 10, color: AppColors.textHint),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -1197,15 +1281,21 @@ class _SubscriptionRow extends StatelessWidget {
                         label: 'Status',
                         value: s.statusLabel,
                         color: s.statusColor),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     _Mini(
                         label: 'Comissão',
-                        value: fmt.format(s.comissao),
+                        value: '${s.comissaoPercent}%',   // percentual correto
                         color: AppColors.gold),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     _Mini(
                         label: 'Início',
                         value: df.format(s.dataInicio)),
+                    if (isMensal) ...[
+                      const SizedBox(width: 10),
+                      _Mini(
+                          label: 'Próx. cobr.',
+                          value: 'Dia ${s.diaCobranca}'),
+                    ],
                   ],
                 ),
               ],
