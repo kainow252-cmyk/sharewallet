@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../services/wallet_service.dart';
 import '../../services/auth_service.dart';
@@ -47,10 +46,14 @@ class _CarteiraScreenState extends State<CarteiraScreen>
   }
 
   Future<void> _loadWallet({bool forceRefresh = false}) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    // Usa o uid do AuthService (já validado após Firebase.initializeApp)
+    // evita "No Firebase App '[DEFAULT]'" quando FirebaseAuth.instance é
+    // acessado antes da inicialização estar completa.
+    final auth = context.read<AuthService>();
+    final uid = auth.currentUser?.id ?? auth.currentUser?.email;
+    if (uid == null || uid.isEmpty) return;
     await context.read<WalletService>().loadData(
-          userId: uid,
+          userId: auth.currentUser!.id,
           forceRefresh: forceRefresh,
         );
   }
@@ -58,7 +61,8 @@ class _CarteiraScreenState extends State<CarteiraScreen>
   Future<void> _loadIndicados() async {
     setState(() => _loadingIndicados = true);
     try {
-      final email = FirebaseAuth.instance.currentUser?.email ?? '';
+      final auth = context.read<AuthService>();
+      final email = auth.currentUser?.email ?? '';
       final affiliateData = await CfApiService.getAffiliateByEmail(email);
       if (affiliateData == null) return;
 

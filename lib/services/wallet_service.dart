@@ -62,41 +62,42 @@ class WalletService extends ChangeNotifier {
         CfApiService.getWithdrawalsByUser(uid),
       ]);
 
-      // Carteira
-      final walletData = results[0] as Map<String, dynamic>?;
-      if (walletData != null) {
-        final wallet = walletData['wallet'] as Map<String, dynamic>?;
-        if (wallet != null) {
-          _saldoCarteira  = _toDouble(wallet['saldo_disponivel']);
-          _saldoPendente  = _toDouble(wallet['saldo_pendente']);
-          _totalRecebido  = _toDouble(wallet['total_recebido']);
-          _totalSacado    = _toDouble(wallet['total_sacado']);
-          _totalIndicados = _toInt(wallet['total_indicados']);
-        }
-        // Sales e withdrawals já vêm no walletData também
-        final salesRaw = walletData['sales'] as List? ?? [];
-        final wdsRaw   = walletData['withdrawals'] as List? ?? [];
-        _sales     = salesRaw.map((r) => SaleModel.fromD1(r as Map<String, dynamic>)).toList();
-        _withdraws = wdsRaw.map((r) => WithdrawModel.fromD1(r as Map<String, dynamic>)).toList();
-      } else {
-        // Fallback: usa os resultados separados
-        final salesRaw = results[1] as List<Map<String, dynamic>>;
-        final wdsRaw   = results[2] as List<Map<String, dynamic>>;
-        _sales     = salesRaw.map((r) => SaleModel.fromD1(r)).toList();
-        _withdraws = wdsRaw.map((r) => WithdrawModel.fromD1(r)).toList();
+      // Carteira — trata {"wallet":{...}} ou objeto direto com saldo_disponivel
+      final walletRaw = results[0] as Map<String, dynamic>?;
+      final wallet = (walletRaw?['wallet'] as Map<String, dynamic>?)
+                  ?? (walletRaw?.containsKey('saldo_disponivel') == true ? walletRaw : null);
+
+      if (wallet != null) {
+        _saldoCarteira  = _toDouble(wallet['saldo_disponivel']);
+        _saldoPendente  = _toDouble(wallet['saldo_pendente']);
+        _totalRecebido  = _toDouble(wallet['total_recebido']);
+        _totalSacado    = _toDouble(wallet['total_sacado']);
+        _totalIndicados = _toInt(wallet['total_indicados']);
       }
 
+      // Sales: usa walletData['sales'] se existir, senão resultado separado
+      final salesList = (walletRaw?['sales'] as List?)
+                     ?? (results[1] as List? ?? []);
+      final wdsList   = (walletRaw?['withdrawals'] as List?)
+                     ?? (results[2] as List? ?? []);
+
+      _sales     = salesList.map((r) => SaleModel.fromD1(r as Map<String, dynamic>)).toList();
+      _withdraws = wdsList.map((r) => WithdrawModel.fromD1(r as Map<String, dynamic>)).toList();
+
       if (kDebugMode) {
-        debugPrint('[WalletService] D1 — saldo=R\$$_saldoCarteira '
+        debugPrint('[WalletService] D1 — uid=$uid '
+            'saldo=R\$$_saldoCarteira '
+            'wallet=${wallet != null} '
             'sales=${_sales.length} withdrawals=${_withdraws.length}');
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('[WalletService] Erro: $e');
+      if (kDebugMode) debugPrint('[WalletService] Erro loadData: $e');
     }
 
     _isLoading = false;
     notifyListeners();
   }
+
 
   // ── Solicitar Saque via D1 + MercadoPago automático ───────────────────────
   Future<WithdrawResult> solicitarSaque({
