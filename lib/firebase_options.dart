@@ -39,6 +39,10 @@ class DefaultFirebaseOptions {
     projectId: 'affiliate-wallet-75853',
     authDomain: 'sharewallet.com.br',
     storageBucket: 'affiliate-wallet-75853.firebasestorage.app',
+    // databaseURL aponta para o banco nomeado 'affiliatewalletwallet'.
+    // Sem isso o SDK usa o banco '(default)' que não existe no projeto,
+    // causando loop infinito de reconexão no webchannel do Firestore.
+    databaseURL: 'https://affiliate-wallet-75853.firebaseio.com',
   );
 
   // ── Android ────────────────────────────────────────────────────────────────

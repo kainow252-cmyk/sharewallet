@@ -38,7 +38,8 @@
     // instanciação. Esse id é lido pelo Flutter via dart:html e enviado no header
     // X-Device-Session-Id de cada pagamento — campo obrigatório para o Quality Score.
     (function initMpSdk() {
-      var MP_PUBLIC_KEY = 'APP_USR-2e7cff35-b8f2-4448-a7b1-9c15a75bcae4';
+      // Mesma public_key usada no defaultConfig() do Dart (MpConfig.defaultConfig)
+      var MP_PUBLIC_KEY = 'APP_USR-1ca2945d-477b-4691-8976-8a27dc2e806e';
 
       function tryInit() {
         if (typeof MercadoPago === 'undefined') return;

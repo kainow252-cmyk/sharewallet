@@ -220,18 +220,26 @@ class MercadoPagoService extends ChangeNotifier {
   static FirebaseFirestore? get _db {
     if (_dbInst != null) return _dbInst;
     try {
-      // Usa Firebase.app() para NÃO abrir o banco "(default)"
-      // Abrir FirebaseFirestore.instance dispara WebChannel no banco errado
+      // Usa instanceFor com databaseId explícito para garantir que o SDK
+      // conecte no banco correto 'affiliatewalletwallet' e não no '(default)'.
+      // Sem databaseId explícito, o webchannel abre no banco errado e entra
+      // em loop infinito de reconexão quando o banco default não existe.
       _dbInst = FirebaseFirestore.instanceFor(
         app: Firebase.app(),
         databaseId: _databaseId,
       );
-      // Habilita persistência offline — evita erro "client is offline"
-      // quando a rede demora para responder na primeira carga
-      _dbInst!.settings = const Settings(
-        persistenceEnabled: true,
-        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-      );
+      // Desabilita persistência offline no web para evitar conflitos de cache
+      // que podem causar leituras de dados obsoletos em produção.
+      if (kIsWeb) {
+        _dbInst!.settings = const Settings(
+          persistenceEnabled: false,
+        );
+      } else {
+        _dbInst!.settings = const Settings(
+          persistenceEnabled: true,
+          cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+        );
+      }
     } catch (_) {}
     return _dbInst;
   }
@@ -241,32 +249,51 @@ class MercadoPagoService extends ChangeNotifier {
   // ── Carregar config do Firestore ──────────────────────────────────────────
 
   Future<void> loadConfig() async {
+    // Evita carregamento duplo simultâneo
+    if (_isLoading) return;
+    _isLoading = true;
+
     try {
+      final collection = _cfgCollection;
+      if (collection == null) {
+        // Firestore não inicializado — usa defaults hardcoded silenciosamente
+        _isConfigLoaded = true;
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+
       DocumentSnapshot<Map<String, dynamic>>? snap;
 
       // 1. Tenta cache local primeiro (instantâneo, funciona offline)
-      try {
-        snap = await _cfgCollection
-            ?.doc('mercadopago')
-            .get(const GetOptions(source: Source.cache));
-        if (snap != null && snap.exists) {
-          if (kDebugMode) debugPrint('[MP] Config carregada do cache local');
-        } else {
-          snap = null; // cache vazio — vai para rede
+      if (!kIsWeb) {
+        // Cache offline só faz sentido no mobile (web desabilitamos persistência)
+        try {
+          snap = await collection
+              .doc('mercadopago')
+              .get(const GetOptions(source: Source.cache));
+          if (snap != null && snap.exists) {
+            if (kDebugMode) debugPrint('[MP] Config carregada do cache local');
+          } else {
+            snap = null;
+          }
+        } catch (_) {
+          snap = null;
         }
-      } catch (_) {
-        snap = null;
       }
 
-      // 2. Tenta rede (com timeout de 6s)
-      snap ??= await _cfgCollection
-          ?.doc('mercadopago')
-          .get()
-          .timeout(const Duration(seconds: 6));
+      // 2. Tenta rede com timeout de 10s (era 6s — muito curto para conexões lentas)
+      if (snap == null || !snap.exists) {
+        snap = await collection
+            .doc('mercadopago')
+            .get(const GetOptions(source: Source.server))
+            .timeout(const Duration(seconds: 10));
+      }
 
       if (snap != null && snap.exists) {
         _config = MpConfig.fromFirestore(snap.data()!);
         _isConfigLoaded = true;
+        _isLoading = false;
         if (kDebugMode) {
           debugPrint('[MP] Config carregada — modo: ${_config.mode}');
           debugPrint('[MP] Token ativo: ${_config.active.accessToken.isNotEmpty ? "${_config.active.accessToken.substring(0, 20)}..." : "(vazio)"}');
@@ -275,13 +302,16 @@ class MercadoPagoService extends ChangeNotifier {
       } else {
         // Documento não existe — criar com defaults e usar defaults
         _isConfigLoaded = true;
+        _isLoading = false;
         notifyListeners();
+        // Cria o documento com os defaults para próximas cargas
         _saveConfigToFirestore(_config).catchError((_) {});
       }
     } catch (e) {
       debugPrint('[MP] Erro ao carregar config: $e — usando defaults hardcoded');
-      // Usa defaults hardcoded como fallback (token APP_USR-4493... já está no defaultConfig)
+      // Usa defaults hardcoded como fallback — app continua funcionando
       _isConfigLoaded = true;
+      _isLoading = false;
       notifyListeners();
     }
   }
