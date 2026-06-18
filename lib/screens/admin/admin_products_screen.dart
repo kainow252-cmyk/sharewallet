@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/admin_service.dart';
@@ -105,10 +106,37 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                               svc.toggleProductStatus(produtos[i].id),
                           onDelete: () =>
                               _confirmDelete(context, svc, produtos[i]),
+                          onCopyLink: () => _copyProductLink(context, produtos[i].id),
                         ),
                       ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _copyProductLink(BuildContext context, String productId) async {
+    const baseUrl = 'https://sharewallet.com.br/app/#/produto';
+    final link = '$baseUrl/$productId';
+    await Clipboard.setData(ClipboardData(text: link));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded,
+                color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Link copiado!\n$link',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.success,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -164,11 +192,13 @@ class _ProductCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
+  final VoidCallback onCopyLink;
   const _ProductCard(
       {required this.product,
       required this.onEdit,
       required this.onToggle,
-      required this.onDelete});
+      required this.onDelete,
+      required this.onCopyLink});
 
   @override
   Widget build(BuildContext context) {
@@ -300,6 +330,20 @@ class _ProductCard extends StatelessWidget {
             const Divider(height: 16),
             Row(
               children: [
+                // Botão copiar link
+                IconButton(
+                  onPressed: onCopyLink,
+                  icon: const Icon(Icons.link_rounded,
+                      color: AppColors.primary),
+                  tooltip: 'Copiar link do produto',
+                  style: IconButton.styleFrom(
+                    backgroundColor:
+                        AppColors.primary.withValues(alpha: 0.08),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: onEdit,

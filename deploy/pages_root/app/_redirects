@@ -1,0 +1,4 @@
+# SPA fallback — Flutter web router (hash routing)
+# Todos os paths sem extensão de arquivo servem o index.html
+/app/*  /app/index.html  200
+/*      /app/index.html  200

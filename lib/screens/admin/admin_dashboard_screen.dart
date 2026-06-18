@@ -5,7 +5,10 @@ import '../../services/admin_service.dart';
 import '../../theme/app_theme.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
-  const AdminDashboardScreen({super.key});
+  /// Callback para navegar para outra aba do AdminNavScreen.
+  /// Índice 4 = Saques.
+  final void Function(int index)? onNavigateTo;
+  const AdminDashboardScreen({super.key, this.onNavigateTo});
 
   @override
   Widget build(BuildContext context) {
@@ -138,26 +141,55 @@ class AdminDashboardScreen extends StatelessWidget {
                       if (pendingWithdrawals.isNotEmpty) ...[
                         _SectionTitle(
                           title: 'Saques Pendentes',
-                          trailing: _BadgeCount(
-                              count: pendingWithdrawals.length),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _BadgeCount(count: pendingWithdrawals.length),
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: () => onNavigateTo?.call(4),
+                                borderRadius: BorderRadius.circular(6),
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  child: Text(
+                                    'Ver todos →',
+                                    style: TextStyle(
+                                        color: AppColors.primary,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 10),
                         ...pendingWithdrawals.take(3).map(
                               (w) => _PendingWithdrawalTile(
                                 withdrawal: w,
-                                onTap: () {},
+                                onTap: () => onNavigateTo?.call(4),
                               ),
                             ),
                         if (pendingWithdrawals.length > 3)
                           Padding(
                             padding:
                                 const EdgeInsets.symmetric(vertical: 6),
-                            child: Text(
-                              'e mais ${pendingWithdrawals.length - 3} saques pendentes…',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 13),
+                            child: InkWell(
+                              onTap: () => onNavigateTo?.call(4),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                child: Text(
+                                  'Ver todos os ${pendingWithdrawals.length} saques pendentes →',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      color: AppColors.primary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
                             ),
                           ),
                         const SizedBox(height: 24),

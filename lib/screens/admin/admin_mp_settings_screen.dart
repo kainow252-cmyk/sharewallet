@@ -169,6 +169,19 @@ class _CredenciaisTab extends StatelessWidget {
         const SizedBox(height: 12),
         _StatusCard(svc: svc),
         const SizedBox(height: 24),
+
+        // ── Quality Score ──────────────────────────────────────────────────
+        if (!svc.config.production.isEmpty) ...[
+          _SectionHeader(
+            icon: Icons.verified_user_rounded,
+            title: 'Qualidade da Conta',
+            badge: 'MP API',
+            badgeColor: _mpBlue,
+          ),
+          const SizedBox(height: 12),
+          _QualityScoreCard(svc: svc),
+          const SizedBox(height: 24),
+        ],
       ],
     );
   }
@@ -755,6 +768,281 @@ class _SettingsTabState extends State<_SettingsTab> {
           ),
         ),
         const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+// ── Quality Score Card ────────────────────────────────────────────────────────
+
+class _QualityScoreCard extends StatefulWidget {
+  final MercadoPagoService svc;
+  const _QualityScoreCard({required this.svc});
+
+  @override
+  State<_QualityScoreCard> createState() => _QualityScoreCardState();
+}
+
+class _QualityScoreCardState extends State<_QualityScoreCard> {
+  bool _loading = false;
+  Map<String, dynamic>? _data;
+  String? _error;
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    final result = await widget.svc.getAccountQualityInfo();
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (result.containsKey('error')) {
+        _error = result['error'] as String;
+      } else {
+        _data = result;
+      }
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-carrega ao montar
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _mpBlue.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Cabeçalho com botão refresh
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _mpBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.shield_rounded,
+                      color: _mpBlue, size: 18),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Qualidade & Status',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: AppColors.textPrimary)),
+                      Text('Dados da conta MercadoPago',
+                          style: TextStyle(
+                              fontSize: 11, color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _loading ? null : _load,
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.refresh_rounded,
+                          size: 18, color: AppColors.textSecondary),
+                  tooltip: 'Atualizar',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Estado
+            if (_loading && _data == null)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_error != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded,
+                        color: AppColors.error, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(_error!,
+                          style: const TextStyle(
+                              color: AppColors.error, fontSize: 12)),
+                    ),
+                  ],
+                ),
+              )
+            else if (_data != null) ...[
+              // Status da conta
+              _QualityRow(
+                icon: Icons.store_rounded,
+                label: 'Status',
+                value: _data!['account_status'] != 'unknown'
+                    ? (_data!['account_status'] as String).toUpperCase()
+                    : '—',
+                color: _data!['account_status'] == 'active'
+                    ? _mpGreen
+                    : AppColors.warning,
+              ),
+              const Divider(height: 12),
+              _QualityRow(
+                icon: Icons.person_rounded,
+                label: 'User ID',
+                value: _data!['user_id'] as String,
+                color: AppColors.textPrimary,
+              ),
+              const Divider(height: 12),
+              _QualityRow(
+                icon: Icons.email_rounded,
+                label: 'Email',
+                value: _data!['email'] as String,
+                color: AppColors.textPrimary,
+              ),
+              const Divider(height: 12),
+              _QualityRow(
+                icon: Icons.language_rounded,
+                label: 'Site',
+                value: _data!['site_id'] as String,
+                color: AppColors.textPrimary,
+              ),
+              // Permissão de venda
+              if ((_data!['sell_permission'] as Map).isNotEmpty) ...[
+                const Divider(height: 12),
+                _QualityRow(
+                  icon: Icons.sell_rounded,
+                  label: 'Venda',
+                  value: (_data!['sell_permission'] as Map)['allowed'] == true
+                      ? '✅ Permitida'
+                      : '⚠️ Restrita',
+                  color: (_data!['sell_permission'] as Map)['allowed'] == true
+                      ? _mpGreen
+                      : AppColors.warning,
+                ),
+              ],
+              // Tags (reputação)
+              if ((_data!['tags'] as List).isNotEmpty) ...[
+                const Divider(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.label_rounded,
+                        size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 80,
+                      child: Text('Tags',
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary)),
+                    ),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: (_data!['tags'] as List<String>)
+                            .map((tag) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: _mpBlue.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                        color: _mpBlue.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Text(tag,
+                                      style: const TextStyle(
+                                          color: _mpBlue,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600)),
+                                ))
+                            .toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              // Data de registro
+              if ((_data!['registration_date'] as String).isNotEmpty) ...[
+                const Divider(height: 12),
+                _QualityRow(
+                  icon: Icons.calendar_today_rounded,
+                  label: 'Cadastro',
+                  value: _data!['registration_date'] as String,
+                  color: AppColors.textSecondary,
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QualityRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _QualityRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.textSecondary),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 80,
+          child: Text(label,
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary)),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }

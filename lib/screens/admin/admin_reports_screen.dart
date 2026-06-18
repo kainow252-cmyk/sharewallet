@@ -22,7 +22,11 @@ class AdminReportsScreen extends StatefulWidget {
 class _AdminReportsScreenState extends State<AdminReportsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
-  bool _exporting = false;
+  // 3 bools separados — um por aba — evita que o loading de uma aba
+  // afete as outras (bug anterior: _exporting único compartilhado).
+  bool _exportingAfiliados = false;
+  bool _exportingSaques    = false;
+  bool _exportingAssinaturas = false;
   bool _refreshing = false;
 
   // Filtros de data
@@ -461,9 +465,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                         onDownloadCsv: _downloadCsv,
                         onDownloadJson: _downloadJson,
                         onCopy: _copyToClipboard,
-                        exporting: _exporting,
+                        exporting: _exportingAfiliados,
                         onExportingChange: (v) =>
-                            setState(() => _exporting = v),
+                            setState(() => _exportingAfiliados = v),
                       ),
 
                       // ── Saques ─────────────────────────────────────────────
@@ -529,12 +533,12 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                         onDownloadCsv: _downloadCsv,
                         onDownloadJson: _downloadJson,
                         onCopy: _copyToClipboard,
-                        exporting: _exporting,
+                        exporting: _exportingSaques,
                         onExportingChange: (v) =>
-                            setState(() => _exporting = v),
+                            setState(() => _exportingSaques = v),
                       ),
 
-                      // ── Assinaturas ────────────────────────────────────────
+                      // ── Assinaturas ───────────────────────────────────────
                       _ReportTab<SubscriptionModel>(
                         items: svc.subscriptions,
                         dateOf: (s) => s.dataInicio,
@@ -610,9 +614,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                         onDownloadCsv: _downloadCsv,
                         onDownloadJson: _downloadJson,
                         onCopy: _copyToClipboard,
-                        exporting: _exporting,
+                        exporting: _exportingAssinaturas,
                         onExportingChange: (v) =>
-                            setState(() => _exporting = v),
+                            setState(() => _exportingAssinaturas = v),
                       ),
       ],
     );

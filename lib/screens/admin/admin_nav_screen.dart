@@ -30,14 +30,15 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     _NavItem(icon: Icons.assessment_rounded, label: 'Relatórios'),
   ];
 
-  final List<Widget> _screens = const [
-    AdminDashboardScreen(),
-    AdminProductsScreen(),
-    AdminAffiliatesScreen(),
-    AdminSubscriptionsScreen(),
-    AdminWithdrawalsScreen(),
-    AdminMpSettingsScreen(),
-    AdminReportsScreen(),
+  // Não pode ser const pois AdminDashboardScreen recebe callback
+  List<Widget> get _screens => [
+    AdminDashboardScreen(onNavigateTo: _onDestinationSelected),
+    const AdminProductsScreen(),
+    const AdminAffiliatesScreen(),
+    const AdminSubscriptionsScreen(),
+    const AdminWithdrawalsScreen(),
+    const AdminMpSettingsScreen(),
+    const AdminReportsScreen(),
   ];
 
   void _onDestinationSelected(int idx) {
