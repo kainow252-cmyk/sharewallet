@@ -1,0 +1,61 @@
+# ── HTML — nunca cachear ───────────────────────────────────────────────────────
+/app/index.html
+  Content-Type: text/html; charset=utf-8
+  Cache-Control: no-store, no-cache, must-revalidate
+  X-Frame-Options: ALLOWALL
+
+# ── JavaScript — nunca cachear (main.dart.js muda a cada build) ───────────────
+/app/*.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-store, no-cache, must-revalidate
+
+/*.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-store, no-cache, must-revalidate
+
+# ── WASM — imutável com hash no nome ─────────────────────────────────────────
+/app/*.wasm
+  Content-Type: application/wasm
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── JSON / Manifest — nunca cachear ──────────────────────────────────────────
+/app/manifest.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: no-store, no-cache
+
+/app/assets/FontManifest.json
+  Cache-Control: no-store, no-cache, must-revalidate
+
+/app/assets/AssetManifest.json
+  Cache-Control: no-store, no-cache, must-revalidate
+
+/app/assets/AssetManifest.bin
+  Cache-Control: no-store, no-cache, must-revalidate
+
+# ── Fontes — NUNCA cachear (tree-shaking muda codepoints a cada build) ────────
+# NOTA: NÃO usar regra genérica /app/assets/* — Pages acumula headers (não substitui)
+# Cada fonte precisa de regra própria
+/app/assets/fonts/MaterialIcons-Regular.otf
+  Content-Type: font/otf
+  Cache-Control: no-store, no-cache, must-revalidate
+
+/app/assets/fonts/CupertinoIcons.ttf
+  Content-Type: font/ttf
+  Cache-Control: no-store, no-cache, must-revalidate
+
+/app/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf
+  Content-Type: font/ttf
+  Cache-Control: no-store, no-cache, must-revalidate
+
+# ── CanvasKit — imutável (hash no nome) ──────────────────────────────────────
+/app/canvaskit/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── Shaders — imutável (hash no nome) ────────────────────────────────────────
+/app/assets/shaders/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# NOTA IMPORTANTE: Regra genérica /app/assets/* foi REMOVIDA intencionalmente.
+# O Cloudflare Pages ACUMULA headers de múltiplas regras que fazem match —
+# não substitui. Se deixássemos /app/assets/* com immutable, as fontes acima
+# receberiam os dois Cache-Control juntos (no-store + immutable), que é inválido.
