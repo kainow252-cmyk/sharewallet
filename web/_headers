@@ -32,16 +32,17 @@
 /app/assets/AssetManifest.bin
   Cache-Control: no-store, no-cache, must-revalidate
 
-# ── Fontes — NUNCA cachear (tree-shaking muda codepoints a cada build) ────────
+# ── Fontes — imutáveis com hash no nome (versionadas pelo post_build.py) ──────
+# post_build.py renomeia MaterialIcons-Regular.otf → MaterialIcons-Regular.<hash>.otf
+# e atualiza FontManifest.json. Cada build tem URL única → CDN nunca confunde versões.
 # NOTA: NÃO usar regra genérica /app/assets/* — Pages acumula headers (não substitui)
-# Cada fonte precisa de regra própria
-/app/assets/fonts/MaterialIcons-Regular.otf
+/app/assets/fonts/*.otf
   Content-Type: font/otf
-  Cache-Control: no-store, no-cache, must-revalidate
+  Cache-Control: public, max-age=31536000, immutable
 
-/app/assets/fonts/CupertinoIcons.ttf
+/app/assets/fonts/*.ttf
   Content-Type: font/ttf
-  Cache-Control: no-store, no-cache, must-revalidate
+  Cache-Control: public, max-age=31536000, immutable
 
 /app/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf
   Content-Type: font/ttf

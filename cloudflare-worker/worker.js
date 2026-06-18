@@ -1317,5 +1317,45 @@ async function _handleRequest(request, env) {
       }
     }
 
+    // ── GET /assets/* — proxy direto para o Pages (bypass CDN cache poisoning) ──
+    // O CDN da zona sharewallet.com.br pode ter objetos corrompidos (32 bytes)
+    // cacheados com immutable de deploys anteriores. Este Worker faz fetch direto
+    // no deployment mais recente do Pages, sem passar pelo cache da zona.
+    //
+    // Flutter usa este endpoint para FontManifest.json e fontes quando o CDN falha.
+    // URL: https://api.sharewallet.com.br/assets/<path>
+    // Ex: /assets/FontManifest.json → pages.dev/app/assets/FontManifest.json
+    //     /assets/fonts/MaterialIcons-Regular.e20afb18.otf → pages.dev/app/assets/fonts/...
+    if (path.startsWith('/assets/') && method === 'GET') {
+      try {
+        const assetPath = path.slice('/assets/'.length); // remove "/assets/" prefix
+        // Usar o deployment preview mais recente (sem CDN de zona) para garantir conteúdo fresco
+        const pagesUrl = `https://115c8082.sharewallet-app.pages.dev/app/assets/${assetPath}`;
+        const upstream = await fetch(pagesUrl, {
+          headers: { 'Accept': request.headers.get('Accept') || '*/*' },
+          cf: { cacheEverything: false }, // nunca cachear no Worker
+        });
+        if (!upstream.ok) {
+          return new Response(`Asset não encontrado: ${assetPath}`, {
+            status: upstream.status,
+            headers: { ...CORS },
+          });
+        }
+        const contentType = upstream.headers.get('Content-Type') || 'application/octet-stream';
+        const body = await upstream.arrayBuffer();
+        return new Response(body, {
+          status: 200,
+          headers: {
+            ...CORS,
+            'Content-Type': contentType,
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'X-Asset-Proxy': 'worker', // identificar que veio pelo proxy
+          },
+        });
+      } catch (e) {
+        return err(`Erro ao buscar asset: ${e.message}`, 500);
+      }
+    }
+
     return err('Rota não encontrada: ' + path, 404);
 }
