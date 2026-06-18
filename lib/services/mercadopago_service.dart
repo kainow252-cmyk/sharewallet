@@ -510,11 +510,26 @@ class MercadoPagoService extends ChangeNotifier {
         Uri.parse('https://api.sharewallet.com.br/api/mp/account-info'),
       ).timeout(const Duration(seconds: 10));
 
-      if (resp.statusCode == 200) {
-        return jsonDecode(resp.body) as Map<String, dynamic>;
+      final envelope = jsonDecode(resp.body) as Map<String, dynamic>? ?? {};
+
+      if (resp.statusCode == 200 && envelope['success'] == true) {
+        // Worker usa envelope { success: true, result: {...} }
+        // Desempacotar o result para o Dart ler os campos direto
+        final inner = envelope['result'] as Map<String, dynamic>? ?? envelope;
+        // Garantir que 'tags' é List<String> (pode vir como List<dynamic>)
+        final rawTags = inner['tags'];
+        final tags = rawTags is List
+            ? rawTags.map((e) => e.toString()).toList()
+            : <String>[];
+        return {
+          ...inner,
+          'tags': tags,
+        };
       } else {
-        final body = jsonDecode(resp.body) as Map<String, dynamic>? ?? {};
-        return {'error': body['error'] ?? 'Erro ${resp.statusCode}'};
+        final errMsg = envelope['error']
+            ?? envelope['result']?.toString()
+            ?? 'Erro ${resp.statusCode}';
+        return {'error': errMsg};
       }
     } catch (e) {
       return {'error': 'Erro de conexão: $e'};

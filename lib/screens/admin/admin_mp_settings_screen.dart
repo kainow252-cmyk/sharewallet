@@ -872,10 +872,10 @@ class _QualityScoreCardState extends State<_QualityScoreCard> {
             const SizedBox(height: 12),
 
             // Estado
-            if (_loading && _data == null)
+            if (_loading || (_data == null && _error == null))
               const Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
+                  padding: EdgeInsets.symmetric(vertical: 24),
                   child: CircularProgressIndicator(),
                 ),
               )
@@ -935,15 +935,16 @@ class _QualityScoreCardState extends State<_QualityScoreCard> {
                 color: AppColors.textPrimary,
               ),
               // Permissão de venda
-              if ((_data!['sell_permission'] as Map).isNotEmpty) ...[
+              if ((_data!['sell_permission'] as Map? ?? {}).isNotEmpty) ...[
                 const Divider(height: 12),
                 _QualityRow(
                   icon: Icons.sell_rounded,
                   label: 'Venda',
-                  value: (_data!['sell_permission'] as Map)['allowed'] == true
+                  // API retorna 'allow' (não 'allowed')
+                  value: (_data!['sell_permission'] as Map)['allow'] == true
                       ? '✅ Permitida'
                       : '⚠️ Restrita',
-                  color: (_data!['sell_permission'] as Map)['allowed'] == true
+                  color: (_data!['sell_permission'] as Map)['allow'] == true
                       ? _mpGreen
                       : AppColors.warning,
                 ),
@@ -967,7 +968,7 @@ class _QualityScoreCardState extends State<_QualityScoreCard> {
                       child: Wrap(
                         spacing: 4,
                         runSpacing: 4,
-                        children: (_data!['tags'] as List<String>)
+                        children: ((_data!['tags'] as List).cast<String>())
                             .map((tag) => Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 6, vertical: 2),
