@@ -572,7 +572,7 @@ export default {
         return err(`Saque já processado (status: ${wd.status})`, 400);
       }
 
-      // 2. Pega token MP — prioridade: header > D1 config > hardcoded produção
+      // 2. Pega token MP — prioridade: header > D1 config > env.MP_ACCESS_TOKEN
       let mpToken = request.headers.get('X-MP-Token') || null;
       if (!mpToken) {
         const mpCfg = await DB.prepare(`SELECT value FROM config WHERE key='mercadopago'`).first().catch(() => null);
@@ -583,9 +583,12 @@ export default {
           } catch (_) {}
         }
       }
+      if (!mpToken && env?.MP_ACCESS_TOKEN) {
+        // Fallback: variável de ambiente configurada no Cloudflare Dashboard
+        mpToken = env.MP_ACCESS_TOKEN;
+      }
       if (!mpToken) {
-        // Fallback: token hardcoded de produção (mesmo usado no webhook)
-        mpToken = 'APP_USR-6134195606061357-042317-6774542c427c45a6f274a4e19d7019c3-3235638414';
+        return err('Token MP não configurado. Configure nas credenciais do painel admin.', 500);
       }
 
       // 3. Lê body com metadados opcionais (pixKeyType, affiliateNome)
@@ -704,41 +707,181 @@ export default {
     }
 
     // ── /api/payment-status/:paymentId ─────────────────────────────────────
-    // Consultado pelo Flutter via polling para saber se o PIX foi pago
+    // Consultado pelo Flutter via polling para saber se o PIX foi pago.
+    // Estratégia dupla:
+    //   1º) Consulta o D1 (sub já processada pelo webhook → resposta instantânea)
+    //   2º) Se não encontrar ou ainda pendente → consulta a API do MP diretamente
+    //       (garante que pagamentos aprovados sejam detectados mesmo se o webhook atrasar)
     const payStatusMatch = path.match(/^\/api\/payment-status\/([^/]+)$/);
     if (payStatusMatch && method === 'GET') {
       const paymentId = payStatusMatch[1];
       const subId = `sub_pix_${paymentId}`;
 
-      // Busca status da subscription no D1
-      const sub = await DB.prepare(
-        `SELECT id, status, valor, comissao, affiliate_code, product_nome, created_at
-         FROM subscriptions WHERE id=?`
-      ).bind(subId).first().catch(() => null);
-
-      if (!sub) {
-        return ok({ paymentId, status: 'not_found', subStatus: null });
-      }
-
-      // Mapeia status da sub para status do pagamento
       const statusMap = {
         'ativa':     'approved',
         'pendente':  'pending',
         'cancelada': 'cancelled',
         'expirada':  'cancelled',
       };
-      const payStatus = statusMap[sub.status] ?? 'pending';
 
-      return ok({
-        paymentId,
-        status:      payStatus,       // 'approved' | 'pending' | 'cancelled'
-        subStatus:   sub.status,      // status real da sub no D1
-        valor:       sub.valor,
-        comissao:    sub.comissao,
-        productNome: sub.product_nome,
-        affiliateCode: sub.affiliate_code,
-        processedAt: sub.created_at,
-      });
+      // ── 1ª tentativa: D1 (rápido, sem chamada externa) ──────────────────
+      const sub = await DB.prepare(
+        `SELECT id, status, valor, comissao, affiliate_code, product_nome, created_at
+         FROM subscriptions WHERE id=?`
+      ).bind(subId).first().catch(() => null);
+
+      // Sub encontrada E já aprovada → retorna imediatamente
+      if (sub && sub.status === 'ativa') {
+        return ok({
+          paymentId,
+          status:       'approved',
+          subStatus:    sub.status,
+          valor:        sub.valor,
+          comissao:     sub.comissao,
+          productNome:  sub.product_nome,
+          affiliateCode: sub.affiliate_code,
+          processedAt:  sub.created_at,
+          source:       'd1',
+        });
+      }
+
+      // ── 2ª tentativa: API do MercadoPago diretamente ─────────────────────
+      // Necessário quando: (a) webhook ainda não chegou, (b) webhook falhou
+      try {
+        // Obtém access_token do D1 config (configurado pelo admin)
+        let mpAccessToken = null;
+        const mpCfgRow = await DB.prepare(
+          `SELECT value FROM config WHERE key='mp_config' LIMIT 1`
+        ).first().catch(() => null);
+        if (mpCfgRow?.value) {
+          try {
+            const cfg = JSON.parse(mpCfgRow.value);
+            mpAccessToken = cfg?.production?.access_token || cfg?.sandbox?.access_token || null;
+          } catch (_) {}
+        }
+        // Fallback: variável de ambiente (nunca exposta no código)
+        if (!mpAccessToken && env?.MP_ACCESS_TOKEN) {
+          mpAccessToken = env.MP_ACCESS_TOKEN;
+        }
+
+        if (mpAccessToken) {
+          const mpResp = await fetch(
+            `https://api.mercadopago.com/v1/payments/${paymentId}`,
+            { headers: { 'Authorization': `Bearer ${mpAccessToken}` } }
+          ).catch(() => null);
+
+          if (mpResp?.ok) {
+            const payment = await mpResp.json().catch(() => null);
+            const mpStatus = payment?.status ?? 'pending'; // approved | pending | rejected | cancelled
+            const extRef   = payment?.external_reference || '';
+            const valor    = payment?.transaction_amount || 0;
+            const metadata = payment?.metadata || {};
+
+            const affiliateCode = metadata.affiliate_code || extRef.split('_')[1] || '';
+            const produtoId     = metadata.produto_id     || extRef.split('_')[2] || '';
+            const comissao      = metadata.comissao       || (valor * 0.20);
+
+            // Se aprovado pelo MP mas webhook ainda não criou a sub → cria agora
+            if (mpStatus === 'approved') {
+              const existSub2 = await DB.prepare(
+                `SELECT id FROM subscriptions WHERE id=?`
+              ).bind(subId).first().catch(() => null);
+
+              if (!existSub2) {
+                const produtoNome = payment.description || produtoId || '';
+                const proximaData = new Date();
+                proximaData.setDate(proximaData.getDate() + 30);
+                await DB.prepare(
+                  `INSERT INTO subscriptions
+                    (id, product_id, product_nome, valor, comissao, affiliate_code,
+                     charge_type, status, dia_cobranca, data_inicio, proxima_cobranca)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(id) DO UPDATE SET status='ativa'`
+                ).bind(
+                  subId, produtoId, produtoNome, valor, comissao,
+                  affiliateCode, 'pixRecorrente', 'ativa', 5,
+                  new Date().toISOString(), proximaData.toISOString()
+                ).run().catch(() => {});
+              } else {
+                await DB.prepare(
+                  `UPDATE subscriptions SET status='ativa' WHERE id=? AND status != 'ativa'`
+                ).bind(subId).run().catch(() => {});
+              }
+
+              // Credita comissão se ainda não creditada
+              if (affiliateCode && comissao > 0) {
+                const saleId = `sale_mp_${paymentId}`;
+                const existSale = await DB.prepare(
+                  `SELECT id FROM sales WHERE id=?`
+                ).bind(saleId).first().catch(() => null);
+                if (!existSale) {
+                  const { results: affs } = await DB.prepare(
+                    `SELECT id FROM affiliates WHERE affiliate_code=?`
+                  ).bind(affiliateCode).all().catch(() => ({ results: [] }));
+                  const affId = affs[0]?.id || null;
+                  if (affId) {
+                    const produtoNome2 = payment.description || produtoId || '';
+                    await DB.prepare(
+                      `INSERT INTO sales (id, user_id, product_id, product_nome, valor, comissao, affiliate_code, status, created_at)
+                       VALUES (?,?,?,?,?,?,?,'aprovado',datetime('now'))`
+                    ).bind(saleId, affId, produtoId, produtoNome2, valor, comissao, affiliateCode).run().catch(() => {});
+                    for (const a of affs) {
+                      await DB.prepare(
+                        `INSERT INTO wallets (user_id, saldo_disponivel, saldo_pendente, total_recebido)
+                         VALUES (?,?,0,?)
+                         ON CONFLICT(user_id) DO UPDATE SET
+                           saldo_disponivel=saldo_disponivel+?,
+                           total_recebido=total_recebido+?,
+                           updated_at=datetime('now')`
+                      ).bind(a.id, comissao, comissao, comissao, comissao).run().catch(() => {});
+                    }
+                    await DB.prepare(
+                      `UPDATE affiliates SET total_comissoes=total_comissoes+?, saldo_disponivel=saldo_disponivel+?, total_assinaturas=total_assinaturas+1 WHERE affiliate_code=?`
+                    ).bind(comissao, comissao, affiliateCode).run().catch(() => {});
+                  }
+                }
+              }
+            }
+
+            // Mapeia status MP → status polling
+            const payStatusFromMp = mpStatus === 'approved' ? 'approved'
+              : (mpStatus === 'rejected' || mpStatus === 'cancelled') ? 'cancelled'
+              : 'pending';
+
+            return ok({
+              paymentId,
+              status:       payStatusFromMp,
+              subStatus:    sub?.status ?? null,
+              valor,
+              comissao,
+              productNome:  payment.description || '',
+              affiliateCode,
+              processedAt:  payment.date_approved || null,
+              source:       'mp_api',
+            });
+          }
+        }
+      } catch (_) {
+        // Falha silenciosa — retorna status baseado no D1 se disponível
+      }
+
+      // ── Fallback final: retorna o que tiver no D1 (ou not_found) ─────────
+      if (sub) {
+        const payStatus = statusMap[sub.status] ?? 'pending';
+        return ok({
+          paymentId,
+          status:       payStatus,
+          subStatus:    sub.status,
+          valor:        sub.valor,
+          comissao:     sub.comissao,
+          productNome:  sub.product_nome,
+          affiliateCode: sub.affiliate_code,
+          processedAt:  sub.created_at,
+          source:       'd1_fallback',
+        });
+      }
+
+      return ok({ paymentId, status: 'not_found', subStatus: null, source: 'none' });
     }
 
     // ── /api/sales ─────────────────────────────────────────────────────────
@@ -961,9 +1104,9 @@ export default {
           } catch (_) {}
         }
 
-        // Fallback: token hardcoded de produção
-        if (!accessToken) {
-          accessToken = 'APP_USR-6134195606061357-042317-6774542c427c45a6f274a4e19d7019c3-3235638414';
+        // Fallback: variável de ambiente (configurada no Cloudflare Dashboard)
+        if (!accessToken && env?.MP_ACCESS_TOKEN) {
+          accessToken = env.MP_ACCESS_TOKEN;
         }
 
         // Consultar API do MercadoPago para obter status real do pagamento

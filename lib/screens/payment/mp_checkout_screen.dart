@@ -426,12 +426,12 @@ class _CheckoutLinkStep extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text('SANDBOX',
+                  child: const Text('CHECKOUT',
                       style: TextStyle(
-                          color: AppColors.success,
+                          color: AppColors.primary,
                           fontWeight: FontWeight.w700,
                           fontSize: 10)),
                 ),

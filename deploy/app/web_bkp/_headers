@@ -1,0 +1,17 @@
+/app/*.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-store, no-cache, must-revalidate
+
+/app/manifest.json
+  Content-Type: application/manifest+json; charset=utf-8
+  Cache-Control: no-store, no-cache
+
+/app/index.html
+  Content-Type: text/html; charset=utf-8
+  Cache-Control: no-store, no-cache, must-revalidate
+
+/app/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/app/canvaskit/*
+  Cache-Control: public, max-age=31536000, immutable

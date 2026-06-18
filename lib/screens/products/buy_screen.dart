@@ -226,7 +226,9 @@ class _BuyScreenState extends State<BuyScreen> {
     });
   }
 
-  // ── Gera PIX via Mercado Pago ─────────────────────────────────────────────
+  // ── Gera pagamento via Mercado Pago ──────────────────────────────────────
+  // Fluxo único:      criarPix()                → QR Code + copia-e-cola + polling
+  // Fluxo recorrente: criarPreferenciaAssinatura() → URL checkout MP (nova aba)
   Future<void> _gerarPix() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -244,22 +246,82 @@ class _BuyScreenState extends State<BuyScreen> {
 
     final mp = context.read<MercadoPagoService>();
 
-    final result = await mp.criarPix(
-      produtoId:     _product!.id,
-      produtoNome:   _product!.nome,
-      valor:         _product!.valor,
-      affiliateId:   widget.affiliateCode,
-      affiliateCode: widget.affiliateCode,
-      clienteNome:   _nomeCtrl.text.trim(),
-      clienteCpf:    _cpfCtrl.text.trim(),
-      clienteEmail:  _emailCtrl.text.trim(),
+    // ── PIX Único: gera QR Code direto ───────────────────────────────────
+    if (_product!.isPixAvulso) {
+      final result = await mp.criarPix(
+        produtoId:     _product!.id,
+        produtoNome:   _product!.nome,
+        valor:         _product!.valor,
+        affiliateId:   widget.affiliateCode,
+        affiliateCode: widget.affiliateCode,
+        clienteNome:   _nomeCtrl.text.trim(),
+        clienteCpf:    _cpfCtrl.text.trim(),
+        clienteEmail:  _emailCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() { _isSubmitting = false; _pixResult = result; });
+      if (result.success) {
+        // preferenceId aqui é o payment_id numérico do MP (ex: "1234567890")
+        _iniciarPolling(result.preferenceId ?? '');
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeInOut,
+            );
+          }
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? 'Erro ao gerar PIX. Tente novamente.'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      return;
+    }
+
+    // ── PIX Recorrente: cria preferência de assinatura → abre checkout MP ─
+    final result = await mp.criarPreferenciaAssinatura(
+      produtoId:        _product!.id,
+      produtoNome:      _product!.nome,
+      produtoDescricao: _product!.descricao.isNotEmpty
+          ? _product!.descricao
+          : 'Assinatura ${_product!.nome} — ShareWallet',
+      valor:            _product!.valor,
+      affiliateId:      widget.affiliateCode,
+      affiliateCode:    widget.affiliateCode,
+      clienteNome:      _nomeCtrl.text.trim(),
+      clienteEmail:     _emailCtrl.text.trim(),
+      clienteCpf:       _cpfCtrl.text.trim().isNotEmpty
+          ? _cpfCtrl.text.trim()
+          : null,
     );
 
     if (!mounted) return;
     setState(() { _isSubmitting = false; _pixResult = result; });
 
     if (result.success) {
-      _iniciarPolling(result.preferenceId ?? '');
+      // Salvar dados do cliente em background
+      _salvarDadosCliente().catchError((_) {});
+
+      // Abre o checkout MP (nova aba no web / browser no mobile)
+      if (result.checkoutUrl != null && result.checkoutUrl!.isNotEmpty) {
+        final opened = await mp.abrirCheckout(result.checkoutUrl!);
+        if (!opened && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Não foi possível abrir o browser. Copie o link abaixo.'),
+              backgroundColor: AppColors.warning,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+      // Scroll para o card com o link de checkout
       Future.delayed(const Duration(milliseconds: 300), () {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -272,7 +334,7 @@ class _BuyScreenState extends State<BuyScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result.errorMessage ?? 'Erro ao gerar PIX. Tente novamente.'),
+          content: Text(result.errorMessage ?? 'Erro ao gerar checkout. Tente novamente.'),
           backgroundColor: AppColors.error,
           duration: const Duration(seconds: 5),
         ),
@@ -472,21 +534,21 @@ class _BuyScreenState extends State<BuyScreen> {
             _HowItWorks(product: product),
             const SizedBox(height: 24),
 
-            // ── Botão gerar PIX ───────────────────────────────────────────────
+            // ── Botão gerar PIX / Checkout ────────────────────────────────
             if (_pixResult == null || !_pixResult!.success)
               PrimaryButton(
                 label: product.isPixRecorrente
-                    ? 'Autorizar e Gerar PIX Recorrente'
+                    ? 'Autorizar e Ir para o Checkout'
                     : 'Gerar QR Code PIX — ${product.valorFormatado}',
                 icon: product.isPixRecorrente
-                    ? Icons.autorenew_rounded
+                    ? Icons.open_in_browser_rounded
                     : Icons.qr_code_rounded,
                 isLoading: _isSubmitting,
                 onPressed: _isSubmitting ? null : _gerarPix,
               ),
 
-            // ── QR Code PIX ───────────────────────────────────────────────────
-            if (_pixResult != null && _pixResult!.success) ...[
+            // ── PIX Único: QR Code ────────────────────────────────────────
+            if (_pixResult != null && _pixResult!.success && product.isPixAvulso) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -537,6 +599,21 @@ class _BuyScreenState extends State<BuyScreen> {
                   minimumSize: const Size.fromHeight(48),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
+              ),
+            ],
+
+            // ── PIX Recorrente: Card de Checkout MP ───────────────────────
+            if (_pixResult != null && _pixResult!.success && product.isPixRecorrente) ...[
+              _CheckoutRecorrenteCard(
+                result: _pixResult!,
+                product: product,
+                onReabrir: () async {
+                  final mp = context.read<MercadoPagoService>();
+                  if (_pixResult?.checkoutUrl != null) {
+                    await mp.abrirCheckout(_pixResult!.checkoutUrl!);
+                  }
+                },
+                onNovaTentativa: () => setState(() { _pixResult = null; }),
               ),
             ],
 
@@ -1474,9 +1551,10 @@ class _HowItWorks extends StatelessWidget {
     final steps = product.isPixRecorrente ? [
       '1️⃣  Preencha seus dados cadastrais acima',
       '2️⃣  Autorize o débito automático mensal',
-      '3️⃣  Um QR Code PIX será gerado para a 1ª cobrança',
-      '4️⃣  Após o pagamento, as próximas cobranças são automáticas todo dia ${product.diaCobranca ?? 5}',
-      '5️⃣  Cancele quando quiser, sem multa',
+      '3️⃣  Você será redirecionado para o checkout seguro do Mercado Pago',
+      '4️⃣  Escolha PIX ou cartão e conclua o pagamento da 1ª mensalidade',
+      '5️⃣  As próximas cobranças são automáticas todo dia ${product.diaCobranca ?? 5}',
+      '6️⃣  Cancele quando quiser, sem multa',
     ] : [
       '1️⃣  Preencha seus dados cadastrais acima',
       '2️⃣  Clique em "Gerar QR Code PIX"',
@@ -1512,6 +1590,190 @@ class _HowItWorks extends StatelessWidget {
                 style: const TextStyle(fontSize: 12,
                     color: Color(0xFF1565C0), height: 1.5)),
           )),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Card de Checkout Recorrente (Mercado Pago) ────────────────────────────────
+class _CheckoutRecorrenteCard extends StatefulWidget {
+  final MpCheckoutResult result;
+  final ProductModel product;
+  final VoidCallback onReabrir;
+  final VoidCallback onNovaTentativa;
+
+  const _CheckoutRecorrenteCard({
+    required this.result,
+    required this.product,
+    required this.onReabrir,
+    required this.onNovaTentativa,
+  });
+
+  @override
+  State<_CheckoutRecorrenteCard> createState() => _CheckoutRecorrenteCardState();
+}
+
+class _CheckoutRecorrenteCardState extends State<_CheckoutRecorrenteCard> {
+  bool _copiou = false;
+
+  void _copiarLink() {
+    final url = widget.result.checkoutUrl ?? '';
+    if (url.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: url));
+    setState(() => _copiou = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('✅ Link de checkout copiado!'),
+        backgroundColor: AppColors.success,
+        duration: Duration(seconds: 3),
+      ),
+    );
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _copiou = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final checkoutUrl = widget.result.checkoutUrl ?? '';
+    final prefId      = widget.result.preferenceId ?? '';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF009EE3).withValues(alpha: 0.5), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF009EE3).withValues(alpha: 0.08),
+            blurRadius: 16, offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ──────────────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF009EE3).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF009EE3),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text('MP',
+                      style: TextStyle(color: Colors.white,
+                          fontWeight: FontWeight.w800, fontSize: 13)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Checkout Recorrente Gerado!',
+                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15,
+                              color: AppColors.textPrimary)),
+                      Text('${widget.product.valorFormatado}/mês · dia ${widget.product.diaCobranca ?? 5}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.check_circle_rounded, color: Color(0xFF009EE3), size: 24),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Info ─────────────────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 16),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'O link foi aberto no seu navegador. Conclua o pagamento no Mercado Pago para ativar a assinatura.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Botão: Abrir novamente ───────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: widget.onReabrir,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF009EE3),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 2,
+              ),
+              icon: const Icon(Icons.open_in_browser_rounded, size: 20),
+              label: const Text('Abrir Checkout Mercado Pago',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // ── Botão: Copiar link ───────────────────────────────────────────
+          if (checkoutUrl.isNotEmpty)
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: _copiarLink,
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(
+                      color: _copiou ? AppColors.success : const Color(0xFF009EE3)),
+                  foregroundColor: _copiou ? AppColors.success : const Color(0xFF009EE3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: Icon(_copiou ? Icons.check_rounded : Icons.copy_rounded, size: 16),
+                label: Text(_copiou ? 'Link Copiado!' : 'Copiar link de pagamento',
+                    style: const TextStyle(fontSize: 12)),
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          // ── ID da preferência ────────────────────────────────────────────
+          if (prefId.isNotEmpty)
+            Text(
+              'ID: ${prefId.length > 24 ? '...${prefId.substring(prefId.length - 20)}' : prefId}',
+              style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+            ),
+          const SizedBox(height: 12),
+
+          // ── Botão: Nova tentativa ────────────────────────────────────────
+          OutlinedButton.icon(
+            onPressed: widget.onNovaTentativa,
+            icon: const Icon(Icons.edit_rounded, size: 16),
+            label: const Text('Corrigir dados e tentar novamente'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(42),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              foregroundColor: AppColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );
