@@ -500,45 +500,22 @@ class MercadoPagoService extends ChangeNotifier {
 
   /// Busca informações de qualidade da conta MP.
   /// Retorna: status_detail, status, sinpe, site_id, level_id, etc.
+  ///
+  /// ⚠️ Não chama api.mercadopago.com diretamente do browser (CORS bloqueado).
+  ///    A chamada é feita via proxy no Cloudflare Worker (/api/mp/account-info)
+  ///    que usa o MP_ACCESS_TOKEN configurado como secret server-side.
   Future<Map<String, dynamic>> getAccountQualityInfo() async {
-    final token = config.production.accessToken;
-    if (token.isEmpty) {
-      return {'error': 'Token não configurado'};
-    }
     try {
-      // Endpoint principal: dados do usuário com campos de status
       final resp = await http.get(
-        Uri.parse('$_baseUrl/users/me'),
-        headers: {'Authorization': 'Bearer $token'},
+        Uri.parse('https://sharewallet-api.kainow252.workers.dev/api/mp/account-info'),
       ).timeout(const Duration(seconds: 10));
 
-      if (resp.statusCode != 200) {
-        return {'error': 'Erro ${resp.statusCode}'};
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      } else {
+        final body = jsonDecode(resp.body) as Map<String, dynamic>? ?? {};
+        return {'error': body['error'] ?? 'Erro ${resp.statusCode}'};
       }
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-
-      // Mapear campos relevantes de qualidade/status
-      final statusDetail = data['status'] as Map<String, dynamic>? ?? {};
-      return {
-        'ok': true,
-        'email': data['email'] ?? '',
-        'user_id': data['id']?.toString() ?? '',
-        'site_id': data['site_id'] ?? '',
-        // Status de conta
-        'account_status': statusDetail['site_status'] ?? 'unknown',
-        'sell_permission': statusDetail['sell'] as Map<String, dynamic>? ?? {},
-        'buy_permission': statusDetail['buy'] as Map<String, dynamic>? ?? {},
-        'immediate_payment': statusDetail['immediate_payment'] as Map<String, dynamic>? ?? {},
-        // Tipo de conta e nível
-        'account_type': data['account_type'] ?? '',
-        'level_id': data['level_id'] ?? '',
-        'context_id': data['context_id'] ?? '',
-        // Flags de reputação
-        'tags': (data['tags'] as List<dynamic>?)?.cast<String>() ?? [],
-        // Identificador de seller
-        'permalink': data['permalink'] ?? '',
-        'registration_date': data['registration_date'] ?? '',
-      };
     } catch (e) {
       return {'error': 'Erro de conexão: $e'};
     }

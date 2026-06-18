@@ -1063,6 +1063,50 @@ export default {
       return ok({ status: 'ok', ts: new Date().toISOString() });
     }
 
+    // ── GET /api/mp/account-info ────────────────────────────────────────────
+    // Proxy server-side para api.mercadopago.com/users/me
+    // O browser não pode chamar a API do MP diretamente por CORS.
+    // O Worker faz a chamada server-side usando o MP_ACCESS_TOKEN secret
+    // e repassa apenas os campos relevantes de volta para o Flutter.
+    if (path === '/api/mp/account-info' && method === 'GET') {
+      try {
+        const mpToken = env.MP_ACCESS_TOKEN;
+        if (!mpToken) {
+          return err('MP_ACCESS_TOKEN não configurado no Worker', 500);
+        }
+        const mpResp = await fetch('https://api.mercadopago.com/users/me', {
+          headers: {
+            'Authorization': `Bearer ${mpToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!mpResp.ok) {
+          const body = await mpResp.text();
+          return err(`Erro MP ${mpResp.status}: ${body}`, mpResp.status);
+        }
+        const data = await mpResp.json();
+        const statusDetail = data.status || {};
+        return ok({
+          ok: true,
+          email:              data.email        || '',
+          user_id:            String(data.id    || ''),
+          site_id:            data.site_id      || '',
+          account_status:     statusDetail.site_status || 'unknown',
+          sell_permission:    statusDetail.sell         || {},
+          buy_permission:     statusDetail.buy          || {},
+          immediate_payment:  statusDetail.immediate_payment || {},
+          account_type:       data.account_type      || '',
+          level_id:           data.level_id          || '',
+          context_id:         data.context_id        || '',
+          tags:               data.tags              || [],
+          permalink:          data.permalink         || '',
+          registration_date:  data.registration_date || '',
+        });
+      } catch (e) {
+        return err(`Erro ao buscar info MP: ${e.message}`, 500);
+      }
+    }
+
     // ── /api/webhook/mp ────────────────────────────────────────────────────
     // Recebe notificações do MercadoPago (pagamento aprovado/pendente/etc.)
     // Docs: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
