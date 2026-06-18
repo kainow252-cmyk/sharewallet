@@ -84,7 +84,7 @@ class _BuyScreenState extends State<BuyScreen> {
   // ── Polling de status do pagamento ──────────────────────────────────────
   Timer?  _pollingTimer;
   bool    _paymentApproved = false;
-  static const _workerBase = 'https://sharewallet-api.kainow252.workers.dev';
+  static const _workerBase = 'https://api.sharewallet.com.br';
 
   // ── Controle de tela de parabéns ─────────────────────────────────────────
   bool _showSuccessScreen = false;

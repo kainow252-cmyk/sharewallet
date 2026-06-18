@@ -5,7 +5,11 @@ import 'package:http/http.dart' as http;
 /// Cliente HTTP para o Cloudflare Worker (D1 SQLite).
 /// Resposta típica: < 100ms global.
 class CfApiService {
-  static const String _base = 'https://sharewallet-api.kainow252.workers.dev';
+  // Usa o custom domain api.sharewallet.com.br (mesmo TLD que o app).
+  // O domínio workers.dev tem bug de HTTP/2 quando o browser envia
+  // Origin: https://sharewallet.com.br — a stream H2 trava e nunca responde.
+  // Com api.sharewallet.com.br (same-site) o CORS funciona corretamente.
+  static const String _base = 'https://api.sharewallet.com.br';
   static const Duration _timeout = Duration(seconds: 10);
 
   // ── HTTP helpers ──────────────────────────────────────────────────────────

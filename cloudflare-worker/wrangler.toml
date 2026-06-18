@@ -2,6 +2,13 @@ name = "sharewallet-api"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 
+# Custom domain no mesmo TLD do app para eliminar cross-origin H2 bug.
+# O browser envia Origin: https://sharewallet.com.br → api.sharewallet.com.br
+# é same-site (não cross-origin) → CORS preflight funciona corretamente.
+[[routes]]
+pattern = "api.sharewallet.com.br"
+custom_domain = true
+
 [[d1_databases]]
 binding = "DB"
 database_name = "sharewallet-db"

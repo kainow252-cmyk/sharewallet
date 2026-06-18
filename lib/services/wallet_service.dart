@@ -245,7 +245,7 @@ class WalletService extends ChangeNotifier {
   }) async {
     try {
       final uri = Uri.parse(
-          'https://sharewallet-api.kainow252.workers.dev/api/withdrawals/$withdrawalId/pay');
+          'https://api.sharewallet.com.br/api/withdrawals/$withdrawalId/pay');
       final res = await http.post(
         uri,
         headers: {

@@ -96,9 +96,14 @@ async function deleteFirebaseAuthUser(uid) {
 }
 
 const CORS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+  'Access-Control-Max-Age':       '86400',
+  'Vary':                         'Origin',
+  // Evita que o Cloudflare edge reutilize streams H2 "stale" quando
+  // o browser envia Origin diferente — causava TimeoutException no Flutter web
+  'Cache-Control':                'no-store',
 };
 
 function json(data, status = 200) {
@@ -119,10 +124,27 @@ function ok(result) {
 // ── Roteador principal ────────────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
+    // Preflight CORS — responder imediatamente para qualquer Origin
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
     }
 
+    try {
+      return await _handleRequest(request, env);
+    } catch (e) {
+      // Captura qualquer exceção não tratada e retorna JSON com CORS
+      // (sem isso, o Worker pode não retornar nenhuma Response no H2,
+      //  travando a stream indefinidamente no browser)
+      console.error('[Worker] Unhandled exception:', e);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Internal error: ' + String(e) }),
+        { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } },
+      );
+    }
+  },
+};
+
+async function _handleRequest(request, env) {
     const url  = new URL(request.url);
     const path = url.pathname.replace(/\/$/, ''); // remove trailing slash
     const method = request.method;
@@ -1296,5 +1318,4 @@ export default {
     }
 
     return err('Rota não encontrada: ' + path, 404);
-  },
-};
+}

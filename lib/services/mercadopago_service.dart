@@ -89,7 +89,7 @@ class MpConfig {
         }),
         comissaoPercent: 0.20,
         // Worker direto — sharewallet.com.br/api/* redireciona 302 para /app (não chega no MP)
-        notificationUrl: 'https://sharewallet-api.kainow252.workers.dev/api/webhook/mp',
+        notificationUrl: 'https://api.sharewallet.com.br/api/webhook/mp',
         backUrlSuccess:  'https://sharewallet.com.br/app/#/checkout/success',
         backUrlFailure:  'https://sharewallet.com.br/app/#/checkout/failure',
         backUrlPending:  'https://sharewallet.com.br/app/#/checkout/pending',
@@ -357,7 +357,7 @@ class MercadoPagoService extends ChangeNotifier {
         },
       };
       final uri = Uri.parse(
-          'https://sharewallet-api.kainow252.workers.dev/api/config');
+          'https://api.sharewallet.com.br/api/config');
       await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},
@@ -507,7 +507,7 @@ class MercadoPagoService extends ChangeNotifier {
   Future<Map<String, dynamic>> getAccountQualityInfo() async {
     try {
       final resp = await http.get(
-        Uri.parse('https://sharewallet-api.kainow252.workers.dev/api/mp/account-info'),
+        Uri.parse('https://api.sharewallet.com.br/api/mp/account-info'),
       ).timeout(const Duration(seconds: 10));
 
       if (resp.statusCode == 200) {
