@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Affiliate Wallet — Plataforma de afiliados e assinaturas.">
+  <meta name="description" content="Affiliate Wallet  -  Plataforma de afiliados e assinaturas.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -29,14 +29,14 @@
   <!-- Google Sign-In Web OAuth Client ID -->
   <meta name="google-signin-client_id" content="470218127330-d1tr5j60i6db3ui56jgdqhar039dilvh.apps.googleusercontent.com">
 
-  <!-- MercadoPago.JS V2 SDK — obrigatório para device_id e Secure Fields (PCI Compliance) -->
+  <!-- MercadoPago.JS V2 SDK  -  obrigatório para device_id e Secure Fields (PCI Compliance) -->
   <!-- Requisito do Quality Score MP: SDK do frontend + Identificador do dispositivo -->
   <script src="https://sdk.mercadopago.com/js/v2"></script>
   <script>
     // Inicializa MP SDK V2 com public key de produção.
     // O SDK gera automaticamente um session fingerprint (device_id) logo após a
     // instanciação. Esse id é lido pelo Flutter via dart:html e enviado no header
-    // X-Device-Session-Id de cada pagamento — campo obrigatório para o Quality Score.
+    // X-Device-Session-Id de cada pagamento  -  campo obrigatório para o Quality Score.
     (function initMpSdk() {
       // Mesma public_key usada no defaultConfig() do Dart (MpConfig.defaultConfig)
       var MP_PUBLIC_KEY = 'APP_USR-1ca2945d-477b-4691-8976-8a27dc2e806e';
@@ -57,12 +57,12 @@
               window.MP_DEVICE_SESSION_ID = sid;
               clearInterval(timer);
             } else if (polls >= 20) {
-              // Timeout de 4s — gera um fallback local para não bloquear o checkout
+              // Timeout de 4s  -  gera um fallback local para não bloquear o checkout
               window.MP_DEVICE_SESSION_ID = 'sw_' + Date.now() + '_' + Math.random().toString(36).slice(2);
               clearInterval(timer);
             }
           }, 200);
-        } catch(e) { /* SDK não carregado — checkout funciona sem device_id */ }
+        } catch(e) { /* SDK não carregado  -  checkout funciona sem device_id */ }
       }
 
       // Tenta agora; se o script ainda não foi parseado, tenta novamente após load
@@ -86,7 +86,7 @@
     e grava no sessionStorage para o Dart ler via dart:js.
 
     URL esperada: /app/#/produto/p_xxx?ref=CODE
-    window.location.hash → "#/produto/p_xxx?ref=CODE"
+    window.location.hash -> "#/produto/p_xxx?ref=CODE"
   -->
   <script>
     (function() {

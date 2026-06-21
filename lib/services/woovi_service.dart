@@ -2,15 +2,15 @@ import 'api_service.dart';
 
 /// Serviço Flutter para integração Woovi via backend NestJS.
 ///
-/// ⚠️  IMPORTANTE: O app Flutter NUNCA fala diretamente com a Woovi API.
+///   IMPORTANTE: O app Flutter NUNCA fala diretamente com a Woovi API.
 ///    Todas as chamadas passam pelo backend NestJS que detém o AppID.
 ///
 /// Fluxo:
-///   Flutter → POST /api/sales/charge → NestJS → Woovi API
-///   Woovi Webhook → NestJS → atualiza banco → Flutter polling/push
+///   Flutter -> POST /api/sales/charge -> NestJS -> Woovi API
+///   Woovi Webhook -> NestJS -> atualiza banco -> Flutter polling/push
 class WooviService {
 
-  // ─── Criar Cobrança PIX ────────────────────────────────────────────────────
+  // --- Criar Cobrança PIX ----------------------------------------------------
 
   /// Cria uma cobrança PIX com split automático para o afiliado.
   /// Retorna o QR Code para exibir na tela de pagamento.
@@ -37,7 +37,7 @@ class WooviService {
     return null;
   }
 
-  // ─── Polling de status do pagamento ───────────────────────────────────────
+  // --- Polling de status do pagamento ---------------------------------------
 
   /// Consulta o status de uma venda (polling enquanto exibe o QR Code).
   /// Status: PENDING | PAID | EXPIRED
@@ -49,10 +49,10 @@ class WooviService {
     return 'PENDING';
   }
 
-  // ─── Solicitar Saque ───────────────────────────────────────────────────────
+  // --- Solicitar Saque -------------------------------------------------------
 
   /// Solicita o saque integral do saldo disponível.
-  /// O backend chama Woovi → PIX enviado para a chave cadastrada.
+  /// O backend chama Woovi -> PIX enviado para a chave cadastrada.
   static Future<WithdrawResult> requestWithdraw() async {
     final response = await ApiService.post('/withdrawals/request', {});
 
@@ -71,7 +71,7 @@ class WooviService {
     );
   }
 
-  // ─── Atualizar Chave PIX ───────────────────────────────────────────────────
+  // --- Atualizar Chave PIX ---------------------------------------------------
 
   /// Atualiza a chave PIX do afiliado para recebimento de comissões.
   static Future<bool> updatePixKey({
@@ -85,7 +85,7 @@ class WooviService {
     return response.success;
   }
 
-  // ─── Sincronizar Saldo com Woovi ──────────────────────────────────────────
+  // --- Sincronizar Saldo com Woovi ------------------------------------------
 
   /// Consulta o saldo real na Woovi e sincroniza com o banco local.
   static Future<double?> syncBalance() async {
@@ -96,7 +96,7 @@ class WooviService {
     return null;
   }
 
-  // ─── Dashboard do Afiliado ────────────────────────────────────────────────
+  // --- Dashboard do Afiliado ------------------------------------------------
 
   /// Carrega dados do dashboard: saldo, estatísticas, etc.
   static Future<Map<String, dynamic>?> getDashboard() async {
@@ -108,7 +108,7 @@ class WooviService {
   }
 }
 
-// ─── Modelos de Resposta ──────────────────────────────────────────────────────
+// --- Modelos de Resposta ------------------------------------------------------
 
 class ChargeResult {
   final String saleId;

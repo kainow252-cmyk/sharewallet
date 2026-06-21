@@ -17,7 +17,7 @@ import '../../services/mercadopago_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
 
-// ─── Chaves para auto-fill ────────────────────────────────────────────────────
+// --- Chaves para auto-fill ----------------------------------------------------
 const _kNome     = 'buyer_nome';
 const _kCpf      = 'buyer_cpf';
 const _kEmail    = 'buyer_email';
@@ -48,12 +48,12 @@ class BuyScreen extends StatefulWidget {
 }
 
 class _BuyScreenState extends State<BuyScreen> {
-  // ── Produto ──────────────────────────────────────────────────────────────
+  // -- Produto --------------------------------------------------------------
   ProductModel? _product;
   bool _loadingProduct = true;
   String? _loadError;
 
-  // ── Formulário ────────────────────────────────────────────────────────────
+  // -- Formulário ------------------------------------------------------------
   final _formKey = GlobalKey<FormState>();
 
   // Dados pessoais
@@ -75,18 +75,18 @@ class _BuyScreenState extends State<BuyScreen> {
   // PIX Recorrente
   bool _autorizou = false;
 
-  // ── Estado de submissão ───────────────────────────────────────────────────
+  // -- Estado de submissão ---------------------------------------------------
   bool _isSubmitting = false;
 
-  // ── Resultado: QR Code gerado ─────────────────────────────────────────────
+  // -- Resultado: QR Code gerado ---------------------------------------------
   MpCheckoutResult? _pixResult;
 
-  // ── Polling de status do pagamento ──────────────────────────────────────
+  // -- Polling de status do pagamento --------------------------------------
   Timer?  _pollingTimer;
   bool    _paymentApproved = false;
   static const _workerBase = 'https://api.sharewallet.com.br';
 
-  // ── Controle de tela de parabéns ─────────────────────────────────────────
+  // -- Controle de tela de parabéns -----------------------------------------
   bool _showSuccessScreen = false;
 
   @override
@@ -108,7 +108,7 @@ class _BuyScreenState extends State<BuyScreen> {
     super.dispose();
   }
 
-  // ── Auto-fill: carrega dados salvos ──────────────────────────────────────
+  // -- Auto-fill: carrega dados salvos --------------------------------------
   Future<void> _carregarDadosSalvos() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -132,7 +132,7 @@ class _BuyScreenState extends State<BuyScreen> {
     } catch (_) {}
   }
 
-  // ── Auto-fill: salva dados após compra bem-sucedida ──────────────────────
+  // -- Auto-fill: salva dados após compra bem-sucedida ----------------------
   Future<void> _salvarDadosCliente() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -151,7 +151,7 @@ class _BuyScreenState extends State<BuyScreen> {
     } catch (_) {}
   }
 
-  // ── Carrega produto ───────────────────────────────────────────────────────
+  // -- Carrega produto -------------------------------------------------------
   Future<void> _loadProduct() async {
     setState(() { _loadingProduct = true; _loadError = null; });
     try {
@@ -170,7 +170,7 @@ class _BuyScreenState extends State<BuyScreen> {
     }
   }
 
-  // ── Busca CEP via ViaCEP ──────────────────────────────────────────────────
+  // -- Busca CEP via ViaCEP --------------------------------------------------
   Future<void> _buscarCep() async {
     final cep = _cepCtrl.text.replaceAll(RegExp(r'\D'), '');
     if (cep.length != 8) return;
@@ -193,7 +193,7 @@ class _BuyScreenState extends State<BuyScreen> {
     } catch (_) {}
   }
 
-  // ── Polling de status do pagamento PIX ─────────────────────────────────
+  // -- Polling de status do pagamento PIX ---------------------------------
   void _iniciarPolling(String paymentId) {
     if (paymentId.isEmpty) return;
     _pollingTimer?.cancel();
@@ -218,7 +218,7 @@ class _BuyScreenState extends State<BuyScreen> {
             if (mounted) {
               setState(() => _showSuccessScreen = true);
             }
-            // Salvar dados em background — falha silenciosa é aceitável
+            // Salvar dados em background - falha silenciosa é aceitável
             _salvarDadosCliente().catchError((_) {});
           }
         }
@@ -226,9 +226,9 @@ class _BuyScreenState extends State<BuyScreen> {
     });
   }
 
-  // ── Gera pagamento via Mercado Pago ──────────────────────────────────────
-  // Fluxo único:      criarPix()                → QR Code + copia-e-cola + polling
-  // Fluxo recorrente: criarPreferenciaAssinatura() → URL checkout MP (nova aba)
+  // -- Gera pagamento via Mercado Pago --------------------------------------
+  // Fluxo único:      criarPix()                -> QR Code + copia-e-cola + polling
+  // Fluxo recorrente: criarPreferenciaAssinatura() -> URL checkout MP (nova aba)
   Future<void> _gerarPix() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -246,7 +246,7 @@ class _BuyScreenState extends State<BuyScreen> {
 
     final mp = context.read<MercadoPagoService>();
 
-    // ── PIX Único: gera QR Code direto ───────────────────────────────────
+    // -- PIX Único: gera QR Code direto -----------------------------------
     if (_product!.isPixAvulso) {
       final result = await mp.criarPix(
         produtoId:     _product!.id,
@@ -284,13 +284,13 @@ class _BuyScreenState extends State<BuyScreen> {
       return;
     }
 
-    // ── PIX Recorrente: cria preferência de assinatura → abre checkout MP ─
+    // -- PIX Recorrente: cria preferência de assinatura -> abre checkout MP -
     final result = await mp.criarPreferenciaAssinatura(
       produtoId:        _product!.id,
       produtoNome:      _product!.nome,
       produtoDescricao: _product!.descricao.isNotEmpty
           ? _product!.descricao
-          : 'Assinatura ${_product!.nome} — ShareWallet',
+          : 'Assinatura ${_product!.nome}  -  ShareWallet',
       valor:            _product!.valor,
       affiliateId:      widget.affiliateCode,
       affiliateCode:    widget.affiliateCode,
@@ -346,7 +346,7 @@ class _BuyScreenState extends State<BuyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ── Tela de parabéns (pós-pagamento) ────────────────────────────────────
+    // -- Tela de parabéns (pós-pagamento) ------------------------------------
     if (_showSuccessScreen && _product != null) {
       return _PurchaseSuccessScreen(
         product: _product!,
@@ -417,21 +417,21 @@ class _BuyScreenState extends State<BuyScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Card do produto ──────────────────────────────────────────────
+            // -- Card do produto ----------------------------------------------
             _ProductCard(product: product),
             const SizedBox(height: 24),
 
-            // ── Banner auto-fill se há dados salvos ──────────────────────────
+            // -- Banner auto-fill se há dados salvos --------------------------
             if (_nomeCtrl.text.isNotEmpty) ...[
               _AutoFillBanner(nome: _nomeCtrl.text),
               const SizedBox(height: 16),
             ],
 
-            // ── Dados Pessoais ───────────────────────────────────────────────
+            // -- Dados Pessoais -----------------------------------------------
             _sectionTitle(Icons.person_rounded, 'Dados Pessoais'),
             const SizedBox(height: 12),
             _field(_nomeCtrl, 'Nome completo *', Icons.person_outline_rounded,
-                validator: (v) => v!.trim().split(' ').length < 2
+                validator: (v) => v!.trim().split('').length < 2
                     ? 'Informe nome e sobrenome' : null),
             const SizedBox(height: 10),
             Row(children: [
@@ -461,7 +461,7 @@ class _BuyScreenState extends State<BuyScreen> {
                         ? 'Celular inválido' : null),
             const SizedBox(height: 24),
 
-            // ── Endereço ─────────────────────────────────────────────────────
+            // -- Endereço -----------------------------------------------------
             _sectionTitle(Icons.location_on_rounded, 'Endereço'),
             const SizedBox(height: 12),
             Row(children: [
@@ -520,7 +520,7 @@ class _BuyScreenState extends State<BuyScreen> {
             ]),
             const SizedBox(height: 24),
 
-            // ── Autorização PIX Recorrente ────────────────────────────────────
+            // -- Autorização PIX Recorrente ------------------------------------
             if (product.isPixRecorrente) ...[
               _AuthBox(
                 product: product,
@@ -530,16 +530,16 @@ class _BuyScreenState extends State<BuyScreen> {
               const SizedBox(height: 20),
             ],
 
-            // ── Como funciona ─────────────────────────────────────────────────
+            // -- Como funciona -------------------------------------------------
             _HowItWorks(product: product),
             const SizedBox(height: 24),
 
-            // ── Botão gerar PIX / Checkout ────────────────────────────────
+            // -- Botão gerar PIX / Checkout --------------------------------
             if (_pixResult == null || !_pixResult!.success)
               PrimaryButton(
                 label: product.isPixRecorrente
                     ? 'Autorizar e Ir para o Checkout'
-                    : 'Gerar QR Code PIX — ${product.valorFormatado}',
+                    : 'Gerar QR Code PIX  -  ${product.valorFormatado}',
                 icon: product.isPixRecorrente
                     ? Icons.open_in_browser_rounded
                     : Icons.qr_code_rounded,
@@ -547,7 +547,7 @@ class _BuyScreenState extends State<BuyScreen> {
                 onPressed: _isSubmitting ? null : _gerarPix,
               ),
 
-            // ── PIX Único: QR Code ────────────────────────────────────────
+            // -- PIX Único: QR Code ----------------------------------------
             if (_pixResult != null && _pixResult!.success && product.isPixAvulso) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -602,7 +602,7 @@ class _BuyScreenState extends State<BuyScreen> {
               ),
             ],
 
-            // ── PIX Recorrente: Card de Checkout MP ───────────────────────
+            // -- PIX Recorrente: Card de Checkout MP -----------------------
             if (_pixResult != null && _pixResult!.success && product.isPixRecorrente) ...[
               _CheckoutRecorrenteCard(
                 result: _pixResult!,
@@ -620,7 +620,7 @@ class _BuyScreenState extends State<BuyScreen> {
             const SizedBox(height: 12),
             Center(
               child: Text(
-                '🔒 Pagamento 100% via PIX — processado pelo Mercado Pago',
+                'Pagamento 100% via PIX  -  processado pelo Mercado Pago',
                 style: TextStyle(fontSize: 11,
                     color: AppColors.textHint.withValues(alpha: 0.8)),
                 textAlign: TextAlign.center,
@@ -633,7 +633,7 @@ class _BuyScreenState extends State<BuyScreen> {
     );
   }
 
-  // ── Helpers de UI ─────────────────────────────────────────────────────────
+  // -- Helpers de UI ---------------------------------------------------------
 
   Widget _sectionTitle(IconData icon, String title) => Row(
     children: [
@@ -675,14 +675,14 @@ class _BuyScreenState extends State<BuyScreen> {
       );
 }
 
-// ─── Banner de auto-fill ─────────────────────────────────────────────────────
+// --- Banner de auto-fill -----------------------------------------------------
 class _AutoFillBanner extends StatelessWidget {
   final String nome;
   const _AutoFillBanner({required this.nome});
 
   @override
   Widget build(BuildContext context) {
-    final primeiroNome = nome.split(' ').first;
+    final primeiroNome = nome.split('').first;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -707,7 +707,7 @@ class _AutoFillBanner extends StatelessWidget {
   }
 }
 
-// ─── Tela de Parabéns pós-pagamento ─────────────────────────────────────────
+// --- Tela de Parabéns pós-pagamento -----------------------------------------
 class _PurchaseSuccessScreen extends StatefulWidget {
   final ProductModel product;
   final String clienteNome;
@@ -749,7 +749,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     super.dispose();
   }
 
-  // ── Captura o widget como imagem PNG ──────────────────────────────────────
+  // -- Captura o widget como imagem PNG --------------------------------------
   Future<Uint8List?> _capturarImagem() async {
     try {
       final boundary = _repaintKey.currentContext?.findRenderObject()
@@ -763,7 +763,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     }
   }
 
-  // ── Download genérico via dart:html (Web) ou Printing (fallback) ──────────
+  // -- Download genérico via dart:html (Web) ou Printing (fallback) ----------
   Future<void> _downloadArquivo({
     required String nomeArquivo,
     required Uint8List bytes,
@@ -781,7 +781,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     }
   }
 
-  // ── Baixar como PDF ───────────────────────────────────────────────────────
+  // -- Baixar como PDF -------------------------------------------------------
   Future<void> _baixarPdf() async {
     setState(() => _baixando = true);
     try {
@@ -789,7 +789,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
       final doc = pw.Document();
       final dataHora = _formatarDataHora(DateTime.now());
       final primeiroNome = widget.clienteNome.isNotEmpty
-          ? widget.clienteNome.split(' ').first : 'Cliente';
+          ? widget.clienteNome.split('').first : 'Cliente';
 
       doc.addPage(pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -868,7 +868,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
             // Rodapé
             pw.Divider(color: PdfColors.grey300),
             pw.SizedBox(height: 8),
-            pw.Text('Documento gerado em $dataHora — ShareWallet © 2025',
+            pw.Text('Documento gerado em $dataHora  -  ShareWallet © 2025',
                 style: pw.TextStyle(fontSize: 9, color: PdfColors.grey500),
                 textAlign: pw.TextAlign.center),
           ],
@@ -909,7 +909,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     ),
   );
 
-  // ── Baixar como PNG ────────────────────────────────────────────────────────
+  // -- Baixar como PNG --------------------------------------------------------
   Future<void> _baixarPng() async {
     setState(() => _baixando = true);
     try {
@@ -931,7 +931,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     }
   }
 
-  // ── Baixar como JPG ────────────────────────────────────────────────────────
+  // -- Baixar como JPG --------------------------------------------------------
   Future<void> _baixarJpg() async {
     setState(() => _baixando = true);
     // Captura tamanho antes de qualquer await (evita async gap no BuildContext)
@@ -986,7 +986,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
   @override
   Widget build(BuildContext context) {
     final primeiroNome = widget.clienteNome.isNotEmpty
-        ? widget.clienteNome.split(' ').first : 'Cliente';
+        ? widget.clienteNome.split('').first : 'Cliente';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -1005,7 +1005,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // ── Widget capturável para screenshot ────────────────────────────
+            // -- Widget capturável para screenshot ----------------------------
             RepaintBoundary(
               key: _repaintKey,
               child: _buildComprovanteWidget(primeiroNome),
@@ -1013,12 +1013,12 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
 
             const SizedBox(height: 28),
 
-            // ── Botões de Download ────────────────────────────────────────────
+            // -- Botões de Download --------------------------------------------
             _buildDownloadSection(),
 
             const SizedBox(height: 20),
 
-            // ── Voltar ────────────────────────────────────────────────────────
+            // -- Voltar --------------------------------------------------------
             OutlinedButton.icon(
               onPressed: widget.onVoltar,
               icon: const Icon(Icons.shopping_bag_outlined),
@@ -1036,13 +1036,13 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     );
   }
 
-  // ── Widget do comprovante (também capturado para imagem) ─────────────────
+  // -- Widget do comprovante (também capturado para imagem) -----------------
   Widget _buildComprovanteWidget(String primeiroNome) {
     return Container(
       color: AppColors.background,
       child: Column(
         children: [
-          // ── Animação de sucesso ──────────────────────────────────────────
+          // -- Animação de sucesso ------------------------------------------
           FadeTransition(
             opacity: _fadeAnim,
             child: ScaleTransition(
@@ -1060,7 +1060,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
 
           const SizedBox(height: 20),
 
-          // ── Título ────────────────────────────────────────────────────────
+          // -- Título --------------------------------------------------------
           FadeTransition(
             opacity: _fadeAnim,
             child: Column(
@@ -1090,7 +1090,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
 
           const SizedBox(height: 24),
 
-          // ── Card do produto comprado ───────────────────────────────────────
+          // -- Card do produto comprado ---------------------------------------
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
@@ -1186,7 +1186,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
 
           const SizedBox(height: 16),
 
-          // ── Info do cliente e data ─────────────────────────────────────────
+          // -- Info do cliente e data -----------------------------------------
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -1205,16 +1205,16 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
                 const SizedBox(height: 8),
                 _infoRow(Icons.calendar_today_rounded, 'Data', _formatarDataHora(DateTime.now())),
                 const SizedBox(height: 8),
-                _infoRow(Icons.pix_rounded, 'Pagamento', 'PIX — Mercado Pago'),
+                _infoRow(Icons.pix_rounded, 'Pagamento', 'PIX  -  Mercado Pago'),
               ],
             ),
           ),
 
           const SizedBox(height: 12),
 
-          // ── Rodapé do comprovante ─────────────────────────────────────────
+          // -- Rodapé do comprovante -----------------------------------------
           Text(
-            '🔒 ShareWallet — Pagamento processado com segurança via PIX',
+            'ShareWallet  -  Pagamento processado com segurança via PIX',
             style: TextStyle(
                 fontSize: 10,
                 color: AppColors.textHint.withValues(alpha: 0.8)),
@@ -1229,7 +1229,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     children: [
       Icon(icon, color: AppColors.primary, size: 16),
       const SizedBox(width: 8),
-      Text('$label: ', style: const TextStyle(
+      Text('$label:', style: const TextStyle(
           fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
       Expanded(
         child: Text(value,
@@ -1239,7 +1239,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     ],
   );
 
-  // ── Seção de botões de download ───────────────────────────────────────────
+  // -- Seção de botões de download -------------------------------------------
   Widget _buildDownloadSection() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1315,7 +1315,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
   }
 }
 
-// ─── Botão de download estilizado ────────────────────────────────────────────
+// --- Botão de download estilizado --------------------------------------------
 class _DownloadButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1380,7 +1380,7 @@ class _DownloadButton extends StatelessWidget {
   }
 }
 
-// ── Card do produto ───────────────────────────────────────────────────────────
+// -- Card do produto -----------------------------------------------------------
 class _ProductCard extends StatelessWidget {
   final ProductModel product;
   const _ProductCard({required this.product});
@@ -1451,7 +1451,7 @@ class _ProductCard extends StatelessWidget {
   }
 }
 
-// ── Caixa de autorização PIX Recorrente ──────────────────────────────────────
+// -- Caixa de autorização PIX Recorrente --------------------------------------
 class _AuthBox extends StatelessWidget {
   final ProductModel product;
   final bool autorizou;
@@ -1500,7 +1500,7 @@ class _AuthBox extends StatelessWidget {
               border: Border.all(color: AppColors.cardBorder),
             ),
             child: Text(
-              'Autorizo o débito de ${product.valorFormatado} via Pix Recorrente, '
+              'Autorizo o débito de ${product.valorFormatado} via Pix Recorrente,'
               'todo dia $dia de cada mês, referente ao plano "${product.nome}".',
               style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.5),
             ),
@@ -1522,11 +1522,11 @@ class _AuthBox extends StatelessWidget {
                       style: const TextStyle(color: AppColors.textSecondary,
                           fontSize: 13, height: 1.4),
                       children: [
-                        const TextSpan(text: 'Concordo e autorizo o '),
+                        const TextSpan(text: 'Concordo e autorizo o'),
                         TextSpan(text: 'Pix Recorrente',
                             style: TextStyle(color: AppColors.primary,
                                 fontWeight: FontWeight.w700)),
-                        TextSpan(text: ' com início em $dataStr. '
+                        TextSpan(text: 'com início em $dataStr.'
                             'Posso cancelar a qualquer momento.'),
                       ],
                     ),
@@ -1541,7 +1541,7 @@ class _AuthBox extends StatelessWidget {
   }
 }
 
-// ── Como funciona ─────────────────────────────────────────────────────────────
+// -- Como funciona -------------------------------------------------------------
 class _HowItWorks extends StatelessWidget {
   final ProductModel product;
   const _HowItWorks({required this.product});
@@ -1549,17 +1549,17 @@ class _HowItWorks extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = product.isPixRecorrente ? [
-      '1️⃣  Preencha seus dados cadastrais acima',
-      '2️⃣  Autorize o débito automático mensal',
-      '3️⃣  Você será redirecionado para o checkout seguro do Mercado Pago',
-      '4️⃣  Escolha PIX ou cartão e conclua o pagamento da 1ª mensalidade',
-      '5️⃣  As próximas cobranças são automáticas todo dia ${product.diaCobranca ?? 5}',
-      '6️⃣  Cancele quando quiser, sem multa',
+      '1. Preencha seus dados cadastrais acima',
+      '2. Autorize o débito automático mensal',
+      '3. Você será redirecionado para o checkout seguro do Mercado Pago',
+      '4. Escolha PIX ou cartão e conclua o pagamento da 1a mensalidade',
+      '5. As próximas cobranças são automáticas todo dia ${product.diaCobranca ?? 5}',
+      '6. Cancele quando quiser, sem multa',
     ] : [
-      '1️⃣  Preencha seus dados cadastrais acima',
-      '2️⃣  Clique em "Gerar QR Code PIX"',
-      '3️⃣  Escaneie o QR Code ou copie o código no seu banco',
-      '4️⃣  Confirmação imediata após o pagamento',
+      '1. Preencha seus dados cadastrais acima',
+      '2. Clique em "Gerar QR Code PIX"',
+      '3. Escaneie o QR Code ou copie o código no seu banco',
+      '4. Confirmação imediata após o pagamento',
     ];
 
     return Container(
@@ -1596,7 +1596,7 @@ class _HowItWorks extends StatelessWidget {
   }
 }
 
-// ── Card de Checkout Recorrente (Mercado Pago) ────────────────────────────────
+// -- Card de Checkout Recorrente (Mercado Pago) --------------------------------
 class _CheckoutRecorrenteCard extends StatefulWidget {
   final MpCheckoutResult result;
   final ProductModel product;
@@ -1624,7 +1624,7 @@ class _CheckoutRecorrenteCardState extends State<_CheckoutRecorrenteCard> {
     setState(() => _copiou = true);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('✅ Link de checkout copiado!'),
+        content: Text('Link de checkout copiado!'),
         backgroundColor: AppColors.success,
         duration: Duration(seconds: 3),
       ),
@@ -1655,7 +1655,7 @@ class _CheckoutRecorrenteCardState extends State<_CheckoutRecorrenteCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ──────────────────────────────────────────────────────
+          // -- Header ------------------------------------------------------
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -1682,7 +1682,7 @@ class _CheckoutRecorrenteCardState extends State<_CheckoutRecorrenteCard> {
                       const Text('Checkout Recorrente Gerado!',
                           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15,
                               color: AppColors.textPrimary)),
-                      Text('${widget.product.valorFormatado}/mês · dia ${widget.product.diaCobranca ?? 5}',
+                      Text('${widget.product.valorFormatado}/mês - dia ${widget.product.diaCobranca ?? 5}',
                           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                     ],
                   ),
@@ -1693,7 +1693,7 @@ class _CheckoutRecorrenteCardState extends State<_CheckoutRecorrenteCard> {
           ),
           const SizedBox(height: 16),
 
-          // ── Info ─────────────────────────────────────────────────────────
+          // -- Info ---------------------------------------------------------
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -1716,7 +1716,7 @@ class _CheckoutRecorrenteCardState extends State<_CheckoutRecorrenteCard> {
           ),
           const SizedBox(height: 16),
 
-          // ── Botão: Abrir novamente ───────────────────────────────────────
+          // -- Botão: Abrir novamente ---------------------------------------
           SizedBox(
             width: double.infinity,
             height: 50,
@@ -1735,7 +1735,7 @@ class _CheckoutRecorrenteCardState extends State<_CheckoutRecorrenteCard> {
           ),
           const SizedBox(height: 10),
 
-          // ── Botão: Copiar link ───────────────────────────────────────────
+          // -- Botão: Copiar link -------------------------------------------
           if (checkoutUrl.isNotEmpty)
             SizedBox(
               width: double.infinity,
@@ -1755,15 +1755,15 @@ class _CheckoutRecorrenteCardState extends State<_CheckoutRecorrenteCard> {
             ),
           const SizedBox(height: 12),
 
-          // ── ID da preferência ────────────────────────────────────────────
+          // -- ID da preferência --------------------------------------------
           if (prefId.isNotEmpty)
             Text(
-              'ID: ${prefId.length > 24 ? '...${prefId.substring(prefId.length - 20)}' : prefId}',
+              'ID: ${prefId.length > 24 ?'...${prefId.substring(prefId.length - 20)}': prefId}',
               style: const TextStyle(fontSize: 10, color: AppColors.textHint),
             ),
           const SizedBox(height: 12),
 
-          // ── Botão: Nova tentativa ────────────────────────────────────────
+          // -- Botão: Nova tentativa ----------------------------------------
           OutlinedButton.icon(
             onPressed: widget.onNovaTentativa,
             icon: const Icon(Icons.edit_rounded, size: 16),
@@ -1780,7 +1780,7 @@ class _CheckoutRecorrenteCardState extends State<_CheckoutRecorrenteCard> {
   }
 }
 
-// ── QR Code PIX gerado pelo Mercado Pago ─────────────────────────────────────
+// -- QR Code PIX gerado pelo Mercado Pago -------------------------------------
 class _PixQrCard extends StatefulWidget {
   final MpCheckoutResult result;
   final ProductModel product;
@@ -1799,7 +1799,7 @@ class _PixQrCardState extends State<_PixQrCard> {
     setState(() => _copiou = true);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('✅ Código PIX copiado!'),
+        content: Text('Código PIX copiado!'),
         backgroundColor: AppColors.success,
         duration: Duration(seconds: 3),
       ),
@@ -1853,7 +1853,7 @@ class _PixQrCardState extends State<_PixQrCard> {
                             color: AppColors.success),
                       ),
                       Text(
-                        'Valor: ${p.valorFormatado}${p.isPixRecorrente ? '/mês' : ''}',
+                        'Valor: ${p.valorFormatado}${p.isPixRecorrente ?'/mês':''}',
                         style: const TextStyle(
                             fontSize: 13, color: AppColors.textSecondary),
                       ),
@@ -1986,7 +1986,7 @@ class _PixQrCardState extends State<_PixQrCard> {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Este PIX expira em 30 minutos. '
+                    'Este PIX expira em 30 minutos.'
                     'Realize o pagamento pelo app do seu banco.',
                     style: TextStyle(fontSize: 12,
                         color: AppColors.warning, height: 1.4),

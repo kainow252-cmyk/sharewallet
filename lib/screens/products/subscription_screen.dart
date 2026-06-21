@@ -175,11 +175,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Resumo do plano ────────────────────────────────────────────
+              // -- Resumo do plano --------------------------------------------
               _PlanSummaryCard(product: product, proximaCobranca: proximaCobranca),
               const SizedBox(height: 24),
 
-              // ── Dados do cliente ───────────────────────────────────────────
+              // -- Dados do cliente -------------------------------------------
               const _SectionHeader(
                 icon: Icons.person_rounded,
                 title: 'Dados do Assinante',
@@ -189,7 +189,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 controller: _nomeCtrl,
                 label: 'Nome completo',
                 icon: Icons.person_outline_rounded,
-                validator: (v) => v!.trim().split(' ').length < 2
+                validator: (v) => v!.trim().split('').length < 2
                     ? 'Informe nome e sobrenome'
                     : null,
               ),
@@ -226,7 +226,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               ),
               const SizedBox(height: 24),
 
-              // ── Caixa de autorização ───────────────────────────────────────
+              // -- Caixa de autorização ---------------------------------------
               _AuthorizationBox(
                 product: product,
                 autorizou: _autorizou,
@@ -235,11 +235,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               ),
               const SizedBox(height: 20),
 
-              // ── Como funciona ──────────────────────────────────────────────
+              // -- Como funciona ----------------------------------------------
               _HowItWorksCard(product: product),
               const SizedBox(height: 24),
 
-              // ── Botão confirmar ────────────────────────────────────────────
+              // -- Botão confirmar --------------------------------------------
               PrimaryButton(
                 label: product.isPixAutomatico
                     ? 'Autorizar Pix Recorrente'
@@ -253,7 +253,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               const SizedBox(height: 12),
               Center(
                 child: Text(
-                  'Autorização segura via PIX — sem necessidade de cartão',
+                  'Autorização segura via PIX  -  sem necessidade de cartão',
                   style: TextStyle(
                       fontSize: 11,
                       color: AppColors.textHint.withValues(alpha: 0.8)),
@@ -298,7 +298,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 }
 
-// ── Widget: Resumo do plano ───────────────────────────────────────────────────
+// -- Widget: Resumo do plano ---------------------------------------------------
 
 class _PlanSummaryCard extends StatelessWidget {
   final ProductModel product;
@@ -375,7 +375,7 @@ class _PlanSummaryCard extends StatelessWidget {
               const SizedBox(width: 12),
               _InfoChip(
                   icon: Icons.event_rounded,
-                  label: '1ª cobrança',
+                  label: '1a cobrança',
                   sub: dataStr),
             ],
           ),
@@ -447,7 +447,7 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-// ── Widget: Caixa de autorização ──────────────────────────────────────────────
+// -- Widget: Caixa de autorização ----------------------------------------------
 
 class _AuthorizationBox extends StatelessWidget {
   final ProductModel product;
@@ -546,7 +546,7 @@ class _AuthorizationBox extends StatelessWidget {
                           height: 1.4),
                       children: [
                         const TextSpan(
-                            text: 'Concordo e autorizo o '),
+                            text: 'Concordo e autorizo o'),
                         TextSpan(
                           text: 'Pix Recorrente',
                           style: TextStyle(
@@ -556,7 +556,7 @@ class _AuthorizationBox extends StatelessWidget {
                         ),
                         TextSpan(
                           text:
-                              ' com início em $dataStr. Poderei cancelar a qualquer momento.',
+                              'com início em $dataStr. Poderei cancelar a qualquer momento.',
                         ),
                       ],
                     ),
@@ -571,7 +571,7 @@ class _AuthorizationBox extends StatelessWidget {
   }
 }
 
-// ── Timeline de cobranças ─────────────────────────────────────────────────────
+// -- Timeline de cobranças -----------------------------------------------------
 
 class _ChargeTimeline extends StatelessWidget {
   final ProductModel product;
@@ -673,7 +673,7 @@ class _ChargeTimeline extends StatelessWidget {
   }
 }
 
-// ── Widget: Como funciona ─────────────────────────────────────────────────────
+// -- Widget: Como funciona -----------------------------------------------------
 
 class _HowItWorksCard extends StatelessWidget {
   final ProductModel product;
@@ -705,10 +705,10 @@ class _HowItWorksCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ...[
-            '1️⃣  Autorize uma única vez — sem cartão de crédito',
-            '2️⃣  Todo dia ${product.diaCobranca ?? 5}, o valor é debitado automaticamente da sua conta PIX',
-            '3️⃣  Se o saldo for insuficiente, o banco tenta novamente em até 3 dias',
-            '4️⃣  Cancele quando quiser, sem multa ou fidelidade',
+            '1. Autorize uma única vez  -  sem cartão de crédito',
+            '2. Todo dia ${product.diaCobranca ?? 5}, o valor é debitado automaticamente da sua conta PIX',
+            '3. Se o saldo for insuficiente, o banco tenta novamente em até 3 dias',
+            '4. Cancele quando quiser, sem multa ou fidelidade',
           ].map((item) => Padding(
                 padding: const EdgeInsets.only(bottom: 5),
                 child: Text(
@@ -725,7 +725,7 @@ class _HowItWorksCard extends StatelessWidget {
   }
 }
 
-// ── Widget auxiliar ───────────────────────────────────────────────────────────
+// -- Widget auxiliar -----------------------------------------------------------
 
 class _SectionHeader extends StatelessWidget {
   final IconData icon;

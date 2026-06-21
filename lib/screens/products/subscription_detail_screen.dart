@@ -80,7 +80,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
-          // ── AppBar flexível com gradiente ──────────────────────────────
+          // -- AppBar flexível com gradiente ------------------------------
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
@@ -171,7 +171,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
             ),
           ),
 
-          // ── Cards de resumo ────────────────────────────────────────────
+          // -- Cards de resumo --------------------------------------------
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -184,7 +184,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
                         child: _MetricCard(
                           label: 'Cobranças pagas',
                           value:
-                              '${_charges.where((c) => c.status == 'pago').length}',
+                              '${_charges.where((c) => c.status =='pago').length}',
                           icon: Icons.check_circle_outline_rounded,
                           color: AppColors.success,
                         ),
@@ -258,7 +258,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
             ),
           ),
 
-          // ── Lista histórico de cobranças ─────────────────────────────
+          // -- Lista histórico de cobranças -----------------------------
           if (_isLoading)
             const SliverToBoxAdapter(
               child: Padding(
@@ -310,7 +310,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
   }
 }
 
-// ── Modelo interno de cobrança ────────────────────────────────────────────────
+// -- Modelo interno de cobrança ------------------------------------------------
 
 class _ChargeRecord {
   final String id;
@@ -377,7 +377,7 @@ class _ChargeRecord {
   }
 }
 
-// ── Widget: Card de métrica ───────────────────────────────────────────────────
+// -- Widget: Card de métrica ---------------------------------------------------
 
 class _MetricCard extends StatelessWidget {
   final String label;
@@ -428,7 +428,7 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-// ── Widget: Informações da assinatura ────────────────────────────────────────
+// -- Widget: Informações da assinatura ----------------------------------------
 
 class _SubscriptionInfoCard extends StatelessWidget {
   final SubscriptionModel sub;
@@ -491,7 +491,7 @@ class _SubscriptionInfoCard extends StatelessWidget {
           _InfoRow(
             icon: Icons.percent_rounded,
             label: 'Comissão',
-            value: '${sub.comissaoPercent}% — R\$ ${sub.valorComissao.toStringAsFixed(2)}/mês',
+            value: '${sub.comissaoPercent}%  -  R\$ ${sub.valorComissao.toStringAsFixed(2)}/mês',
             valueColor: AppColors.gold,
           ),
         ],
@@ -541,7 +541,7 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-// ── Widget: Item de cobrança no histórico ─────────────────────────────────────
+// -- Widget: Item de cobrança no histórico -------------------------------------
 
 class _ChargeItem extends StatelessWidget {
   final _ChargeRecord charge;
@@ -567,7 +567,7 @@ class _ChargeItem extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Timeline linha vertical ──────────────────────────────────
+        // -- Timeline linha vertical ----------------------------------
         SizedBox(
           width: 32,
           child: Column(
@@ -598,7 +598,7 @@ class _ChargeItem extends StatelessWidget {
         ),
         const SizedBox(width: 12),
 
-        // ── Conteúdo da cobrança ─────────────────────────────────────
+        // -- Conteúdo da cobrança -------------------------------------
         Expanded(
           child: Container(
             margin: EdgeInsets.only(bottom: isLast ? 0 : 8),

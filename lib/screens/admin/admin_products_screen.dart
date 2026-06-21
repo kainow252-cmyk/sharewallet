@@ -186,7 +186,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
   }
 }
 
-// ── Card do produto ───────────────────────────────────────────────────────────
+// -- Card do produto -----------------------------------------------------------
 class _ProductCard extends StatelessWidget {
   final ProductModel product;
   final VoidCallback onEdit;
@@ -371,7 +371,7 @@ class _ProductCard extends StatelessWidget {
   }
 }
 
-// ── Formulário de produto ─────────────────────────────────────────────────────
+// -- Formulário de produto -----------------------------------------------------
 class _ProductFormSheet extends StatefulWidget {
   final ProductModel? product;
   const _ProductFormSheet({this.product});
@@ -527,7 +527,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                   controller: controller,
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                   children: [
-                    // ── Tipo de cobrança Pix ─────────────────────────────
+                    // -- Tipo de cobrança Pix -----------------------------
                     const Text('Tipo de Cobrança Pix',
                         style: TextStyle(
                             fontWeight: FontWeight.w700,
@@ -546,7 +546,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       icon: Icons.autorenew_rounded,
                       color: const Color(0xFF0D7A5A),
                       title: 'Pix Recorrente',
-                      subtitle: 'Cliente autoriza 1x → débito automático todo mês',
+                      subtitle: 'Cliente autoriza 1x -> débito automático todo mês',
                       badge: 'RECOMENDADO',
                       onTap: () => setState(() => _chargeType = ChargeType.pixRecorrente),
                     ),
@@ -562,7 +562,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Campos principais ───────────────────────────────
+                    // -- Campos principais -------------------------------
                     _Field(
                       controller: _nome,
                       label: 'Nome do Produto',
@@ -637,7 +637,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                     ),
                     const SizedBox(height: 12),
 
-                    // ── Status ativo/inativo ──────────────────────────────
+                    // -- Status ativo/inativo ------------------------------
                     const Text('Status do Produto',
                         style: TextStyle(
                             fontWeight: FontWeight.w700,
@@ -784,7 +784,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   }
 }
 
-// ── Widgets auxiliares ────────────────────────────────────────────────────────
+// -- Widgets auxiliares --------------------------------------------------------
 class _ChargeBadge extends StatelessWidget {
   final ProductModel product;
   const _ChargeBadge({required this.product});
@@ -904,7 +904,7 @@ class _Field extends StatelessWidget {
   }
 }
 
-// ── Opção visual de tipo de Pix ────────────────────────────────────────────────
+// -- Opção visual de tipo de Pix ------------------------------------------------
 class _PixTypeOption extends StatelessWidget {
   final bool selected;
   final IconData icon;

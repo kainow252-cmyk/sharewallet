@@ -102,7 +102,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               onRefresh: () => ps.loadProducts(forceRefresh: true),
               child: CustomScrollView(
               slivers: [
-                // ── Filtro chips — Categoria ─────────────────────────────
+                // -- Filtro chips - Categoria -----------------------------
                 SliverToBoxAdapter(
                   child: Column(
                     children: [
@@ -167,7 +167,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         ),
                       ),
 
-                      // ── Filtro chips — Tipo de Cobrança ──────────────────
+                      // -- Filtro chips - Tipo de Cobrança ------------------
                       _ChargeFilterBar(
                         selected: _chargeFilter,
                         onSelect: (v) => setState(() => _chargeFilter = v),
@@ -187,7 +187,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   ),
                 ),
 
-                // ── Banner info ──────────────────────────────────────────
+                // -- Banner info ------------------------------------------
                 SliverToBoxAdapter(
                   child: Container(
                     margin: const EdgeInsets.fromLTRB(16, 14, 16, 4),
@@ -205,7 +205,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            '100% Pix — Recorrente (autoriza 1x, débito automático) '
+                            '100% Pix  -  Recorrente (autoriza 1x, débito automático)'
                             'ou Único (QR Code a cada cobrança).',
                             style: TextStyle(
                                 color: Colors.white,
@@ -218,7 +218,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   ),
                 ),
 
-                // ── Lista por categoria ou filtrada ──────────────────────
+                // -- Lista por categoria ou filtrada ----------------------
                 if (ps.selectedCategory == 'todos')
                   // Modo "Todos": agrupa por categoria com cabeçalhos
                   ..._buildCategorySections(ps, _applyChargeFilter(ps.products))
@@ -242,7 +242,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
-  // ── Seções por categoria ──────────────────────────────────────────────────
+  // -- Seções por categoria --------------------------------------------------
   List<Widget> _buildCategorySections(
       ProductService ps, List<ProductModel> baseList) {
     final Map<String, List<ProductModel>> grouped = {};
@@ -291,7 +291,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     return widgets;
   }
 
-  // ── Drawer de categoria (menu hamburguer) ────────────────────────────────
+  // -- Drawer de categoria (menu hamburguer) --------------------------------
   void _showCategoryDrawer(BuildContext context, ProductService ps) {
     showModalBottomSheet(
       context: context,
@@ -457,15 +457,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   String _catIcon(String cat) {
     switch (cat.toLowerCase()) {
-      case 'seguros': return '🛡️';
-      case 'capitalizacao': return '💰';
-      case 'assistencia': return '🔧';
-      case 'beneficios': return '🎁';
-      case 'cursos': return '📚';
-      case 'entretenimento': return '🎯';
-      case 'garantias': return '✅';
-      case 'todos': return '🏷️';
-      default: return '📦';
+      case 'seguros': return '';
+      case 'capitalizacao': return '';
+      case 'assistencia': return '';
+      case 'beneficios': return '';
+      case 'cursos': return '';
+      case 'entretenimento': return '';
+      case 'garantias': return '';
+      case 'todos': return '';
+      default: return '';
     }
   }
 
@@ -481,7 +481,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 }
 
-// ── Barra de filtro por tipo de cobrança ──────────────────────────────────────
+// -- Barra de filtro por tipo de cobrança --------------------------------------
 class _ChargeFilterBar extends StatelessWidget {
   final String selected;
   final void Function(String) onSelect;
@@ -494,9 +494,9 @@ class _ChargeFilterBar extends StatelessWidget {
   });
 
   static const _items = [
-    {'key': 'todos',  'label': 'Todos',  'icon': Icons.apps_rounded,         'emoji': '🏷️'},
-    {'key': 'mensal', 'label': 'Mensal', 'icon': Icons.autorenew_rounded,     'emoji': '🔄'},
-    {'key': 'unico',  'label': 'Único',  'icon': Icons.qr_code_2_rounded,     'emoji': '⚡'},
+    {'key': 'todos',  'label': 'Todos',  'icon': Icons.apps_rounded,         'emoji': ''},
+    {'key': 'mensal', 'label': 'Mensal', 'icon': Icons.autorenew_rounded,     'emoji': ''},
+    {'key': 'unico',  'label': 'Único',  'icon': Icons.qr_code_2_rounded,     'emoji': ''},
   ];
 
   @override
@@ -585,7 +585,7 @@ class _ChargeFilterBar extends StatelessWidget {
   }
 }
 
-// ── Cabeçalho de categoria ────────────────────────────────────────────────────
+// -- Cabeçalho de categoria ----------------------------------------------------
 
 class _CategoryHeader extends StatelessWidget {
   final String icon;
@@ -640,7 +640,7 @@ class _CategoryHeader extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '$count produto${count > 1 ? 's' : ''} disponíve${count > 1 ? 'is' : 'l'}',
+                  '$count produto${count > 1 ?'s':''} disponíve${count > 1 ?'is':'l'}',
                   style: TextStyle(
                     color: color.withValues(alpha: 0.7),
                     fontSize: 11,
@@ -675,7 +675,7 @@ class _CategoryHeader extends StatelessWidget {
   }
 }
 
-// ── Card de produto ────────────────────────────────────────────────────────────
+// -- Card de produto ------------------------------------------------------------
 
 class _ProductCard extends StatefulWidget {
   final ProductModel product;
@@ -693,7 +693,7 @@ class _ProductCardState extends State<_ProductCard> {
     final product = widget.product;
     final auth = context.read<AuthService>();
     final affiliateCode = auth.currentUser?.affiliateCode ?? 'ABC123';
-    final categoryIcon = ProductService.categoryIcons[product.categoria] ?? '📦';
+    final categoryIcon = ProductService.categoryIcons[product.categoria] ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -716,7 +716,7 @@ class _ProductCardState extends State<_ProductCard> {
       ),
       child: Column(
         children: [
-          // ── Header ──────────────────────────────────────────────────────────
+          // -- Header ----------------------------------------------------------
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -774,7 +774,7 @@ class _ProductCardState extends State<_ProductCard> {
             ),
           ),
 
-          // ── Preço + comissão ─────────────────────────────────────────────────
+          // -- Preço + comissão -------------------------------------------------
           Container(
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             padding: const EdgeInsets.all(14),
@@ -873,7 +873,7 @@ class _ProductCardState extends State<_ProductCard> {
             ),
           ),
 
-          // ── Benefícios (expansível) ──────────────────────────────────────────
+          // -- Benefícios (expansível) ------------------------------------------
           if (product.beneficiosList.isNotEmpty) ...[
             GestureDetector(
               onTap: () => setState(() => _expanded = !_expanded),
@@ -932,7 +932,7 @@ class _ProductCardState extends State<_ProductCard> {
 
           const Divider(height: 1, indent: 16, endIndent: 16),
 
-          // ── Ações: Divulgar link rastreável ─────────────────────────────────
+          // -- Ações: Divulgar link rastreável ---------------------------------
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -967,7 +967,7 @@ class _ProductCardState extends State<_ProductCard> {
     );
   }
 
-  // ── Bottom sheet: compartilhar link rastreável ───────────────────────────
+  // -- Bottom sheet: compartilhar link rastreável ---------------------------
   void _showShareSheet(
       BuildContext context, ProductModel product, String affiliateCode) {
     final link =
@@ -976,11 +976,11 @@ class _ProductCardState extends State<_ProductCard> {
     // Textos específicos por tipo de produto
     final isRecorrente = product.isPixRecorrente;
     final comissaoLabel = isRecorrente
-        ? 'Comissão: ${product.comissaoFormatada}/mês  •  ${product.comissaoPercent}%'
-        : 'Comissão por venda: ${product.comissaoFormatada}  •  ${product.comissaoPercent}%';
+        ? 'Comissão: ${product.comissaoFormatada}/mês * ${product.comissaoPercent}%'
+        : 'Comissão por venda: ${product.comissaoFormatada} * ${product.comissaoPercent}%';
     final instrucaoText = isRecorrente
-        ? '💡 Envie este link para seu cliente. Ele preenche os dados e autoriza o débito automático mensal via PIX.'
-        : '💡 Envie este link para seu cliente. Ele preenche os dados e gera o PIX para pagamento único.';
+        ? 'Envie este link para seu cliente. Ele preenche os dados e autoriza o débito automático mensal via PIX.'
+        : 'Envie este link para seu cliente. Ele preenche os dados e gera o PIX para pagamento único.';
 
     showModalBottomSheet(
       context: context,
@@ -1030,8 +1030,8 @@ class _ProductCardState extends State<_ProductCard> {
                       ),
                       Text(
                         isRecorrente
-                            ? 'Assinatura mensal — débito automático PIX'
-                            : 'Pagamento único — QR Code PIX',
+                            ? 'Assinatura mensal  -  débito automático PIX'
+                            : 'Pagamento único  -  QR Code PIX',
                         style: TextStyle(
                             fontSize: 12,
                             color: product.chargeTypeColor,
@@ -1133,7 +1133,7 @@ class _ProductCardState extends State<_ProductCard> {
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                            content: Text('✅ Link copiado! Compartilhe com seu cliente.'),
+                            content: Text('Link copiado! Compartilhe com seu cliente.'),
                             backgroundColor: AppColors.success),
                       );
                     },
@@ -1181,7 +1181,7 @@ class _ProductCardState extends State<_ProductCard> {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content: Text('✅ Link copiado!'),
+                        content: Text('Link copiado!'),
                         backgroundColor: AppColors.success),
                   );
                 },
@@ -1208,7 +1208,7 @@ class _ProductCardState extends State<_ProductCard> {
   }
 }
 
-// ── Badge tipo de cobrança ─────────────────────────────────────────────────────
+// -- Badge tipo de cobrança -----------------------------------------------------
 class _ChargeBadge extends StatelessWidget {
   final ProductModel product;
   const _ChargeBadge({required this.product});

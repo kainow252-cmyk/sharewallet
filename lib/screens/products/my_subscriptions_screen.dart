@@ -64,10 +64,10 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen>
       ),
       body: Column(
         children: [
-          // ── Resumo de comissões ────────────────────────────────────────────
+          // -- Resumo de comissões --------------------------------------------
           _CommissionSummary(svc: svc),
 
-          // ── Tabs ──────────────────────────────────────────────────────────
+          // -- Tabs ----------------------------------------------------------
           Expanded(
             child: svc.isLoading
                 ? const Center(
@@ -93,7 +93,7 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen>
   }
 }
 
-// ── Resumo de comissões ───────────────────────────────────────────────────────
+// -- Resumo de comissões -------------------------------------------------------
 
 class _CommissionSummary extends StatelessWidget {
   final SubscriptionService svc;
@@ -188,8 +188,8 @@ class _CommissionSummary extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       svc.podeSacar
-                          ? '✅ Saldo suficiente — você pode sacar agora!'
-                          : 'Faltam R\$ ${(SubscriptionService.saqueMinimo - svc.saldoDisponivel).toStringAsFixed(2).replaceAll('.', ',')} para o saque mínimo',
+                          ? 'Saldo suficiente  -  você pode sacar agora!'
+                          : 'Faltam R\$ ${(SubscriptionService.saqueMinimo - svc.saldoDisponivel).toStringAsFixed(2).replaceAll('.',',')} para o saque mínimo',
                       style: TextStyle(
                           color: svc.podeSacar
                               ? AppColors.gold
@@ -252,7 +252,7 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-// ── Lista de assinaturas ──────────────────────────────────────────────────────
+// -- Lista de assinaturas ------------------------------------------------------
 
 class _SubscriptionList extends StatelessWidget {
   final List<SubscriptionModel> subscriptions;
@@ -300,7 +300,7 @@ class _SubscriptionList extends StatelessWidget {
   }
 }
 
-// ── Card de assinatura ────────────────────────────────────────────────────────
+// -- Card de assinatura --------------------------------------------------------
 
 class _SubscriptionCard extends StatefulWidget {
   final SubscriptionModel subscription;
@@ -341,7 +341,7 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
       ),
       child: Column(
         children: [
-          // ── Header ──────────────────────────────────────────────────────────
+          // -- Header ----------------------------------------------------------
           Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
@@ -398,7 +398,7 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
             ),
           ),
 
-          // ── Info da assinatura ───────────────────────────────────────────────
+          // -- Info da assinatura -----------------------------------------------
           Container(
             margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
             padding: const EdgeInsets.all(12),
@@ -446,7 +446,7 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
                       child: _InfoRow(
                         label: 'Valor',
                         value:
-                            'R\$ ${sub.valor.toStringAsFixed(2).replaceAll('.', ',')}',
+                            'R\$ ${sub.valor.toStringAsFixed(2).replaceAll('.',',')}',
                         valueColor: AppColors.textPrimary,
                       ),
                     ),
@@ -456,7 +456,7 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
                         value: sub.valorComissao
                             .toStringAsFixed(2)
                             .replaceAll('.', ','),
-                        prefix: 'R\$ ',
+                        prefix: 'R\$',
                         valueColor: AppColors.success,
                       ),
                     ),
@@ -486,7 +486,7 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
             ),
           ),
 
-          // ── Histórico de pagamentos ──────────────────────────────────────────
+          // -- Histórico de pagamentos ------------------------------------------
           if (sub.historico.isNotEmpty) ...[
             GestureDetector(
               onTap: () => setState(() => _showHistory = !_showHistory),
@@ -528,7 +528,7 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
               ),
           ],
 
-          // ── Botão Ver Detalhes Completos ─────────────────────────────────
+          // -- Botão Ver Detalhes Completos ---------------------------------
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
             child: SizedBox(
@@ -620,7 +620,7 @@ class _InfoRow extends StatelessWidget {
                 fontSize: 10, color: AppColors.textHint)),
         const SizedBox(height: 2),
         Text(
-          '${prefix ?? ''}$value',
+          '${prefix ??''}$value',
           style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
@@ -672,7 +672,7 @@ class _PaymentRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'R\$ ${payment.valor.toStringAsFixed(2).replaceAll('.', ',')}',
+                'R\$ ${payment.valor.toStringAsFixed(2).replaceAll('.',',')}',
                 style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 12,

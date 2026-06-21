@@ -66,7 +66,7 @@ class UserModel {
         'pix_key_type': pixKeyType,
       };
 
-  String get primeiroNome => nome.split(' ').first;
+  String get primeiroNome => nome.split('').first;
 
   UserModel copyWith({
     String? id,

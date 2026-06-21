@@ -89,7 +89,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // ── Cadastro/Login via Google ─────────────────────────────────────────────────
+  // -- Cadastro/Login via Google -------------------------------------------------
   Future<void> _registerWithGoogle() async {
     setState(() => _socialLoading = true);
     final auth = context.read<AuthService>();
@@ -132,7 +132,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // ── Cadastro/Login via Facebook ───────────────────────────────────────────────
+  // -- Cadastro/Login via Facebook -----------------------------------------------
   Future<void> _registerWithFacebook() async {
     setState(() => _socialLoading = true);
     final auth = context.read<AuthService>();
@@ -180,7 +180,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ── Modal: completar dados após login social ─────────────────────────────────
+  // -- Modal: completar dados após login social ---------------------------------
   Future<void> _mostrarCompletarCadastro(
       BuildContext context, AuthService auth) async {
     await showModalBottomSheet<bool>(
@@ -354,7 +354,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         label: 'Nome completo',
                         icon: Icons.person_rounded,
                         validator: (v) =>
-                            v!.trim().split(' ').length < 2 ? 'Informe nome e sobrenome' : null,
+                            v!.trim().split('').length < 2 ? 'Informe nome e sobrenome' : null,
                       ),
                       const SizedBox(height: 14),
                       _buildField(
@@ -441,14 +441,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       color: AppColors.textSecondary,
                                       fontSize: 13),
                                   children: [
-                                    TextSpan(text: 'Aceito os '),
+                                    TextSpan(text: 'Aceito os'),
                                     TextSpan(
                                       text: 'Termos de Uso',
                                       style: TextStyle(
                                           color: AppColors.primary,
                                           fontWeight: FontWeight.w600),
                                     ),
-                                    TextSpan(text: ' e a '),
+                                    TextSpan(text: 'e a'),
                                     TextSpan(
                                       text: 'Política de Privacidade',
                                       style: TextStyle(
@@ -472,7 +472,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         icon: Icons.rocket_launch_rounded,
                       ),
 
-                      // ── Divisor "ou cadastre-se com" ──────────────────────
+                      // -- Divisor "ou cadastre-se com" ----------------------
                       const SizedBox(height: 24),
                       Row(
                         children: [
@@ -502,7 +502,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // ── Botões sociais ────────────────────────────────────
+                      // -- Botões sociais ------------------------------------
                       Row(
                         children: [
                           Expanded(
@@ -592,7 +592,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 }
 
-// ── Widget: Botão Social para Cadastro ───────────────────────────────────────
+// -- Widget: Botão Social para Cadastro ---------------------------------------
 
 class _RegisterSocialButton extends StatelessWidget {
   final String label;
@@ -647,7 +647,7 @@ class _RegisterSocialButton extends StatelessWidget {
   }
 }
 
-// ── Widget: Ícone Google para Cadastro ───────────────────────────────────────
+// -- Widget: Ícone Google para Cadastro ---------------------------------------
 
 class _GoogleRegisterIcon extends StatelessWidget {
   const _GoogleRegisterIcon();
@@ -692,7 +692,7 @@ class _GooglePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ── Modal: Completar cadastro após login social ───────────────────────────────
+// -- Modal: Completar cadastro após login social -------------------------------
 class _CompletarCadastroSheet extends StatefulWidget {
   final String uid;
   final String nomeAtual;
@@ -868,7 +868,7 @@ class _CompletarCadastroSheetState
                   prefixIcon: Icon(Icons.person_rounded,
                       color: AppColors.primary),
                 ),
-                validator: (v) => v!.trim().split(' ').length < 2
+                validator: (v) => v!.trim().split('').length < 2
                     ? 'Informe nome e sobrenome'
                     : null,
               ),

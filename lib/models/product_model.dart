@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-// ── Tipo de cobrança — somente Pix ────────────────────────────────────────────
+// -- Tipo de cobrança - somente Pix --------------------------------------------
 enum ChargeType {
-  pixRecorrente, // Pix Recorrente — autoriza uma vez, débito automático mensal
-  pixAvulso,     // Pix Único/Avulso — QR Code gerado a cada cobrança
+  pixRecorrente, // Pix Recorrente  -  autoriza uma vez, débito automático mensal
+  pixAvulso,     // Pix Único/Avulso  -  QR Code gerado a cada cobrança
 }
 
 class ProductModel {
@@ -50,20 +50,20 @@ class ProductModel {
     if (raw == 'pixAutomatico') ct = ChargeType.pixRecorrente; // legado
     if (raw == 'unico') ct = ChargeType.pixAvulso;             // legado
 
-    // ── Suporte a dois schemas ────────────────────────────────────────────────
+    // -- Suporte a dois schemas ------------------------------------------------
     // Schema novo:  valor / comissao (decimal: 0.20)
     // Schema antigo: preco / comissao_pct (percentual: 20) + comissao_valor
     final double valor = (json['valor'] ?? json['preco'] ?? 0).toDouble();
 
     double comissao;
     if (json['comissao'] != null) {
-      // Schema novo — já é decimal (0.20)
+      // Schema novo - já é decimal (0.20)
       comissao = (json['comissao'] as num).toDouble();
     } else if (json['comissao_pct'] != null) {
-      // Schema antigo — percentual inteiro (20 → 0.20)
+      // Schema antigo - percentual inteiro (20 -> 0.20)
       comissao = (json['comissao_pct'] as num).toDouble() / 100.0;
     } else if (json['comissao_valor'] != null && valor > 0) {
-      // Schema antigo alternativo — valor absoluto da comissão
+      // Schema antigo alternativo - valor absoluto da comissão
       comissao = (json['comissao_valor'] as num).toDouble() / valor;
     } else {
       comissao = 0.0;
@@ -95,9 +95,9 @@ class ProductModel {
   int get comissaoPercent => (comissao * 100).round();
 
   String get valorFormatado =>
-      'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
+      'R\$ ${valor.toStringAsFixed(2).replaceAll('.',',')}';
   String get comissaoFormatada =>
-      'R\$ ${valorComissao.toStringAsFixed(2).replaceAll('.', ',')}';
+      'R\$ ${valorComissao.toStringAsFixed(2).replaceAll('.',',')}';
 
   String get chargeTypeLabel {
     switch (chargeType) {
@@ -111,7 +111,7 @@ class ProductModel {
   String get chargeTypeDescription {
     switch (chargeType) {
       case ChargeType.pixRecorrente:
-        return 'Autoriza 1x • débito automático todo mês';
+        return 'Autoriza 1x * débito automático todo mês';
       case ChargeType.pixAvulso:
         return 'QR Code gerado a cada cobrança';
     }
@@ -153,7 +153,7 @@ class ProductModel {
         'beneficios': beneficios,
       };
 
-  // ── Produtos mock — todos somente Pix ─────────────────────────────────────
+  // -- Produtos mock - todos somente Pix -------------------------------------
   static List<ProductModel> get mockProducts => [
         ProductModel(
           id: '1',

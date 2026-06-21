@@ -7,7 +7,7 @@ import '../../services/auth_service.dart';
 import '../../services/cf_api_service.dart';
 import '../../theme/app_theme.dart';
 
-/// Tela completa de Carteira ShareWallet — dados via Cloudflare D1
+/// Tela completa de Carteira ShareWallet - dados via Cloudflare D1
 class CarteiraScreen extends StatefulWidget {
   const CarteiraScreen({super.key});
 
@@ -121,7 +121,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
     sb.writeln('Tipo,Descrição,Valor,Data,Status');
     for (final tx in wallet.extratoCompleto) {
       final tipo   = tx['tipo'] as String? ?? '';
-      final desc   = (tx['descricao'] as String? ?? '').replaceAll('"', '""');
+      final desc   = (tx['descricao'] as String? ?? '').replaceAll('"','""');
       final valor  = (tx['valor'] as num?)?.toDouble() ?? 0.0;
       final data   = tx['data'] as DateTime?;
       final status = tx['status'] as String? ?? '';
@@ -132,7 +132,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
     Clipboard.setData(ClipboardData(text: sb.toString()));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('📋 Extrato copiado! Cole numa planilha para visualizar.'),
+        content: Text('Extrato copiado! Cole numa planilha para visualizar.'),
         backgroundColor: AppColors.success,
         duration: Duration(seconds: 4),
       ),
@@ -145,7 +145,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Saldo mínimo para saque: ${_fmt.format(_saqueMinimo)}. '
+            'Saldo mínimo para saque: ${_fmt.format(_saqueMinimo)}.'
             'Você tem ${_fmt.format(wallet.saldoCarteira)}.',
           ),
           backgroundColor: AppColors.error,
@@ -174,7 +174,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(result.success
-                    ? 'Solicitação de saque de ${_fmt.format(valor)} enviada! ✅'
+                    ? 'Solicitação de saque de ${_fmt.format(valor)} enviada!'
                     : result.message ?? 'Erro ao solicitar saque'),
                 backgroundColor:
                     result.success ? AppColors.success : AppColors.error,
@@ -270,7 +270,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                                 : Text(
                                     _saldoVisible
                                         ? _fmt.format(saldo)
-                                        : 'R\$ ••••••',
+                                        : 'R\$ ******',
                                     style: const TextStyle(
                                         color: Color(0xFF00E5B4),
                                         fontSize: 32,
@@ -282,13 +282,13 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                                     label: 'Pendente',
                                     value: _saldoVisible
                                         ? _fmt.format(pendente)
-                                        : 'R\$ ••'),
+                                        : 'R\$ **'),
                                 const SizedBox(width: 16),
                                 _MiniStat(
                                     label: 'Total recebido',
                                     value: _saldoVisible
                                         ? _fmt.format(totalRecebido)
-                                        : 'R\$ ••••'),
+                                        : 'R\$ ****'),
                               ],
                             ),
                           ],
@@ -352,7 +352,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
             body: TabBarView(
               controller: _tabController,
               children: [
-                // ── ABA 1: CARTEIRA ────────────────────────────────────────
+                // -- ABA 1: CARTEIRA ----------------------------------------
                 RefreshIndicator(
                   onRefresh: () => _loadWallet(forceRefresh: true),
                   color: const Color(0xFF00E5B4),
@@ -407,7 +407,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                               const SizedBox(height: 8),
                               Text(
                                 podesSacar
-                                    ? '✅ Você já pode solicitar seu saque!'
+                                    ? 'Você já pode solicitar seu saque!'
                                     : 'Faltam ${_fmt.format(faltam)} para o mínimo de ${_fmt.format(_saqueMinimo)}',
                                 style: TextStyle(
                                     color: podesSacar
@@ -473,7 +473,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Mínimo: ${_fmt.format(_saqueMinimo)} • Processamento em até 24h',
+                          'Mínimo: ${_fmt.format(_saqueMinimo)} * Processamento em até 24h',
                           style: const TextStyle(
                               color: AppColors.textHint, fontSize: 11),
                         ),
@@ -537,7 +537,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                   ),
                 ),
 
-                // ── ABA 2: INDICADOS ──────────────────────────────────────
+                // -- ABA 2: INDICADOS --------------------------------------
                 RefreshIndicator(
                   onRefresh: _loadIndicados,
                   color: AppColors.primary,
@@ -673,7 +673,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
   }
 }
 
-// ── Mini stat na AppBar ───────────────────────────────────────────────────────
+// -- Mini stat na AppBar -------------------------------------------------------
 class _MiniStat extends StatelessWidget {
   final String label;
   final String value;
@@ -696,7 +696,7 @@ class _MiniStat extends StatelessWidget {
   }
 }
 
-// ── Widget: Card de saldo ─────────────────────────────────────────────────────
+// -- Widget: Card de saldo -----------------------------------------------------
 class _SaldoCard extends StatelessWidget {
   final String label;
   final String valor;
@@ -747,7 +747,7 @@ class _SaldoCard extends StatelessWidget {
   }
 }
 
-// ── Header de seção de indicados ──────────────────────────────────────────────
+// -- Header de seção de indicados ----------------------------------------------
 class _IndicadosSectionHeader extends StatelessWidget {
   final String label;
   final int count;
@@ -797,7 +797,7 @@ class _IndicadosSectionHeader extends StatelessWidget {
   }
 }
 
-// ── Tile de indicado ──────────────────────────────────────────────────────────
+// -- Tile de indicado ----------------------------------------------------------
 class _IndicadoTile extends StatelessWidget {
   final String nome;
   final String email;
@@ -927,7 +927,7 @@ class _IndicadoTile extends StatelessWidget {
   }
 }
 
-// ── Widget: Tile de transação ─────────────────────────────────────────────────
+// -- Widget: Tile de transação -------------------------------------------------
 class _TransacaoTile extends StatelessWidget {
   final Map<String, dynamic> tx;
   final NumberFormat fmt;
@@ -988,7 +988,7 @@ class _TransacaoTile extends StatelessWidget {
             ),
           ),
           Text(
-            '${isComissao ? '+' : '-'}${fmt.format(valor)}',
+            '${isComissao ?'+':'-'}${fmt.format(valor)}',
             style: TextStyle(
               color: isComissao ? AppColors.success : AppColors.warning,
               fontWeight: FontWeight.w800,
@@ -1001,7 +1001,7 @@ class _TransacaoTile extends StatelessWidget {
   }
 }
 
-// ── Modal de solicitação de saque ─────────────────────────────────────────────
+// -- Modal de solicitação de saque ---------------------------------------------
 class _SaqueModal extends StatefulWidget {
   final double saldoDisponivel;
   final String pixKey;
@@ -1087,7 +1087,7 @@ class _SaqueModalState extends State<_SaqueModal> {
             keyboardType:
                 const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(
-              prefixText: 'R\$ ',
+              prefixText: 'R\$',
               hintText: '100,00',
             ),
           ),

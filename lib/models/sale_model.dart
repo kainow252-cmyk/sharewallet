@@ -40,7 +40,7 @@ class SaleModel {
     );
   }
 
-  /// Factory para resposta da API NestJS (snake_case → camelCase)
+  /// Factory para resposta da API NestJS (snake_case -> camelCase)
   factory SaleModel.fromApiJson(Map<String, dynamic> json) {
     final totalValue = (json['totalValue'] as int? ?? 0);
     final commission = (json['commission'] as int? ?? 0);
@@ -63,7 +63,7 @@ class SaleModel {
 
   /// Factory para Cloudflare D1 (snake_case, status em minúsculo)
   /// ATENÇÃO: o campo 'comissao' no D1 já é o valor em reais (ex: 0.50)
-  /// NÃO multiplicar por 'valor' — isso causava 2.5 × 0.5 = 1.25 (errado)
+  /// NÃO multiplicar por 'valor' - isso causava 2.5 × 0.5 = 1.25 (errado)
   factory SaleModel.fromD1(Map<String, dynamic> r) {
     // comissao já vem em reais direto do D1
     final comissaoValor = (r['comissao'] as num? ?? 0).toDouble();
@@ -102,8 +102,8 @@ class SaleModel {
   bool get isCompleted => status == 'COMPLETED';
   bool get isPending => status == 'PENDING';
 
-  String get valorFormatado => 'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
-  String get comissaoFormatada => 'R\$ ${comissao.toStringAsFixed(2).replaceAll('.', ',')}';
+  String get valorFormatado => 'R\$ ${valor.toStringAsFixed(2).replaceAll('.',',')}';
+  String get comissaoFormatada => 'R\$ ${comissao.toStringAsFixed(2).replaceAll('.',',')}';
 
   static String statusLabel(String status) {
     switch (status) {

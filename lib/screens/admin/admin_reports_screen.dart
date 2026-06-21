@@ -11,7 +11,7 @@ import '../../theme/app_theme.dart';
 // ignore: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:html' as html;
 
-/// Tela de Relatórios Admin — exporta CSV / JSON das tabelas D1
+/// Tela de Relatórios Admin - exporta CSV / JSON das tabelas D1
 class AdminReportsScreen extends StatefulWidget {
   const AdminReportsScreen({super.key});
 
@@ -22,7 +22,7 @@ class AdminReportsScreen extends StatefulWidget {
 class _AdminReportsScreenState extends State<AdminReportsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
-  // 3 bools separados — um por aba — evita que o loading de uma aba
+  // 3 bools separados - um por aba - evita que o loading de uma aba
   // afete as outras (bug anterior: _exporting único compartilhado).
   bool _exportingAfiliados = false;
   bool _exportingSaques    = false;
@@ -58,7 +58,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
     super.dispose();
   }
 
-  // ── Helpers de data ────────────────────────────────────────────────────────
+  // -- Helpers de data --------------------------------------------------------
 
   bool _inRange(DateTime d) {
     if (_de != null && d.isBefore(_de!)) return false;
@@ -88,7 +88,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
     if (picked != null) setState(() => _ate = picked);
   }
 
-  // ── Download no browser via JS ─────────────────────────────────────────────
+  // -- Download no browser via JS ---------------------------------------------
 
   void _downloadCsv(String filename, String csv) {
     try {
@@ -130,7 +130,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
     );
   }
 
-  // ── Gerador CSV — Afiliados ────────────────────────────────────────────────
+  // -- Gerador CSV - Afiliados ------------------------------------------------
 
   String _csvAfiliados(List<AdminAffiliate> rows) {
     final buf = StringBuffer();
@@ -156,7 +156,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
     return buf.toString();
   }
 
-  // ── Gerador CSV — Saques ──────────────────────────────────────────────────
+  // -- Gerador CSV - Saques --------------------------------------------------
 
   String _csvSaques(List<AdminWithdrawal> rows) {
     final buf = StringBuffer();
@@ -177,7 +177,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
     return buf.toString();
   }
 
-  // ── Gerador CSV — Assinaturas ─────────────────────────────────────────────
+  // -- Gerador CSV - Assinaturas ---------------------------------------------
   // Tipo legível: 'Mensal (PIX Recorrente)' ou 'Único (PIX Avulso)'
   static String _tipoLegivel(ChargeType ct) =>
       ct == ChargeType.pixRecorrente ? 'Mensal (PIX Recorrente)' : 'Único (PIX Avulso)';
@@ -227,12 +227,12 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
 
   static String _esc(String v) {
     if (v.contains(',') || v.contains('"') || v.contains('\n')) {
-      return '"${v.replaceAll('"', '""')}"';
+      return '"${v.replaceAll('"','""')}"';
     }
     return v;
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // -- Build -----------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -242,7 +242,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
       backgroundColor: AppColors.background,
       body: Column(
         children: [
-          // ── Header com botão refresh ─────────────────────────────────────
+          // -- Header com botão refresh -------------------------------------
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
             child: Row(
@@ -277,7 +277,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
             ),
           ),
 
-          // ── Filtro de datas ──────────────────────────────────────────────
+          // -- Filtro de datas ----------------------------------------------
           Container(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Column(
@@ -300,7 +300,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                     ),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('→',
+                      child: Text('->',
                           style:
                               TextStyle(color: AppColors.textHint, fontSize: 18)),
                     ),
@@ -323,7 +323,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
             ),
           ),
 
-          // ── Tabs ──────────────────────────────────────────────────────────
+          // -- Tabs ----------------------------------------------------------
           Container(
             margin: const EdgeInsets.only(top: 12),
             color: const Color(0xFF071A10),
@@ -358,9 +358,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
     );
   }
 
-  // ── Corpo principal — separado para clareza e garantir height constraint ────
+  // -- Corpo principal - separado para clareza e garantir height constraint ----
   Widget _buildBody(AdminService svc) {
-    // Loading — só mostra spinner se realmente não tem dados ainda
+    // Loading - só mostra spinner se realmente não tem dados ainda
     if (svc.isLoadingData && svc.affiliates.isEmpty && svc.subscriptions.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -400,11 +400,11 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
         ),
       );
     }
-    // Dados carregados — exibe as abas
+    // Dados carregados - exibe as abas
     return TabBarView(
       controller: _tab,
       children: [
-                      // ── Afiliados ──────────────────────────────────────────
+                      // -- Afiliados ------------------------------------------
                       _ReportTab<AdminAffiliate>(
                         items: svc.affiliates,
                         dateOf: (a) => a.createdAt,
@@ -470,7 +470,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                             setState(() => _exportingAfiliados = v),
                       ),
 
-                      // ── Saques ─────────────────────────────────────────────
+                      // -- Saques ---------------------------------------------
                       _ReportTab<AdminWithdrawal>(
                         items: svc.withdrawals,
                         dateOf: (w) => w.solicitadoEm,
@@ -538,7 +538,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                             setState(() => _exportingSaques = v),
                       ),
 
-                      // ── Assinaturas ───────────────────────────────────────
+                      // -- Assinaturas ---------------------------------------
                       _ReportTab<SubscriptionModel>(
                         items: svc.subscriptions,
                         dateOf: (s) => s.dataInicio,
@@ -624,7 +624,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
 }
 
 
-// ── _DateChip ────────────────────────────────────────────────────────────────
+// -- _DateChip ----------------------------------------------------------------
 class _DateChip extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -684,7 +684,7 @@ class _DateChip extends StatelessWidget {
   }
 }
 
-// ── _SummaryKpi ───────────────────────────────────────────────────────────────
+// -- _SummaryKpi ---------------------------------------------------------------
 class _SummaryKpi extends StatelessWidget {
   final String label;
   final String value;
@@ -700,7 +700,7 @@ class _SummaryKpi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // NÃO usa Expanded aqui — o Row pai no _ReportTab gerencia o layout
+    // NÃO usa Expanded aqui - o Row pai no _ReportTab gerencia o layout
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
@@ -736,7 +736,7 @@ class _SummaryKpi extends StatelessWidget {
   }
 }
 
-// ── Tab genérica de relatório ─────────────────────────────────────────────────
+// -- Tab genérica de relatório -------------------------------------------------
 class _ReportTab<T> extends StatelessWidget {
   final List<T> items;
   final DateTime Function(T) dateOf;
@@ -812,7 +812,7 @@ class _ReportTab<T> extends StatelessWidget {
     final rows = _filtered;
     return Column(
       children: [
-        // ── KPIs de resumo ───────────────────────────────────────────────
+        // -- KPIs de resumo -----------------------------------------------
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Row(
@@ -832,7 +832,7 @@ class _ReportTab<T> extends StatelessWidget {
           ),
         ),
 
-        // ── Barra de ações de exportação ──────────────────────────────────
+        // -- Barra de ações de exportação ----------------------------------
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Container(
@@ -851,7 +851,7 @@ class _ReportTab<T> extends StatelessWidget {
                         color: AppColors.primary, size: 16),
                     const SizedBox(width: 6),
                     Text(
-                      'Exportar — ${rows.length} registros',
+                      'Exportar  -  ${rows.length} registros',
                       style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
@@ -901,7 +901,7 @@ class _ReportTab<T> extends StatelessWidget {
           ),
         ),
 
-        // ── Tabela / Lista ────────────────────────────────────────────────
+        // -- Tabela / Lista ------------------------------------------------
         Expanded(
           child: rows.isEmpty
               ? Center(
@@ -950,7 +950,7 @@ class _ReportTab<T> extends StatelessWidget {
   }
 }
 
-// ── Botão de exportação ───────────────────────────────────────────────────────
+// -- Botão de exportação -------------------------------------------------------
 class _ExportButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -1001,7 +1001,7 @@ class _ExportButton extends StatelessWidget {
   }
 }
 
-// ── Row: Afiliado ─────────────────────────────────────────────────────────────
+// -- Row: Afiliado -------------------------------------------------------------
 class _AffiliateRow extends StatelessWidget {
   final AdminAffiliate a;
   final NumberFormat fmt;
@@ -1095,7 +1095,7 @@ class _AffiliateRow extends StatelessWidget {
   }
 }
 
-// ── Row: Saque ────────────────────────────────────────────────────────────────
+// -- Row: Saque ----------------------------------------------------------------
 class _WithdrawalRow extends StatelessWidget {
   final AdminWithdrawal w;
   final NumberFormat fmt;
@@ -1176,7 +1176,7 @@ class _WithdrawalRow extends StatelessWidget {
   }
 }
 
-// ── Row: Assinatura ───────────────────────────────────────────────────────────
+// -- Row: Assinatura -----------------------------------------------------------
 class _SubscriptionRow extends StatelessWidget {
   final SubscriptionModel s;
   final NumberFormat fmt;
@@ -1266,7 +1266,7 @@ class _SubscriptionRow extends StatelessWidget {
                   ],
                 ),
                 Text(
-                  '${s.affiliateNome ?? s.affiliateCode} · ${s.affiliateCode}',
+                  '${s.affiliateNome ?? s.affiliateCode} - ${s.affiliateCode}',
                   style: const TextStyle(
                       fontSize: 11, color: AppColors.textSecondary),
                   overflow: TextOverflow.ellipsis,
@@ -1311,7 +1311,7 @@ class _SubscriptionRow extends StatelessWidget {
   }
 }
 
-// ── Micro texto label+valor ───────────────────────────────────────────────────
+// -- Micro texto label+valor ---------------------------------------------------
 class _Mini extends StatelessWidget {
   final String label;
   final String value;

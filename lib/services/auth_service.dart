@@ -16,7 +16,7 @@ class AuthService extends ChangeNotifier {
   bool get isLoggedIn => _currentUser != null;
   String? get error => _error;
 
-  // ── Inicialização: restaura sessão Firebase ──────────────────────────────
+  // -- Inicialização: restaura sessão Firebase ------------------------------
 
   Future<void> init() async {
     _isLoading = true;
@@ -39,7 +39,7 @@ class AuthService extends ChangeNotifier {
       }
 
       // 2. Fallback: token local (apenas quando Firebase NÃO está ativo)
-      // ⚠️ Não tenta conectar em localhost quando Firebase está disponível —
+      //  Não tenta conectar em localhost quando Firebase está disponível -
       //    evita 15 s de timeout travando a splash em produção.
       if (!_isFirebaseMode) {
         await ApiService.loadToken();
@@ -61,7 +61,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Login ────────────────────────────────────────────────────────────────
+  // -- Login ----------------------------------------------------------------
 
   Future<bool> login(String email, String senha) async {
     _isLoading = true;
@@ -111,7 +111,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // ── Cadastro ──────────────────────────────────────────────────────────────
+  // -- Cadastro --------------------------------------------------------------
 
   Future<RegisterResult> register({
     required String nome,
@@ -149,8 +149,8 @@ class AuthService extends ChangeNotifier {
             success: true,
             walletCreated: result.walletCreated,
             message: result.walletCreated
-                ? '✅ Conta e carteira criadas com sucesso!'
-                : '✅ Conta criada! Carteira será criada em instantes.',
+                ? 'Conta e carteira criadas com sucesso!'
+                : 'Conta criada! Carteira será criada em instantes.',
           );
         } else {
           _error = result.error ?? 'Erro ao criar conta';
@@ -189,7 +189,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // ── Login Social (Google / Facebook) ─────────────────────────────────────
+  // -- Login Social (Google / Facebook) -------------------------------------
 
   Future<bool> loginWithFirebase({
     required String uid,
@@ -237,7 +237,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // ── Logout ────────────────────────────────────────────────────────────────
+  // -- Logout ----------------------------------------------------------------
 
   Future<void> logout() async {
     _currentUser = null;
@@ -248,7 +248,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Atualizar saldo local ─────────────────────────────────────────────────
+  // -- Atualizar saldo local -------------------------------------------------
 
   void updateSaldo(double novoSaldo) {
     if (_currentUser != null) {
@@ -260,7 +260,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // ── Atualizar campos do perfil diretamente (sem depender do cache Firestore) ─
+  // -- Atualizar campos do perfil diretamente (sem depender do cache Firestore) -
 
   void updateCurrentUser({
     String? nome,
@@ -281,7 +281,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // ── Recarregar perfil ─────────────────────────────────────────────────────
+  // -- Recarregar perfil -----------------------------------------------------
 
   Future<void> refreshProfile() async {
     try {
@@ -300,7 +300,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Helpers privados ──────────────────────────────────────────────────────
+  // -- Helpers privados ------------------------------------------------------
 
   /// Firebase disponível quando o app está configurado com google-services.json.
   static bool get _isFirebaseMode {
@@ -342,7 +342,7 @@ class AuthService extends ChangeNotifier {
   );
 }
 
-// ── Resultado do cadastro ─────────────────────────────────────────────────────
+// -- Resultado do cadastro -----------------------------------------------------
 
 class RegisterResult {
   final bool success;

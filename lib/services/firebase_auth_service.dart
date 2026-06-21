@@ -1,11 +1,11 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// firebase_auth_service.dart — Affiliate Wallet
-// ─────────────────────────────────────────────────────────────────────────────
+// ===============================================================================
+// firebase_auth_service.dart - Affiliate Wallet
+// -----------------------------------------------------------------------------
 // Gerencia autenticação Firebase com três provedores:
 //   1. Email + Senha  (Firebase Auth nativo)
 //   2. Google Sign-In (OAuth via Firebase)
-//   3. Facebook Login (OAuth via Firebase — requer configuração no Meta)
-// ═══════════════════════════════════════════════════════════════════════════════
+//   3. Facebook Login (OAuth via Firebase - requer configuração no Meta)
+// ===============================================================================
 
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,7 +13,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:flutter/foundation.dart';
 
-// ── Resultado padrão de autenticação ─────────────────────────────────────────
+// -- Resultado padrão de autenticação -----------------------------------------
 
 class FirebaseAuthResult {
   final bool success;
@@ -48,7 +48,7 @@ class FirebaseAuthResult {
 
 enum FirebaseAuthProvider { email, google, facebook }
 
-// ── Serviço principal ─────────────────────────────────────────────────────────
+// -- Serviço principal ---------------------------------------------------------
 
 class FirebaseAuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -68,7 +68,7 @@ class FirebaseAuthService {
   // Stream de mudanças de autenticação (útil para ouvir login/logout em tempo real)
   static Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  // ── Buscar ID Token do Firebase (para enviar ao backend NestJS) ──────────────
+  // -- Buscar ID Token do Firebase (para enviar ao backend NestJS) --------------
 
   static Future<String?> getIdToken({bool forceRefresh = false}) async {
     try {
@@ -79,9 +79,9 @@ class FirebaseAuthService {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════════
-  // 1. EMAIL + SENHA — Cadastro
-  // ══════════════════════════════════════════════════════════════════════════════
+  // ==============================================================================
+  // 1. EMAIL + SENHA - Cadastro
+  // ==============================================================================
 
   static Future<FirebaseAuthResult> createUserWithEmail({
     required String email,
@@ -124,9 +124,9 @@ class FirebaseAuthService {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════════
-  // 2. EMAIL + SENHA — Login
-  // ══════════════════════════════════════════════════════════════════════════════
+  // ==============================================================================
+  // 2. EMAIL + SENHA - Login
+  // ==============================================================================
 
   static Future<FirebaseAuthResult> signInWithEmail({
     required String email,
@@ -162,9 +162,9 @@ class FirebaseAuthService {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════════
+  // ==============================================================================
   // 3. GOOGLE SIGN-IN
-  // ══════════════════════════════════════════════════════════════════════════════
+  // ==============================================================================
 
   static Future<FirebaseAuthResult> signInWithGoogle() async {
     // Fluxo Web usa signInWithPopup; Mobile usa Google Sign-In nativo
@@ -238,14 +238,14 @@ class FirebaseAuthService {
         );
       }
 
-      // Se popup bloqueado ou domínio com problema → tenta redirect
+      // Se popup bloqueado ou domínio com problema -> tenta redirect
       if (code == 'popup-blocked' ||
           code == 'unauthorized-domain' ||
           msg.contains('domain') ||
           msg.contains('not authorized') ||
           msg.contains('origin') ||
           msg.contains('popup')) {
-        // Redireciona para auth do Google — resultado capturado no getRedirectResult()
+        // Redireciona para auth do Google - resultado capturado no getRedirectResult()
         await _auth.signInWithRedirect(googleProvider);
         return FirebaseAuthResult.failure(
           'REDIRECT_INITIATED',
@@ -254,7 +254,7 @@ class FirebaseAuthService {
       }
 
       return FirebaseAuthResult.failure(
-        'FIREBASE_ERR:$code|${e.message ?? ''}',
+        'FIREBASE_ERR:$code|${e.message ??''}',
         provider: FirebaseAuthProvider.google,
       );
     } catch (e) {
@@ -302,18 +302,18 @@ class FirebaseAuthService {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════════
+  // ==============================================================================
   // 4. FACEBOOK / META LOGIN
-  // ══════════════════════════════════════════════════════════════════════════════
+  // ==============================================================================
   //
   // REQUISITO: Configurar no Meta for Developers:
   //   1. Acesse https://developers.facebook.com/
   //   2. Crie um app ou use existente
   //   3. Adicione o produto "Login do Facebook"
   //   4. Configure redirect URIs: https://SEU_PROJECT.firebaseapp.com/__/auth/handler
-  //   5. Ative no Firebase Console → Authentication → Sign-in method → Facebook
+  //   5. Ative no Firebase Console -> Authentication -> Sign-in method -> Facebook
   //   6. Insira App ID e App Secret do Meta
-  // ════════════════════════════════════════════════════════════════════════════
+  // ============================================================================
 
   static Future<FirebaseAuthResult> signInWithFacebook() async {
     try {
@@ -400,7 +400,7 @@ class FirebaseAuthService {
           provider: FirebaseAuthProvider.facebook,
         );
       }
-      // popup bloqueado → redirect
+      // popup bloqueado -> redirect
       if (code == 'popup-blocked' ||
           code == 'unauthorized-domain' ||
           (e.message?.toLowerCase().contains('domain') == true)) {
@@ -411,7 +411,7 @@ class FirebaseAuthService {
         );
       }
       return FirebaseAuthResult.failure(
-        'FACEBOOK_ERR:$code|${e.message ?? ''}',
+        'FACEBOOK_ERR:$code|${e.message ??''}',
         provider: FirebaseAuthProvider.facebook,
       );
     } catch (e) {
@@ -436,9 +436,9 @@ class FirebaseAuthService {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════════
+  // ==============================================================================
   // 5. REDEFINIR SENHA
-  // ══════════════════════════════════════════════════════════════════════════════
+  // ==============================================================================
 
   static Future<FirebaseAuthResult> sendPasswordReset(String email) async {
     try {
@@ -454,9 +454,9 @@ class FirebaseAuthService {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════════
+  // ==============================================================================
   // 6. LOGOUT (todos os provedores)
-  // ══════════════════════════════════════════════════════════════════════════════
+  // ==============================================================================
 
   static Future<void> signOut() async {
     try {
@@ -473,9 +473,9 @@ class FirebaseAuthService {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TRADUTOR DE ERROS FIREBASE → Português
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ===========================================================================
+  // TRADUTOR DE ERROS FIREBASE -> Português
+  // ===========================================================================
 
   static String _translateFirebaseError(String code) {
     switch (code) {

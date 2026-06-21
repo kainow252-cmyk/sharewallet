@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Landing Page — Pitch de Cadastro da ShareWallet
+/// Landing Page - Pitch de Cadastro da ShareWallet
 /// Layout totalmente centralizado, feature cards em coluna vertical com ícone
 /// acima do texto, pitch centralizado e textos com textAlign.center.
 class LandingScreen extends StatefulWidget {
@@ -92,7 +92,7 @@ class _LandingScreenState extends State<LandingScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // ── Hero ─────────────────────────────────────────────
+                    // -- Hero ---------------------------------------------
                     SlideTransition(
                       position: _heroSlide,
                       child: FadeTransition(
@@ -103,7 +103,7 @@ class _LandingScreenState extends State<LandingScreen>
 
                     const SizedBox(height: 20),
 
-                    // ── Pitch centralizado ────────────────────────────────
+                    // -- Pitch centralizado --------------------------------
                     FadeTransition(
                       opacity: _cardsFade,
                       child: const _PitchSection(),
@@ -111,7 +111,7 @@ class _LandingScreenState extends State<LandingScreen>
 
                     const SizedBox(height: 28),
 
-                    // ── Feature Cards (vertical centrado) ─────────────────
+                    // -- Feature Cards (vertical centrado) -----------------
                     SlideTransition(
                       position: _cardsSlide,
                       child: FadeTransition(
@@ -122,7 +122,7 @@ class _LandingScreenState extends State<LandingScreen>
 
                     const SizedBox(height: 36),
 
-                    // ── CTA Buttons ───────────────────────────────────────
+                    // -- CTA Buttons ---------------------------------------
                     ScaleTransition(
                       scale: _ctaScale,
                       child: _CtaSection(
@@ -134,7 +134,7 @@ class _LandingScreenState extends State<LandingScreen>
 
                     const SizedBox(height: 32),
 
-                    // ── Footer ────────────────────────────────────────────
+                    // -- Footer --------------------------------------------
                     const _FooterSection(),
 
                     const SizedBox(height: 24),
@@ -149,7 +149,7 @@ class _LandingScreenState extends State<LandingScreen>
   }
 }
 
-// ── Hero Section ──────────────────────────────────────────────────────────────
+// -- Hero Section --------------------------------------------------------------
 
 class _HeroSection extends StatelessWidget {
   const _HeroSection();
@@ -228,7 +228,7 @@ class _HeroSection extends StatelessWidget {
 
         const SizedBox(height: 10),
 
-        // Subtítulo — centralizado
+        // Subtítulo - centralizado
         const Text(
           'Transforme suas conexões estratégicas\nem receita recorrente.',
           textAlign: TextAlign.center,
@@ -244,7 +244,7 @@ class _HeroSection extends StatelessWidget {
   }
 }
 
-// ── Pitch Section — totalmente centralizado ───────────────────────────────────
+// -- Pitch Section - totalmente centralizado -----------------------------------
 
 class _PitchSection extends StatelessWidget {
   const _PitchSection();
@@ -309,10 +309,10 @@ class _PitchSection extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // Corpo — centralizado
+          // Corpo - centralizado
           Text(
-            'Gerencie, rastreie e expanda seus ganhos digitais. '
-            'Transforme conexões estratégicas em receita recorrente '
+            'Gerencie, rastreie e expanda seus ganhos digitais.'
+            'Transforme conexões estratégicas em receita recorrente'
             'e assuma o controle da sua performance financeira.',
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -328,7 +328,7 @@ class _PitchSection extends StatelessWidget {
   }
 }
 
-// ── Feature Cards — ícone acima, texto centralizado ──────────────────────────
+// -- Feature Cards - ícone acima, texto centralizado --------------------------
 
 class _FeatureCards extends StatelessWidget {
   const _FeatureCards();
@@ -356,7 +356,7 @@ class _FeatureCards extends StatelessWidget {
       ),
     ];
 
-    // Grid 3 colunas — IntrinsicHeight força todos os cards à mesma altura
+    // Grid 3 colunas - IntrinsicHeight força todos os cards à mesma altura
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -446,7 +446,7 @@ class _FeatureCard extends StatelessWidget {
   }
 }
 
-// ── CTA Section ───────────────────────────────────────────────────────────────
+// -- CTA Section ---------------------------------------------------------------
 
 class _CtaSection extends StatelessWidget {
   final VoidCallback onCadastro;
@@ -479,7 +479,7 @@ class _CtaSection extends StatelessWidget {
                 Icon(Icons.rocket_launch_rounded, size: 20),
                 SizedBox(width: 8),
                 Text(
-                  'Começar agora — é grátis',
+                  'Começar agora  -  é grátis',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
@@ -532,7 +532,7 @@ class _CtaSection extends StatelessWidget {
   }
 }
 
-// ── Footer Section ────────────────────────────────────────────────────────────
+// -- Footer Section ------------------------------------------------------------
 
 class _FooterSection extends StatelessWidget {
   const _FooterSection();
@@ -549,7 +549,7 @@ class _FooterSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // Social proof row — centralizado
+        // Social proof row - centralizado
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
@@ -564,7 +564,7 @@ class _FooterSection extends StatelessWidget {
         const SizedBox(height: 16),
 
         Text(
-          '© 2025 ShareWallet • Todos os direitos reservados',
+          '© 2025 ShareWallet * Todos os direitos reservados',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.2),

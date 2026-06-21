@@ -7,9 +7,9 @@ import 'package:flutter/foundation.dart'
 /// Projeto: affiliate-wallet-75853
 /// Gerado em: 2025-06-03
 ///
-/// ⚠️  IMPORTANTE: Antes de usar Firebase, crie o Firestore Database:
+///   IMPORTANTE: Antes de usar Firebase, crie o Firestore Database:
 /// https://console.cloud.google.com/datastore/setup?project=affiliate-wallet-75853
-/// Escolha "Cloud Firestore" → "Modo nativo" → Região "southamerica-east1"
+/// Escolha "Cloud Firestore" -> "Modo nativo" -> Região "southamerica-east1"
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) return web;
@@ -31,7 +31,7 @@ class DefaultFirebaseOptions {
     }
   }
 
-  // ── Web ────────────────────────────────────────────────────────────────────
+  // -- Web --------------------------------------------------------------------
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyAapUKRo74zDOzrjjtZnAjodjptUnnHrCM',
     appId: '1:470218127330:web:310f8672bbdefe2f4aabbb',
@@ -45,7 +45,7 @@ class DefaultFirebaseOptions {
     databaseURL: 'https://affiliate-wallet-75853.firebaseio.com',
   );
 
-  // ── Android ────────────────────────────────────────────────────────────────
+  // -- Android ----------------------------------------------------------------
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCN639SuHRlNzGZUa9rW7cgrNUN5lZ-wpA',
     appId: '1:470218127330:android:d3af2223eaf22d2d4aabbb',
@@ -54,7 +54,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'affiliate-wallet-75853.firebasestorage.app',
   );
 
-  // ── iOS ────────────────────────────────────────────────────────────────────
+  // -- iOS --------------------------------------------------------------------
   // Configure no Firebase Console se for suportar iOS
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCN639SuHRlNzGZUa9rW7cgrNUN5lZ-wpA',
@@ -66,7 +66,7 @@ class DefaultFirebaseOptions {
     iosBundleId: 'com.affiliatewallet.wallet',
   );
 
-  // ── macOS ──────────────────────────────────────────────────────────────────
+  // -- macOS ------------------------------------------------------------------
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyCN639SuHRlNzGZUa9rW7cgrNUN5lZ-wpA',
     appId: '1:470218127330:ios:placeholder',

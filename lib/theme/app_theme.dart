@@ -63,6 +63,11 @@ class AppTheme {
         ),
         scaffoldBackgroundColor: AppColors.background,
         fontFamily: 'Roboto',
+        // fontFamilyFallback com NotoColorEmoji como fallback para chars especiais
+        // Elimina o warning "Could not find a set of Noto fonts" para dados dinâmicos
+        textTheme: const TextTheme().apply(
+          fontFamilyFallback: ['NotoColorEmoji'],
+        ),
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,

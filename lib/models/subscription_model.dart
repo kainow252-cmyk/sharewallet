@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'product_model.dart';
 
-// ── Status da assinatura ──────────────────────────────────────────────────────
+// -- Status da assinatura ------------------------------------------------------
 enum SubscriptionStatus {
   ativa,      // Pix Recorrente autorizado, pagamentos em dia
   pendente,   // Tentativa de débito falhou (saldo insuficiente, etc.)
@@ -9,7 +9,7 @@ enum SubscriptionStatus {
   aguardando, // Aguardando autorização do cliente no banco
 }
 
-// ── Status do pagamento mensal ────────────────────────────────────────────────
+// -- Status do pagamento mensal ------------------------------------------------
 enum PaymentStatus {
   pago,
   pendente,
@@ -17,7 +17,7 @@ enum PaymentStatus {
   processando,
 }
 
-// ── Histórico de cobrança mensal ─────────────────────────────────────────────
+// -- Histórico de cobrança mensal ---------------------------------------------
 class SubscriptionPayment {
   final String id;
   final DateTime dataVencimento;
@@ -75,7 +75,7 @@ class SubscriptionPayment {
   }
 }
 
-// ── Modelo principal da assinatura ───────────────────────────────────────────
+// -- Modelo principal da assinatura -------------------------------------------
 class SubscriptionModel {
   final String id;
   final String productId;
@@ -196,7 +196,7 @@ class SubscriptionModel {
     );
   }
 
-  // ── Mock para demonstração ────────────────────────────────────────────────
+  // -- Mock para demonstração ------------------------------------------------
   static List<SubscriptionModel> get mockSubscriptions => [
         SubscriptionModel(
           id: 'sub_001',
@@ -266,7 +266,7 @@ class SubscriptionModel {
                   DateTime.now().year, DateTime.now().month, 5),
               valor: 19.90,
               status: PaymentStatus.falhou,
-              motivo: 'Pix Recorrente recusado — Saldo insuficiente',
+              motivo: 'Pix Recorrente recusado  -  Saldo insuficiente',
             ),
             SubscriptionPayment(
               id: 'pay_004',

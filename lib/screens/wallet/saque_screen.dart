@@ -74,13 +74,13 @@ class _SaqueScreenState extends State<SaqueScreen>
     super.dispose();
   }
 
-  // ── Atalho: preencher valor máximo (saldo disponível) ──────────────────────
+  // -- Atalho: preencher valor máximo (saldo disponível) ----------------------
   void _setMax(double saldo) {
     _valorController.text =
         saldo.toStringAsFixed(2).replaceAll('.', ',');
   }
 
-  // ── Solicitar Saque ────────────────────────────────────────────────────────
+  // -- Solicitar Saque --------------------------------------------------------
   Future<void> _solicitarSaque() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -209,7 +209,7 @@ class _SaqueScreenState extends State<SaqueScreen>
     );
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
+  // -- Build ------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     context.watch<AuthService>(); // escuta mudanças de autenticação
@@ -236,7 +236,7 @@ class _SaqueScreenState extends State<SaqueScreen>
         child: TabBarView(
           controller: _tabController,
           children: [
-            // ── Tab 1: Formulário ──────────────────────────────────────────
+            // -- Tab 1: Formulário ------------------------------------------
             SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Form(
@@ -244,7 +244,7 @@ class _SaqueScreenState extends State<SaqueScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Card de saldo ──────────────────────────────────────
+                    // -- Card de saldo --------------------------------------
                     _SaldoCard(
                       saldo: saldo,
                       totalSacado: wallet.totalSacado,
@@ -252,7 +252,7 @@ class _SaqueScreenState extends State<SaqueScreen>
                     ),
                     const SizedBox(height: 24),
 
-                    // ── Valor ──────────────────────────────────────────────
+                    // -- Valor ----------------------------------------------
                     const _SectionLabel('Valor do Saque'),
                     const SizedBox(height: 10),
                     TextFormField(
@@ -264,7 +264,7 @@ class _SaqueScreenState extends State<SaqueScreen>
                           fontWeight: FontWeight.w800,
                           color: AppColors.primary),
                       decoration: const InputDecoration(
-                        prefixText: 'R\$ ',
+                        prefixText: 'R\$',
                         prefixStyle: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
@@ -285,7 +285,7 @@ class _SaqueScreenState extends State<SaqueScreen>
                       },
                     ),
 
-                    // ── Atalhos de valor ───────────────────────────────────
+                    // -- Atalhos de valor -----------------------------------
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
@@ -313,7 +313,7 @@ class _SaqueScreenState extends State<SaqueScreen>
 
                     const SizedBox(height: 24),
 
-                    // ── Tipo de chave PIX ──────────────────────────────────
+                    // -- Tipo de chave PIX ----------------------------------
                     const _SectionLabel('Tipo de Chave PIX'),
                     const SizedBox(height: 10),
                     GridView.count(
@@ -392,7 +392,7 @@ class _SaqueScreenState extends State<SaqueScreen>
 
                     const SizedBox(height: 16),
 
-                    // ── Campo de chave PIX ─────────────────────────────────
+                    // -- Campo de chave PIX ---------------------------------
                     TextFormField(
                       controller: _pixKeyController,
                       decoration: InputDecoration(
@@ -423,7 +423,7 @@ class _SaqueScreenState extends State<SaqueScreen>
 
                     const SizedBox(height: 24),
 
-                    // ── Aviso ──────────────────────────────────────────────
+                    // -- Aviso ----------------------------------------------
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -471,7 +471,7 @@ class _SaqueScreenState extends State<SaqueScreen>
               ),
             ),
 
-            // ── Tab 2: Histórico de saques ─────────────────────────────────
+            // -- Tab 2: Histórico de saques ---------------------------------
             _HistoricoSaques(
               withdraws: wallet.withdraws,
               isLoading: wallet.isLoading,
@@ -493,7 +493,7 @@ class _SaqueScreenState extends State<SaqueScreen>
   }
 }
 
-// ── Card de saldo ─────────────────────────────────────────────────────────────
+// -- Card de saldo -------------------------------------------------------------
 class _SaldoCard extends StatelessWidget {
   final double saldo;
   final double totalSacado;
@@ -652,7 +652,7 @@ class _MiniStat extends StatelessWidget {
   }
 }
 
-// ── Chip de valor rápido ──────────────────────────────────────────────────────
+// -- Chip de valor rápido ------------------------------------------------------
 class _ValueChip extends StatelessWidget {
   final String label;
   final bool enabled;
@@ -706,7 +706,7 @@ class _ValueChip extends StatelessWidget {
   }
 }
 
-// ── Label de seção ────────────────────────────────────────────────────────────
+// -- Label de seção ------------------------------------------------------------
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
@@ -723,7 +723,7 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// ── Histórico de Saques ───────────────────────────────────────────────────────
+// -- Histórico de Saques -------------------------------------------------------
 class _HistoricoSaques extends StatelessWidget {
   final List<WithdrawModel> withdraws;
   final bool isLoading;
@@ -752,7 +752,7 @@ class _HistoricoSaques extends StatelessWidget {
       color: AppColors.primary,
       child: CustomScrollView(
         slivers: [
-          // ── Banner resumo ────────────────────────────────────────────────
+          // -- Banner resumo ------------------------------------------------
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -792,7 +792,7 @@ class _HistoricoSaques extends StatelessWidget {
             ),
           ),
 
-          // ── Lista ou empty state ─────────────────────────────────────────
+          // -- Lista ou empty state -----------------------------------------
           if (withdraws.isEmpty)
             SliverFillRemaining(
               child: Center(
@@ -850,7 +850,7 @@ class _HistoricoSaques extends StatelessWidget {
   }
 }
 
-// ── KPI do histórico ──────────────────────────────────────────────────────────
+// -- KPI do histórico ----------------------------------------------------------
 class _HistoricoKpi extends StatelessWidget {
   final String label;
   final String value;
@@ -901,7 +901,7 @@ class _HistoricoKpi extends StatelessWidget {
   }
 }
 
-// ── Card individual do histórico ──────────────────────────────────────────────
+// -- Card individual do histórico ----------------------------------------------
 class _WithdrawCard extends StatelessWidget {
   final WithdrawModel w;
   final NumberFormat currencyFmt;
@@ -973,7 +973,7 @@ class _WithdrawCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // ── Ícone status ─────────────────────────────────────────────────
+          // -- Ícone status -------------------------------------------------
           Container(
             width: 44,
             height: 44,
@@ -985,7 +985,7 @@ class _WithdrawCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
 
-          // ── Detalhes ─────────────────────────────────────────────────────
+          // -- Detalhes -----------------------------------------------------
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1070,7 +1070,7 @@ class _WithdrawCard extends StatelessWidget {
   }
 }
 
-// ── Linha de info ─────────────────────────────────────────────────────────────
+// -- Linha de info -------------------------------------------------------------
 class _InfoRow extends StatelessWidget {
   final String text;
   const _InfoRow({required this.text});

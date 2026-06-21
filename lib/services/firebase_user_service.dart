@@ -1,19 +1,19 @@
-// ═══════════════════════════════════════════════════════════════════════════
-// firebase_user_service.dart — ShareWallet
-// ───────────────────────────────────────────────────────────────────────────
+// ===========================================================================
+// firebase_user_service.dart - ShareWallet
+// ---------------------------------------------------------------------------
 // Gerencia registro, login e perfil de usuários com Firebase Auth + Firestore.
 //
 // Fluxo de REGISTRO:
 //   1. Cria conta no Firebase Auth (email + senha)
-//   2. Cria documento em affiliates/{uid}    ← perfil no Firestore
-//   3. Cria documento em wallets/{uid}       ← carteira zerada automática
-//   4. Cria registro no D1 (Worker)          ← visível no painel Admin
+//   2. Cria documento em affiliates/{uid}    <- perfil no Firestore
+//   3. Cria documento em wallets/{uid}       <- carteira zerada automática
+//   4. Cria registro no D1 (Worker)          <- visível no painel Admin
 //
 // Fluxo de LOGIN:
 //   1. Autentica no Firebase Auth
 //   2. Busca/atualiza perfil em affiliates/{uid}
 //   3. Retorna UserModel com saldo real da carteira
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -22,7 +22,7 @@ import '../models/user_model.dart';
 import 'firebase_auth_service.dart';
 import 'cf_api_service.dart';
 
-// ── Resultado de operações do serviço ────────────────────────────────────────
+// -- Resultado de operações do serviço ----------------------------------------
 
 class UserServiceResult {
   final bool success;
@@ -41,10 +41,10 @@ class UserServiceResult {
       UserServiceResult(success: false, error: msg);
 }
 
-// ── Serviço principal ────────────────────────────────────────────────────────
+// -- Serviço principal --------------------------------------------------------
 
 class FirebaseUserService {
-  // ── Registrar novo afiliado ─────────────────────────────────────────────
+  // -- Registrar novo afiliado ---------------------------------------------
 
   /// Cria conta Firebase + perfil Firestore + carteira zerada.
   static Future<UserServiceResult> register({
@@ -77,7 +77,7 @@ class FirebaseUserService {
 
     final db = _getDb();
     if (db == null) {
-        // Firebase não disponível — retorna usuário local sem Firestore
+        // Firebase não disponível - retorna usuário local sem Firestore
         return UserServiceResult(
           success: true,
           walletCreated: false,
@@ -128,7 +128,7 @@ class FirebaseUserService {
 
       await db.collection('affiliates').doc(uid).set(affiliateData);
 
-      // 4. Criar carteira em wallets/{uid} — zerada, pronta para receber
+      // 4. Criar carteira em wallets/{uid} - zerada, pronta para receber
       await _criarCarteira(db, uid: uid, affiliateCode: affiliateCode);
 
       // 5. Incrementar contador no afiliado sponsor (se houver)
@@ -136,7 +136,7 @@ class FirebaseUserService {
         await _incrementarReferral(db, sponsorId);
       }
 
-      // 6. Sincronizar no D1 (Cloudflare Worker) — necessário para o painel Admin
+      // 6. Sincronizar no D1 (Cloudflare Worker) - necessário para o painel Admin
       await _sincronizarD1(
         uid: uid,
         nome: nome,
@@ -150,10 +150,10 @@ class FirebaseUserService {
       );
 
       if (kDebugMode) {
-        debugPrint('[FirebaseUserService] ✅ Registro completo:');
-        debugPrint('  uid: $uid');
-        debugPrint('  code: $affiliateCode');
-        debugPrint('  sponsor: $sponsorId');
+        debugPrint('[FirebaseUserService] Registro completo:');
+        debugPrint('uid: $uid');
+        debugPrint('code: $affiliateCode');
+        debugPrint('sponsor: $sponsorId');
       }
 
       return UserServiceResult(
@@ -179,7 +179,7 @@ class FirebaseUserService {
     }
   }
 
-  // ── Login de afiliado existente ─────────────────────────────────────────
+  // -- Login de afiliado existente -----------------------------------------
 
   /// Autentica no Firebase Auth e busca perfil + saldo no Firestore.
   static Future<UserServiceResult> login({
@@ -216,9 +216,9 @@ class FirebaseUserService {
     }
   }
 
-  // ── Login via Google / Facebook (social) ───────────────────────────────
+  // -- Login via Google / Facebook (social) -------------------------------
 
-  /// Processa login social — cria perfil se for primeiro acesso.
+  /// Processa login social - cria perfil se for primeiro acesso.
   static Future<UserServiceResult> loginSocial({
     required FirebaseAuthResult authResult,
   }) async {
@@ -244,7 +244,7 @@ class FirebaseUserService {
     }
   }
 
-  // ── Buscar perfil do usuário atual ─────────────────────────────────────
+  // -- Buscar perfil do usuário atual -------------------------------------
 
   /// Verifica Firebase Auth atual e carrega dados do Firestore.
   static Future<UserModel?> carregarUsuarioAtual() async {
@@ -265,7 +265,7 @@ class FirebaseUserService {
     }
   }
 
-  // ── Atualizar saldo local no Firestore ─────────────────────────────────
+  // -- Atualizar saldo local no Firestore ---------------------------------
 
   /// Atualiza dados do perfil do afiliado no Firestore.
   static Future<void> atualizarPerfil({
@@ -295,7 +295,7 @@ class FirebaseUserService {
 
       await db.collection('affiliates').doc(uid).set(data, SetOptions(merge: true));
 
-      if (kDebugMode) debugPrint('[FirebaseUserService] ✅ Perfil atualizado: $uid');
+      if (kDebugMode) debugPrint('[FirebaseUserService] Perfil atualizado: $uid');
     } catch (e) {
       if (kDebugMode) debugPrint('[FirebaseUserService] Erro atualizarPerfil: $e');
       rethrow;
@@ -323,11 +323,11 @@ class FirebaseUserService {
     }
   }
 
-  // ── Logout ──────────────────────────────────────────────────────────────
+  // -- Logout --------------------------------------------------------------
 
   static Future<void> signOut() => FirebaseAuthService.signOut();
 
-  // ── Helpers privados ────────────────────────────────────────────────────
+  // -- Helpers privados ----------------------------------------------------
 
   /// Busca perfil no Firestore. Se não existir, cria automaticamente.
   static Future<UserModel> _buscarOuCriarPerfil({
@@ -392,7 +392,7 @@ class FirebaseUserService {
         );
       }
 
-      // Perfil existe — montar UserModel com dados reais
+      // Perfil existe - montar UserModel com dados reais
       final aData = affiliateDoc.data()!;
       final saldoDisponivel = walletDoc.exists
           ? _toDouble(walletDoc.data()?['saldo_disponivel'])
@@ -406,7 +406,7 @@ class FirebaseUserService {
 
       final affiliateCode = _toStr(aData['affiliate_code'], fallback: _gerarCodigo(uid));
 
-      // ── Monta campos do perfil sem bloquear no D1 ────────────────────────
+      // -- Monta campos do perfil sem bloquear no D1 ------------------------
       // OTIMIZAÇÃO DE LOGIN: NÃO fazemos request D1 aqui.
       // O merge D1 agora acontece em background (após retornar o UserModel),
       // eliminando 2-3 requests HTTP do caminho crítico do login.
@@ -416,9 +416,9 @@ class FirebaseUserService {
       final String pixKeyResolvido   = _toStr(aData['pix_key'], fallback: email);
       final String pixKeyTypeResolvido = _toStr(aData['pix_key_type'], fallback: 'EMAIL');
 
-      // Sincronizar com D1 em background — NÃO bloqueia o login
+      // Sincronizar com D1 em background - NÃO bloqueia o login
       // Garante que afiliados apareçam no Admin e mantém D1 atualizado.
-      // O merge D1→Firestore é feito dentro do _sincronizarD1 se campos estiverem vazios.
+      // O merge D1->Firestore é feito dentro do _sincronizarD1 se campos estiverem vazios.
       Future.microtask(() => _sincronizarD1(
         uid: uid,
         nome: nomeResolvido,
@@ -483,7 +483,7 @@ class FirebaseUserService {
       });
 
       if (kDebugMode) {
-        debugPrint('[FirebaseUserService] ✅ Carteira criada: wallets/$uid');
+        debugPrint('[FirebaseUserService] Carteira criada: wallets/$uid');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -521,7 +521,7 @@ class FirebaseUserService {
 
   /// Sincroniza o afiliado no banco D1 do Cloudflare Worker.
   /// Isso torna o usuário visível no painel Admin (que lê do D1).
-  /// Também faz merge D1→Firestore quando campos estão vazios (ex: CPF, telefone).
+  /// Também faz merge D1->Firestore quando campos estão vazios (ex: CPF, telefone).
   /// [db] é passado opcionalmente para o merge Firestore; se null, apenas sincroniza D1.
   static Future<void> _sincronizarD1({
     required String uid,
@@ -539,7 +539,7 @@ class FirebaseUserService {
       // Verifica se já existe no D1 pelo email
       final existing = await CfApiService.getAffiliateByEmail(email);
       if (existing != null) {
-        // ── Merge D1→Firestore quando campos Firestore estão vazios ─────────
+        // -- Merge D1->Firestore quando campos Firestore estão vazios ---------
         // Feito AQUI (background) ao invés de antes do retorno do UserModel,
         // eliminando latência de request D1 do caminho crítico do login.
         if (db != null && (cpf.isEmpty || telefone.isEmpty)) {
@@ -580,7 +580,7 @@ class FirebaseUserService {
             'status': 'ativo',
           });
         } else {
-          // IDs iguais — apenas atualizar campos de perfil
+          // IDs iguais - apenas atualizar campos de perfil
           await CfApiService.updateAffiliate(uid, {
             'nome': nome,
             'email': email,
@@ -594,7 +594,7 @@ class FirebaseUserService {
         return;
       }
 
-      // Não existe no D1 → criar registro completo
+      // Não existe no D1 -> criar registro completo
       final result = await CfApiService.createAffiliate({
         'id': uid,
         'nome': nome,
@@ -616,9 +616,9 @@ class FirebaseUserService {
 
       if (kDebugMode) {
         if (result != null) {
-          debugPrint('[FirebaseUserService] ✅ D1 sincronizado: $affiliateCode');
+          debugPrint('[FirebaseUserService] D1 sincronizado: $affiliateCode');
         } else {
-          debugPrint('[FirebaseUserService] ⚠️ D1 falhou (será reprocessado no login)');
+          debugPrint('[FirebaseUserService] D1 falhou (será reprocessado no login)');
         }
       }
     } catch (e) {
@@ -640,7 +640,7 @@ class FirebaseUserService {
     return buffer.toString();
   }
 
-  // ── Helpers inline (substitui FirestoreService helpers) ────────────────
+  // -- Helpers inline (substitui FirestoreService helpers) ----------------
 
   static const String _databaseId = 'affiliatewalletwallet';
   static FirebaseFirestore? _dbInstance;

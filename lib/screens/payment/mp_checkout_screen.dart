@@ -7,7 +7,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../dashboard/main_nav_screen.dart';
 
-// ── Tela principal de checkout MP ─────────────────────────────────────────────
+// -- Tela principal de checkout MP ---------------------------------------------
 
 class MpCheckoutScreen extends StatefulWidget {
   final ProductModel product;
@@ -196,7 +196,7 @@ class _MpCheckoutScreenState extends State<MpCheckoutScreen>
 
 enum _CheckoutStep { form, loading, checkout, success, error }
 
-// ── Step 1: Formulário ────────────────────────────────────────────────────────
+// -- Step 1: Formulário --------------------------------------------------------
 
 class _FormStep extends StatelessWidget {
   final ProductModel product;
@@ -227,7 +227,7 @@ class _FormStep extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Card produto ───────────────────────────────────────────────
+            // -- Card produto -----------------------------------------------
             _ProductCard(product: product),
             const SizedBox(height: 24),
 
@@ -241,7 +241,7 @@ class _FormStep extends StatelessWidget {
               label: 'Nome completo',
               icon: Icons.person_outline_rounded,
               validator: (v) =>
-                  v!.trim().split(' ').length < 2 ? 'Informe nome e sobrenome' : null,
+                  v!.trim().split('').length < 2 ? 'Informe nome e sobrenome' : null,
             ),
             const SizedBox(height: 12),
             _Field(
@@ -262,11 +262,11 @@ class _FormStep extends StatelessWidget {
             ),
             const SizedBox(height: 28),
 
-            // ── Resumo ────────────────────────────────────────────────────
+            // -- Resumo ----------------------------------------------------
             _ResumoCard(product: product),
             const SizedBox(height: 20),
 
-            // ── Botão ─────────────────────────────────────────────────────
+            // -- Botão -----------------------------------------------------
             SizedBox(
               width: double.infinity,
               height: 54,
@@ -301,7 +301,7 @@ class _FormStep extends StatelessWidget {
             const SizedBox(height: 12),
             Center(
               child: Text(
-                '🔒 Pagamento 100% seguro via Mercado Pago',
+                'Pagamento 100% seguro via Mercado Pago',
                 style: TextStyle(
                     fontSize: 11,
                     color: AppColors.textHint.withValues(alpha: 0.9)),
@@ -315,7 +315,7 @@ class _FormStep extends StatelessWidget {
   }
 }
 
-// ── Step 2: Loading ───────────────────────────────────────────────────────────
+// -- Step 2: Loading -----------------------------------------------------------
 
 class _LoadingStep extends StatelessWidget {
   const _LoadingStep({super.key});
@@ -357,7 +357,7 @@ class _LoadingStep extends StatelessWidget {
   }
 }
 
-// ── Step 3: Link Checkout ─────────────────────────────────────────────────────
+// -- Step 3: Link Checkout -----------------------------------------------------
 
 class _CheckoutLinkStep extends StatelessWidget {
   final ProductModel product;
@@ -383,7 +383,7 @@ class _CheckoutLinkStep extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // ── Header ───────────────────────────────────────────────────────
+          // -- Header -------------------------------------------------------
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -416,7 +416,7 @@ class _CheckoutLinkStep extends StatelessWidget {
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
                               color: AppColors.textPrimary)),
-                      Text('Preferência: ${preferenceId.length > 20 ? '...${preferenceId.substring(preferenceId.length - 16)}' : preferenceId}',
+                      Text('Preferência: ${preferenceId.length > 20 ?'...${preferenceId.substring(preferenceId.length - 16)}': preferenceId}',
                           style: const TextStyle(
                               fontSize: 10, color: AppColors.textHint)),
                     ],
@@ -440,7 +440,7 @@ class _CheckoutLinkStep extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // ── Resumo do produto ────────────────────────────────────────────
+          // -- Resumo do produto --------------------------------------------
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -484,7 +484,7 @@ class _CheckoutLinkStep extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // ── Botão principal: Abrir MP ────────────────────────────────────
+          // -- Botão principal: Abrir MP ------------------------------------
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -511,7 +511,7 @@ class _CheckoutLinkStep extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // ── Copiar link ──────────────────────────────────────────────────
+          // -- Copiar link --------------------------------------------------
           SizedBox(
             width: double.infinity,
             height: 42,
@@ -520,7 +520,7 @@ class _CheckoutLinkStep extends StatelessWidget {
                 Clipboard.setData(ClipboardData(text: checkoutUrl));
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('🔗 Link copiado! Cole no navegador.'),
+                    content: Text('Link copiado! Cole no navegador.'),
                     backgroundColor: Color(0xFF009EE3),
                     duration: Duration(seconds: 2),
                   ),
@@ -539,7 +539,7 @@ class _CheckoutLinkStep extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // ── Divider ──────────────────────────────────────────────────────
+          // -- Divider ------------------------------------------------------
           Row(
             children: [
               const Expanded(child: Divider()),
@@ -561,7 +561,7 @@ class _CheckoutLinkStep extends StatelessWidget {
   }
 }
 
-// ── Step 4: Sucesso ───────────────────────────────────────────────────────────
+// -- Step 4: Sucesso -----------------------------------------------------------
 
 class _SuccessStep extends StatelessWidget {
   final ProductModel product;
@@ -582,7 +582,7 @@ class _SuccessStep extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 20),
-          // ── Animação sucesso ─────────────────────────────────────────────
+          // -- Animação sucesso ---------------------------------------------
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -619,7 +619,7 @@ class _SuccessStep extends StatelessWidget {
           ),
           const SizedBox(height: 28),
 
-          // ── Comissão creditada ─────────────────────────────────────────
+          // -- Comissão creditada -----------------------------------------
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -670,7 +670,7 @@ class _SuccessStep extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // ── Detalhes recorrência ──────────────────────────────────────
+          // -- Detalhes recorrência --------------------------------------
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -696,7 +696,7 @@ class _SuccessStep extends StatelessWidget {
                 _SuccessDetail(
                   icon: Icons.percent_rounded,
                   label: 'Comissão',
-                  value: '20% — R\$ ${comissao.toStringAsFixed(2)}/mês',
+                  value: '20%  -  R\$ ${comissao.toStringAsFixed(2)}/mês',
                   color: AppColors.gold,
                 ),
               ],
@@ -734,7 +734,7 @@ class _SuccessStep extends StatelessWidget {
   }
 }
 
-// ── Step 5: Erro ──────────────────────────────────────────────────────────────
+// -- Step 5: Erro --------------------------------------------------------------
 
 class _ErrorStep extends StatelessWidget {
   final String message;
@@ -795,7 +795,7 @@ class _ErrorStep extends StatelessWidget {
   }
 }
 
-// ── Widgets auxiliares ────────────────────────────────────────────────────────
+// -- Widgets auxiliares --------------------------------------------------------
 
 class _ProductCard extends StatelessWidget {
   final ProductModel product;

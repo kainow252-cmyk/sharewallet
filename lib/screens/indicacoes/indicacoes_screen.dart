@@ -90,7 +90,7 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
             'status': (s['status']?.toString() ?? 'ativa') == 'ativa'
                 ? 'ATIVO'
                 : 'INATIVO',
-            // CORREÇÃO: comissao no D1 já é R$ — usar diretamente
+            // CORREÇÃO: comissao no D1 já é R$ - usar diretamente
             'comissao_mensal': (s['comissao'] as num?)?.toDouble() ?? 0,
             'meses_ativos': 1,
           }).toList();
@@ -142,7 +142,7 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
         color: AppColors.primary,
         child: CustomScrollView(
           slivers: [
-            // ── AppBar ───────────────────────────────────────────────────
+            // -- AppBar ---------------------------------------------------
             SliverAppBar(
               expandedHeight: 200,
               pinned: true,
@@ -205,7 +205,7 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Card de nível atual ──────────────────────────────
+                    // -- Card de nível atual ------------------------------
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -286,7 +286,7 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
                             ),
                           ] else ...[
                             const SizedBox(height: 8),
-                            const Text('🏆 Nível máximo atingido!',
+                            const Text('Nível máximo atingido!',
                                 style: TextStyle(
                                     color: AppColors.success,
                                     fontWeight: FontWeight.w700)),
@@ -297,7 +297,7 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
 
                     const SizedBox(height: 24),
 
-                    // ── Todos os níveis ──────────────────────────────────
+                    // -- Todos os níveis ----------------------------------
                     const Text('Progressão de Níveis',
                         style: TextStyle(
                             fontWeight: FontWeight.w800,
@@ -319,7 +319,7 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
 
                     const SizedBox(height: 24),
 
-                    // ── Lista de indicados ───────────────────────────────
+                    // -- Lista de indicados -------------------------------
                     Row(
                       children: [
                         const Text('Meus indicados',
@@ -390,7 +390,7 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
   }
 }
 
-// ── Modelo de nível ───────────────────────────────────────────────────────────
+// -- Modelo de nível -----------------------------------------------------------
 class _Nivel {
   final String nome;
   final int min;
@@ -401,7 +401,7 @@ class _Nivel {
   const _Nivel(this.nome, this.min, this.max, this.cor, this.icone);
 }
 
-// ── Widget: Bolha de estatística ──────────────────────────────────────────────
+// -- Widget: Bolha de estatística ----------------------------------------------
 class _StatBubble extends StatelessWidget {
   final String label;
   final String value;
@@ -440,7 +440,7 @@ class _StatBubble extends StatelessWidget {
   }
 }
 
-// ── Widget: Chip de nível ─────────────────────────────────────────────────────
+// -- Widget: Chip de nível -----------------------------------------------------
 class _NivelChip extends StatelessWidget {
   final _Nivel nivel;
   final bool isAtual;
@@ -498,7 +498,7 @@ class _NivelChip extends StatelessWidget {
   }
 }
 
-// ── Widget: Tile de referral ──────────────────────────────────────────────────
+// -- Widget: Tile de referral --------------------------------------------------
 class _ReferralTile extends StatelessWidget {
   final Map<String, dynamic> referral;
   final NumberFormat fmt;
@@ -542,7 +542,7 @@ class _ReferralTile extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                         color: AppColors.textPrimary)),
-                Text('$meses ${ meses == 1 ? 'mês' : 'meses'} ativo',
+                Text('$meses ${ meses == 1 ?'mês':'meses'} ativo',
                     style: const TextStyle(
                         color: AppColors.textHint, fontSize: 11)),
               ],

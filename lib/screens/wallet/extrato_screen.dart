@@ -65,7 +65,7 @@ class _ExtratoScreenState extends State<ExtratoScreen>
                 _SummaryItem(
                   label: 'Total Comissões',
                   value:
-                      'R\$ ${wallet.totalComissoes.toStringAsFixed(2).replaceAll('.', ',')}',
+                      'R\$ ${wallet.totalComissoes.toStringAsFixed(2).replaceAll('.',',')}',
                   color: AppColors.gold,
                 ),
                 Container(
@@ -74,7 +74,7 @@ class _ExtratoScreenState extends State<ExtratoScreen>
                     color: Colors.white.withValues(alpha: 0.2)),
                 _SummaryItem(
                   label: 'Total Saques',
-                  value: 'R\$ ${wallet.withdraws.fold(0.0, (s, w) => s + w.valor).toStringAsFixed(2).replaceAll('.', ',')}',
+                  value: 'R\$ ${wallet.withdraws.fold(0.0, (s, w) => s + w.valor).toStringAsFixed(2).replaceAll('.',',')}',
                   color: Colors.white,
                 ),
                 Container(
@@ -163,7 +163,7 @@ class _ExtratoScreenState extends State<ExtratoScreen>
                   ),
                   const Spacer(),
                   Text(
-                    '+R\$ ${monthTotal.toStringAsFixed(2).replaceAll('.', ',')}',
+                    '+R\$ ${monthTotal.toStringAsFixed(2).replaceAll('.',',')}',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -279,7 +279,7 @@ class _ExtratoItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${isPositivo ? '+' : '-'}R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}',
+                '${isPositivo ?'+':'-'}R\$ ${valor.toStringAsFixed(2).replaceAll('.',',')}',
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w800,

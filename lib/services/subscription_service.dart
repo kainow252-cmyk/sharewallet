@@ -3,7 +3,7 @@ import '../models/subscription_model.dart';
 import '../models/product_model.dart';
 import 'cf_api_service.dart';
 
-// ── Resultado da autorização de assinatura ───────────────────────────────────
+// -- Resultado da autorização de assinatura -----------------------------------
 class SubscribeResult {
   final bool success;
   final String? subscriptionId;
@@ -20,7 +20,7 @@ class SubscribeResult {
   });
 }
 
-// ── Resultado do saque ────────────────────────────────────────────────────────
+// -- Resultado do saque --------------------------------------------------------
 class WithdrawResult {
   final bool success;
   final String? txId;
@@ -67,7 +67,7 @@ class SubscriptionService extends ChangeNotifier {
   double get comissoesMensaisRecorrentes =>
       ativas.fold(0.0, (sum, s) => sum + s.valorComissao);
 
-  // ── Carregar assinaturas via D1 ───────────────────────────────────────────
+  // -- Carregar assinaturas via D1 -------------------------------------------
   Future<void> loadSubscriptions(String affiliateCode) async {
     _isLoading = true;
     _error = null;
@@ -88,7 +88,7 @@ class SubscriptionService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Criar assinatura via D1 ───────────────────────────────────────────────
+  // -- Criar assinatura via D1 -----------------------------------------------
   Future<SubscribeResult> subscribe({
     required ProductModel product,
     required String clienteNome,

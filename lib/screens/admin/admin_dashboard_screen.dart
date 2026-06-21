@@ -46,11 +46,11 @@ class AdminDashboardScreen extends StatelessWidget {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                     children: [
-                      // ── Header com botão refresh ───────────────────────────
+                      // -- Header com botão refresh ---------------------------
                       _DashboardHeader(onRefresh: svc.loadAll),
                       const SizedBox(height: 20),
 
-                      // ── Receita ────────────────────────────────────────────
+                      // -- Receita --------------------------------------------
                       _SectionTitle(title: 'Receita'),
                       const SizedBox(height: 10),
                       _TwoColumnGrid(children: [
@@ -85,7 +85,7 @@ class AdminDashboardScreen extends StatelessWidget {
                       ]),
                       const SizedBox(height: 24),
 
-                      // ── Afiliados ──────────────────────────────────────────
+                      // -- Afiliados ------------------------------------------
                       _SectionTitle(title: 'Afiliados'),
                       const SizedBox(height: 10),
                       _TwoColumnGrid(children: [
@@ -109,7 +109,7 @@ class AdminDashboardScreen extends StatelessWidget {
                       ]),
                       const SizedBox(height: 24),
 
-                      // ── Assinaturas ────────────────────────────────────────
+                      // -- Assinaturas ----------------------------------------
                       _SectionTitle(title: 'Assinaturas'),
                       const SizedBox(height: 10),
                       _TwoColumnGrid(children: [
@@ -137,7 +137,7 @@ class AdminDashboardScreen extends StatelessWidget {
                       ]),
                       const SizedBox(height: 24),
 
-                      // ── Saques pendentes ───────────────────────────────────
+                      // -- Saques pendentes -----------------------------------
                       if (pendingWithdrawals.isNotEmpty) ...[
                         _SectionTitle(
                           title: 'Saques Pendentes',
@@ -153,7 +153,7 @@ class AdminDashboardScreen extends StatelessWidget {
                                   padding: EdgeInsets.symmetric(
                                       horizontal: 6, vertical: 2),
                                   child: Text(
-                                    'Ver todos →',
+                                    'Ver todos ->',
                                     style: TextStyle(
                                         color: AppColors.primary,
                                         fontSize: 12,
@@ -182,7 +182,7 @@ class AdminDashboardScreen extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 4),
                                 child: Text(
-                                  'Ver todos os ${pendingWithdrawals.length} saques pendentes →',
+                                  'Ver todos os ${pendingWithdrawals.length} saques pendentes ->',
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                       color: AppColors.primary,
@@ -195,7 +195,7 @@ class AdminDashboardScreen extends StatelessWidget {
                         const SizedBox(height: 24),
                       ],
 
-                      // ── Resumo financeiro ──────────────────────────────────
+                      // -- Resumo financeiro ----------------------------------
                       _SummaryCard(metrics: m),
                     ],
                   ),
@@ -204,7 +204,7 @@ class AdminDashboardScreen extends StatelessWidget {
   }
 }
 
-// ── Header ────────────────────────────────────────────────────────────────────
+// -- Header --------------------------------------------------------------------
 class _DashboardHeader extends StatelessWidget {
   final VoidCallback onRefresh;
   const _DashboardHeader({required this.onRefresh});
@@ -263,7 +263,7 @@ class _DashboardHeader extends StatelessWidget {
   }
 }
 
-// ── Título de seção ───────────────────────────────────────────────────────────
+// -- Título de seção -----------------------------------------------------------
 class _SectionTitle extends StatelessWidget {
   final String title;
   final Widget? trailing;
@@ -298,7 +298,7 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-// ── Badge contador ────────────────────────────────────────────────────────────
+// -- Badge contador ------------------------------------------------------------
 class _BadgeCount extends StatelessWidget {
   final int count;
   const _BadgeCount({required this.count});
@@ -322,7 +322,7 @@ class _BadgeCount extends StatelessWidget {
   }
 }
 
-// ── Grid de 2 colunas ─────────────────────────────────────────────────────────
+// -- Grid de 2 colunas ---------------------------------------------------------
 class _TwoColumnGrid extends StatelessWidget {
   final List<Widget> children;
   const _TwoColumnGrid({required this.children});
@@ -351,7 +351,7 @@ class _TwoColumnGrid extends StatelessWidget {
   }
 }
 
-// ── Card de métrica ───────────────────────────────────────────────────────────
+// -- Card de métrica -----------------------------------------------------------
 class _MetricCard extends StatelessWidget {
   final String label;
   final String value;
@@ -445,7 +445,7 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-// ── Tile de saque pendente ────────────────────────────────────────────────────
+// -- Tile de saque pendente ----------------------------------------------------
 class _PendingWithdrawalTile extends StatelessWidget {
   final AdminWithdrawal withdrawal;
   final VoidCallback onTap;
@@ -512,7 +512,7 @@ class _PendingWithdrawalTile extends StatelessWidget {
   }
 }
 
-// ── Card resumo financeiro ────────────────────────────────────────────────────
+// -- Card resumo financeiro ----------------------------------------------------
 class _SummaryCard extends StatelessWidget {
   final AdminMetrics metrics;
   const _SummaryCard({required this.metrics});

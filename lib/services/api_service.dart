@@ -4,16 +4,16 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Serviço base de comunicação com o backend NestJS.
-/// O Flutter NUNCA fala diretamente com a Woovi — sempre via backend.
+/// O Flutter NUNCA fala diretamente com a Woovi - sempre via backend.
 class ApiService {
-  // ── Configuração ──────────────────────────────────────────────────────────
+  // -- Configuração ----------------------------------------------------------
   // Mude para a URL real do seu backend quando estiver em produção
   static const String _baseUrl = String.fromEnvironment(
     'BACKEND_URL',
     defaultValue: 'http://localhost:3000/api',
   );
 
-  // ── Token JWT armazenado localmente ───────────────────────────────────────
+  // -- Token JWT armazenado localmente ---------------------------------------
   static String? _token;
 
   static Future<void> setToken(String token) async {
@@ -35,14 +35,14 @@ class ApiService {
 
   static bool get hasToken => _token != null;
 
-  // ── Headers padrão ────────────────────────────────────────────────────────
+  // -- Headers padrão --------------------------------------------------------
   static Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
-  // ── GET ───────────────────────────────────────────────────────────────────
+  // -- GET -------------------------------------------------------------------
   static Future<ApiResponse> get(String path) async {
     try {
       final uri = Uri.parse('$_baseUrl$path');
@@ -58,7 +58,7 @@ class ApiService {
     }
   }
 
-  // ── POST ──────────────────────────────────────────────────────────────────
+  // -- POST ------------------------------------------------------------------
   static Future<ApiResponse> post(String path, Map<String, dynamic> body) async {
     try {
       final uri = Uri.parse('$_baseUrl$path');
@@ -74,7 +74,7 @@ class ApiService {
     }
   }
 
-  // ── PUT ───────────────────────────────────────────────────────────────────
+  // -- PUT -------------------------------------------------------------------
   static Future<ApiResponse> put(String path, Map<String, dynamic> body) async {
     try {
       final uri = Uri.parse('$_baseUrl$path');
@@ -88,7 +88,7 @@ class ApiService {
     }
   }
 
-  // ── Parser ────────────────────────────────────────────────────────────────
+  // -- Parser ----------------------------------------------------------------
   static ApiResponse _parse(http.Response response) {
     if (kDebugMode) {
       debugPrint('Response ${response.statusCode}: ${response.body.substring(0, response.body.length.clamp(0, 300))}');
@@ -110,7 +110,7 @@ class ApiService {
   }
 }
 
-// ── Resposta padronizada ───────────────────────────────────────────────────
+// -- Resposta padronizada ---------------------------------------------------
 
 class ApiResponse {
   final bool success;

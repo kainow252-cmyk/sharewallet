@@ -74,7 +74,7 @@ class _AdminMpSettingsScreenState extends State<AdminMpSettingsScreen>
   }
 }
 
-// ── Aba 1: Credenciais de Produção ────────────────────────────────────────────
+// -- Aba 1: Credenciais de Produção --------------------------------------------
 
 class _CredenciaisTab extends StatelessWidget {
   final MercadoPagoService svc;
@@ -86,7 +86,7 @@ class _CredenciaisTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
 
-        // ── Banner de modo fixo ───────────────────────────────────────────
+        // -- Banner de modo fixo -------------------------------------------
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -125,7 +125,7 @@ class _CredenciaisTab extends StatelessWidget {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Pagamentos reais via PIX — MercadoPago',
+                      'Pagamentos reais via PIX  -  MercadoPago',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 11,
@@ -153,7 +153,7 @@ class _CredenciaisTab extends StatelessWidget {
 
         const SizedBox(height: 24),
 
-        // ── Card de credenciais ───────────────────────────────────────────
+        // -- Card de credenciais -------------------------------------------
         _SectionHeader(
           icon: Icons.key_rounded,
           title: 'Access Token de Produção',
@@ -164,13 +164,13 @@ class _CredenciaisTab extends StatelessWidget {
         _CredenciaisCard(svc: svc),
         const SizedBox(height: 24),
 
-        // ── Status ────────────────────────────────────────────────────────
+        // -- Status --------------------------------------------------------
         _SectionHeader(icon: Icons.info_outline_rounded, title: 'Status Atual'),
         const SizedBox(height: 12),
         _StatusCard(svc: svc),
         const SizedBox(height: 24),
 
-        // ── Quality Score ──────────────────────────────────────────────────
+        // -- Quality Score --------------------------------------------------
         if (!svc.config.production.isEmpty) ...[
           _SectionHeader(
             icon: Icons.verified_user_rounded,
@@ -187,7 +187,7 @@ class _CredenciaisTab extends StatelessWidget {
   }
 }
 
-// ── Card de credenciais de produção ──────────────────────────────────────────
+// -- Card de credenciais de produção ------------------------------------------
 
 class _CredenciaisCard extends StatefulWidget {
   final MercadoPagoService svc;
@@ -269,7 +269,7 @@ class _CredenciaisCardState extends State<_CredenciaisCard> {
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(ok
-          ? '✅ Credenciais de produção salvas!'
+          ? 'Credenciais de produção salvas!'
           : widget.svc.lastError ?? 'Erro ao salvar'),
       backgroundColor: ok ? _mpGreen : AppColors.error,
     ));
@@ -303,7 +303,7 @@ class _CredenciaisCardState extends State<_CredenciaisCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            // ── Header ────────────────────────────────────────────────────
+            // -- Header ----------------------------------------------------
             Row(
               children: [
                 Icon(
@@ -342,7 +342,7 @@ class _CredenciaisCardState extends State<_CredenciaisCard> {
               ],
             ),
 
-            // ── Exibição resumida ─────────────────────────────────────────
+            // -- Exibição resumida -----------------------------------------
             if (!_editing && !isEmpty) ...[
               const SizedBox(height: 12),
               _TokenDisplay(
@@ -379,7 +379,7 @@ class _CredenciaisCardState extends State<_CredenciaisCard> {
               ],
             ],
 
-            // ── Estado vazio ──────────────────────────────────────────────
+            // -- Estado vazio ----------------------------------------------
             if (!_editing && isEmpty) ...[
               const SizedBox(height: 12),
               Container(
@@ -418,7 +418,7 @@ class _CredenciaisCardState extends State<_CredenciaisCard> {
               ),
             ],
 
-            // ── Formulário de edição ──────────────────────────────────────
+            // -- Formulário de edição --------------------------------------
             if (_editing) ...[
               const SizedBox(height: 16),
 
@@ -505,9 +505,9 @@ class _CredenciaisCardState extends State<_CredenciaisCard> {
                       if (_verifyResult!['valid'] == true) ...[
                         const SizedBox(height: 6),
                         Text(
-                          '📧 ${_verifyResult!['email']}\n'
-                          '🆔 User ID: ${_verifyResult!['user_id']}\n'
-                          '🌎 País: ${_verifyResult!['site_id']}',
+                          '${_verifyResult!['email']}\n'
+                          ' User ID: ${_verifyResult!['user_id']}\n'
+                          'País: ${_verifyResult!['site_id']}',
                           style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondary),
@@ -569,7 +569,7 @@ class _CredenciaisCardState extends State<_CredenciaisCard> {
   }
 }
 
-// ── Aba 2: Configurações gerais ───────────────────────────────────────────────
+// -- Aba 2: Configurações gerais -----------------------------------------------
 
 class _SettingsTab extends StatefulWidget {
   final MercadoPagoService svc;
@@ -620,7 +620,7 @@ class _SettingsTabState extends State<_SettingsTab> {
     setState(() => _saving = false);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(
-          ok ? '✅ Configurações salvas!' : (widget.svc.lastError ?? 'Erro')),
+          ok ? 'Configurações salvas!' : (widget.svc.lastError ?? 'Erro')),
       backgroundColor: ok ? _mpGreen : AppColors.error,
     ));
   }
@@ -630,7 +630,7 @@ class _SettingsTabState extends State<_SettingsTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ── Comissão ──────────────────────────────────────────────────────
+        // -- Comissão ------------------------------------------------------
         _SectionHeader(icon: Icons.percent_rounded, title: 'Comissão dos Afiliados'),
         const SizedBox(height: 12),
         Container(
@@ -682,7 +682,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                       style: TextStyle(
                           fontSize: 11, color: AppColors.textHint)),
                   Text(
-                    'Venda R\$10 → afiliado ganha R\$${(10 * _comissao / 100).toStringAsFixed(2)}',
+                    'Venda R\$10 -> afiliado ganha R\$${(10 * _comissao / 100).toStringAsFixed(2)}',
                     style: const TextStyle(
                         fontSize: 11, color: AppColors.textSecondary),
                   ),
@@ -696,7 +696,7 @@ class _SettingsTabState extends State<_SettingsTab> {
         ),
         const SizedBox(height: 24),
 
-        // ── URLs ──────────────────────────────────────────────────────────
+        // -- URLs ----------------------------------------------------------
         _SectionHeader(icon: Icons.link_rounded, title: 'URLs de Retorno'),
         const SizedBox(height: 12),
         Container(
@@ -740,13 +740,13 @@ class _SettingsTabState extends State<_SettingsTab> {
         ),
         const SizedBox(height: 24),
 
-        // ── Status ────────────────────────────────────────────────────────
+        // -- Status --------------------------------------------------------
         _SectionHeader(icon: Icons.info_outline_rounded, title: 'Status Atual'),
         const SizedBox(height: 12),
         _StatusCard(svc: widget.svc),
         const SizedBox(height: 24),
 
-        // ── Salvar ────────────────────────────────────────────────────────
+        // -- Salvar --------------------------------------------------------
         SizedBox(
           height: 52,
           child: ElevatedButton.icon(
@@ -773,7 +773,7 @@ class _SettingsTabState extends State<_SettingsTab> {
   }
 }
 
-// ── Quality Score Card ────────────────────────────────────────────────────────
+// -- Quality Score Card --------------------------------------------------------
 
 class _QualityScoreCard extends StatefulWidget {
   final MercadoPagoService svc;
@@ -908,7 +908,7 @@ class _QualityScoreCardState extends State<_QualityScoreCard> {
                 label: 'Status',
                 value: _data!['account_status'] != 'unknown'
                     ? (_data!['account_status'] as String).toUpperCase()
-                    : '—',
+                    : ' - ',
                 color: _data!['account_status'] == 'active'
                     ? _mpGreen
                     : AppColors.warning,
@@ -942,8 +942,8 @@ class _QualityScoreCardState extends State<_QualityScoreCard> {
                   label: 'Venda',
                   // API retorna 'allow' (não 'allowed')
                   value: (_data!['sell_permission'] as Map)['allow'] == true
-                      ? '✅ Permitida'
-                      : '⚠️ Restrita',
+                      ? 'Permitida'
+                      : 'Restrita',
                   color: (_data!['sell_permission'] as Map)['allow'] == true
                       ? _mpGreen
                       : AppColors.warning,
@@ -1049,7 +1049,7 @@ class _QualityRow extends StatelessWidget {
   }
 }
 
-// ── Card de status ────────────────────────────────────────────────────────────
+// -- Card de status ------------------------------------------------------------
 
 class _StatusCard extends StatelessWidget {
   final MercadoPagoService svc;
@@ -1071,27 +1071,27 @@ class _StatusCard extends StatelessWidget {
         children: [
           _StatusRow(
             label: 'Modo',
-            value: '🚀 Produção (Pagamentos Reais)',
+            value: 'Produção (Pagamentos Reais)',
             color: _mpGreen,
           ),
           const Divider(height: 16),
           _StatusRow(
             label: 'Access Token',
             value: creds.isEmpty
-                ? '❌ Não configurado'
-                : '✅ ${creds.accessToken.substring(0, creds.accessToken.length.clamp(0, 20))}...',
+                ? 'Não configurado'
+                : '${creds.accessToken.substring(0, creds.accessToken.length.clamp(0, 20))}...',
             color: creds.isEmpty ? AppColors.error : _mpGreen,
           ),
           const Divider(height: 16),
           _StatusRow(
             label: 'User ID',
-            value: creds.userId.isEmpty ? '—' : creds.userId,
+            value: creds.userId.isEmpty ? ' - ' : creds.userId,
             color: AppColors.textPrimary,
           ),
           const Divider(height: 16),
           _StatusRow(
             label: 'Verificado',
-            value: creds.verified ? '✅ Sim' : '⚠️ Não verificado',
+            value: creds.verified ? 'Sim' : 'Não verificado',
             color: creds.verified ? _mpGreen : AppColors.warning,
           ),
           const Divider(height: 16),
@@ -1113,7 +1113,7 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-// ── Guia de onde encontrar o Access Token ─────────────────────────────────────
+// -- Guia de onde encontrar o Access Token -------------------------------------
 
 class _GuiaProducao extends StatelessWidget {
   const _GuiaProducao();
@@ -1140,7 +1140,7 @@ class _GuiaProducao extends StatelessWidget {
             ),
             child: const Row(
               children: [
-                Text('🔑', style: TextStyle(fontSize: 16)),
+                Text('', style: TextStyle(fontSize: 16)),
                 SizedBox(width: 8),
                 Text(
                   'Onde encontrar o Access Token',
@@ -1162,7 +1162,7 @@ class _GuiaProducao extends StatelessWidget {
                 _Passo(
                     n: '2',
                     texto:
-                        'Seu perfil → Seu negócio → Configurações → Gestão e administração → Credenciais'),
+                        'Seu perfil -> Seu negócio -> Configurações -> Gestão e administração -> Credenciais'),
                 _Passo(n: '3', texto: 'Clique na aba "Credenciais de produção"'),
                 _Passo(
                     n: '4',
@@ -1176,10 +1176,10 @@ class _GuiaProducao extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
-                    '⚠️ "Chave secreta" e "ID do aplicativo" que aparecem no\n'
+                    '"Chave secreta" e "ID do aplicativo" que aparecem no\n'
                     'painel de Desenvolvedores NÃO são o Access Token!\n'
                     'O Access Token correto fica em:\n'
-                    'Configurações → Credenciais de produção.',
+                    'Configurações -> Credenciais de produção.',
                     style: TextStyle(
                         fontSize: 10,
                         color: Color(0xFF1B5E20),
@@ -1196,7 +1196,7 @@ class _GuiaProducao extends StatelessWidget {
   }
 }
 
-// ── Widgets auxiliares ────────────────────────────────────────────────────────
+// -- Widgets auxiliares --------------------------------------------------------
 
 class _SectionHeader extends StatelessWidget {
   final IconData icon;
@@ -1271,7 +1271,7 @@ class _TokenDisplayState extends State<_TokenDisplay> {
   @override
   Widget build(BuildContext context) {
     final display = widget.mask && !_visible
-        ? '${widget.value.substring(0, widget.value.length.clamp(0, 12))}••••••••••••'
+        ? '${widget.value.substring(0, widget.value.length.clamp(0, 12))}************'
         : widget.value;
 
     return Row(

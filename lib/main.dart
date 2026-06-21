@@ -36,7 +36,7 @@ import 'screens/products/buy_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── Firebase ────────────────────────────────────────────────────────────────
+  // -- Firebase ----------------------------------------------------------------
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
@@ -45,7 +45,7 @@ void main() async {
     }
     // Web: desabilita persistência para evitar o IndexedDB lock loop
     // Com persistenceEnabled:true no Web, múltiplas abas / reloads causam
-    // falhas repetidas no GET Listen/channel → backoff exponencial ~50s de login.
+    // falhas repetidas no GET Listen/channel -> backoff exponencial ~50s de login.
     // Referência: https://firebase.google.com/docs/firestore/manage-data/enable-offline
     if (kIsWeb) {
       FirebaseFirestore.instance.settings = const Settings(
@@ -70,7 +70,7 @@ void main() async {
     ]);
   }
 
-  // ── Deep link: lê o fragment gravado pelo JS no index.html ─────────────────
+  // -- Deep link: lê o fragment gravado pelo JS no index.html -----------------
   // O index.html grava window.location.hash no sessionStorage ANTES do Flutter
   // carregar. Aqui lemos via dart:js e extraímos productId + affiliateCode.
   //
@@ -161,7 +161,7 @@ class ShareWalletApp extends StatelessWidget {
         onGenerateRoute: (settings) {
           final name = settings.name ?? '';
 
-          // /ref/CODE → registro de afiliado
+          // /ref/CODE -> registro de afiliado
           if (name.startsWith('/ref/')) {
             final code = name.replaceFirst('/ref/', '');
             return MaterialPageRoute(
@@ -169,7 +169,7 @@ class ShareWalletApp extends StatelessWidget {
             );
           }
 
-          // /produto/ID?ref=CODE → tela pública do comprador (sem login)
+          // /produto/ID?ref=CODE -> tela pública do comprador (sem login)
           if (name.startsWith('/produto/')) {
             final withoutPrefix = name.replaceFirst('/produto/', '');
             final parts = withoutPrefix.split('?');

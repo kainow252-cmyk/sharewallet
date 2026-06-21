@@ -171,7 +171,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
   }
 }
 
-// ── Lista de assinaturas ──────────────────────────────────────────────────────
+// -- Lista de assinaturas ------------------------------------------------------
 class _SubList extends StatelessWidget {
   final List<SubscriptionModel> subs;
   final Future<void> Function(BuildContext, SubscriptionModel)? onCancel;
@@ -205,7 +205,7 @@ class _SubList extends StatelessWidget {
   }
 }
 
-// ── Card da assinatura ────────────────────────────────────────────────────────
+// -- Card da assinatura --------------------------------------------------------
 class _SubCard extends StatelessWidget {
   final SubscriptionModel sub;
   final VoidCallback? onCancel;
@@ -326,7 +326,7 @@ class _SubCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 6,
               children: [
-                // ── Tipo de cobrança bem visível ────────────────────────────
+                // -- Tipo de cobrança bem visível ----------------------------
                 _InfoPill(
                     icon: sub.chargeType == ChargeType.pixRecorrente
                         ? Icons.autorenew_rounded
@@ -442,7 +442,7 @@ class _SubCard extends StatelessWidget {
   }
 }
 
-// ── Pill de info ──────────────────────────────────────────────────────────────
+// -- Pill de info --------------------------------------------------------------
 class _InfoPill extends StatelessWidget {
   final IconData icon;
   final String label;

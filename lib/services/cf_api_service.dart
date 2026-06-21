@@ -7,12 +7,12 @@ import 'package:http/http.dart' as http;
 class CfApiService {
   // Usa o custom domain api.sharewallet.com.br (mesmo TLD que o app).
   // O domínio workers.dev tem bug de HTTP/2 quando o browser envia
-  // Origin: https://sharewallet.com.br — a stream H2 trava e nunca responde.
+  // Origin: https://sharewallet.com.br - a stream H2 trava e nunca responde.
   // Com api.sharewallet.com.br (same-site) o CORS funciona corretamente.
   static const String _base = 'https://api.sharewallet.com.br';
   static const Duration _timeout = Duration(seconds: 10);
 
-  // ── HTTP helpers ──────────────────────────────────────────────────────────
+  // -- HTTP helpers ----------------------------------------------------------
 
   static Future<dynamic> _get(String path) async {
     final uri = Uri.parse('$_base$path');
@@ -96,7 +96,7 @@ class CfApiService {
     }
   }
 
-  // ── PRODUCTS ──────────────────────────────────────────────────────────────
+  // -- PRODUCTS --------------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> getProducts({bool all = false}) async {
     final res = await _get(all ? '/api/products/all' : '/api/products');
@@ -119,7 +119,7 @@ class CfApiService {
     return res != null;
   }
 
-  // ── AFFILIATES ────────────────────────────────────────────────────────────
+  // -- AFFILIATES ------------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> getAffiliates() async {
     final res = await _get('/api/affiliates');
@@ -132,10 +132,13 @@ class CfApiService {
   }
 
   static Future<Map<String, dynamic>?> getAffiliateByCode(String code) async {
+    if (code.trim().isEmpty) return null;
     return await _get('/api/affiliates/by-code/$code');
   }
 
   static Future<Map<String, dynamic>?> getAffiliateByEmail(String email) async {
+    // Guard: email vazio geraria URL /api/affiliates/by-email/ -> 404
+    if (email.trim().isEmpty) return null;
     return await _get('/api/affiliates/by-email/${Uri.encodeComponent(email)}');
   }
 
@@ -152,7 +155,7 @@ class CfApiService {
     return res != null;
   }
 
-  // ── WALLET ────────────────────────────────────────────────────────────────
+  // -- WALLET ----------------------------------------------------------------
 
   static Future<Map<String, dynamic>?> getWallet(String userId) async {
     return await _get('/api/wallet/$userId');
@@ -162,7 +165,7 @@ class CfApiService {
     return await _patch('/api/wallet/$userId', data);
   }
 
-  // ── SUBSCRIPTIONS ─────────────────────────────────────────────────────────
+  // -- SUBSCRIPTIONS ---------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> getSubscriptions() async {
     final res = await _get('/api/subscriptions');
@@ -184,7 +187,7 @@ class CfApiService {
     return await _patch('/api/subscriptions/$id', data);
   }
 
-  // ── WITHDRAWALS ───────────────────────────────────────────────────────────
+  // -- WITHDRAWALS -----------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> getWithdrawals() async {
     final res = await _get('/api/withdrawals');
@@ -212,7 +215,7 @@ class CfApiService {
     return res != null;
   }
 
-  // ── SALES ─────────────────────────────────────────────────────────────────
+  // -- SALES -----------------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> getSalesByUser(String userId) async {
     final res = await _get('/api/sales/by-user/$userId');
@@ -224,7 +227,7 @@ class CfApiService {
     return await _post('/api/sales', data);
   }
 
-  // ── RANKING ───────────────────────────────────────────────────────────────
+  // -- RANKING ---------------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> getRanking() async {
     final res = await _get('/api/ranking');
@@ -232,7 +235,7 @@ class CfApiService {
     return List<Map<String, dynamic>>.from(res);
   }
 
-  // ── METRICS ───────────────────────────────────────────────────────────────
+  // -- METRICS ---------------------------------------------------------------
 
   static Future<Map<String, dynamic>?> getMetrics() async {
     return await _get('/api/metrics');

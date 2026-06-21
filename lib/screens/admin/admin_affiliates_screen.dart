@@ -101,7 +101,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
                 const SizedBox(width: 8),
                 _StatChip(
                   label:
-                      '${svc.affiliates.where((a) => a.status == 'ativo').length} ativos',
+                      '${svc.affiliates.where((a) => a.status =='ativo').length} ativos',
                   color: AppColors.success,
                   selected: _filter == 'ativo',
                   onTap: () => setState(() => _filter = 'ativo'),
@@ -109,7 +109,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
                 const SizedBox(width: 8),
                 _StatChip(
                   label:
-                      '${svc.affiliates.where((a) => a.status == 'suspenso').length} suspensos',
+                      '${svc.affiliates.where((a) => a.status =='suspenso').length} suspensos',
                   color: AppColors.error,
                   selected: _filter == 'suspenso',
                   onTap: () => setState(() => _filter = 'suspenso'),
@@ -147,7 +147,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
     );
   }
 
-  // ── Toggle status ativo/suspenso ─────────────────────────────────────────
+  // -- Toggle status ativo/suspenso -----------------------------------------
   Future<void> _toggleStatus(
       BuildContext context, AdminService svc, AdminAffiliate a) async {
     final newStatus = a.status == 'ativo' ? 'suspenso' : 'ativo';
@@ -157,7 +157,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(
-            '${newStatus == 'ativo' ? 'Ativar' : 'Suspender'} Afiliado'),
+            '${newStatus =='ativo'?'Ativar':'Suspender'} Afiliado'),
         content: Text('Tem certeza que deseja $label "${a.nome}"?'),
         actions: [
           TextButton(
@@ -180,7 +180,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'Afiliado ${newStatus == 'ativo' ? 'ativado' : 'suspenso'}!'),
+              'Afiliado ${newStatus =='ativo'?'ativado':'suspenso'}!'),
           backgroundColor:
               newStatus == 'ativo' ? AppColors.success : AppColors.error,
         ));
@@ -188,7 +188,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
     }
   }
 
-  // ── Detalhes ─────────────────────────────────────────────────────────────
+  // -- Detalhes -------------------------------------------------------------
   void _showDetails(BuildContext context, AdminAffiliate a) {
     showModalBottomSheet(
       context: context,
@@ -199,7 +199,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
     );
   }
 
-  // ── Editar ───────────────────────────────────────────────────────────────
+  // -- Editar ---------------------------------------------------------------
   void _showEditSheet(
       BuildContext context, AdminService svc, AdminAffiliate a) {
     showModalBottomSheet(
@@ -223,7 +223,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
     );
   }
 
-  // ── Excluir ──────────────────────────────────────────────────────────────
+  // -- Excluir --------------------------------------------------------------
   Future<void> _confirmDelete(
       BuildContext context, AdminService svc, AdminAffiliate a) async {
     final ok = await showDialog<bool>(
@@ -248,7 +248,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
                 style: const TextStyle(
                     color: AppColors.textPrimary, fontSize: 14),
                 children: [
-                  const TextSpan(text: 'Tem certeza que deseja excluir '),
+                  const TextSpan(text: 'Tem certeza que deseja excluir'),
                   TextSpan(
                     text: a.nome,
                     style: const TextStyle(fontWeight: FontWeight.w700),
@@ -315,7 +315,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
   }
 }
 
-// ── Widget auxiliar para lista de bullets no diálogo ─────────────────────────
+// -- Widget auxiliar para lista de bullets no diálogo -------------------------
 class _BulletItem extends StatelessWidget {
   final String text;
   const _BulletItem(this.text);
@@ -327,7 +327,7 @@ class _BulletItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('• ',
+          const Text('*',
               style:
                   TextStyle(color: AppColors.error, fontWeight: FontWeight.w700)),
           Expanded(
@@ -341,7 +341,7 @@ class _BulletItem extends StatelessWidget {
   }
 }
 
-// ── Bottom sheet de edição ────────────────────────────────────────────────────
+// -- Bottom sheet de edição ----------------------------------------------------
 class _EditAffiliateSheet extends StatefulWidget {
   final AdminAffiliate affiliate;
   final Future<void> Function(Map<String, dynamic> data) onSave;
@@ -594,7 +594,7 @@ class _EditAffiliateSheetState extends State<_EditAffiliateSheet> {
   }
 }
 
-// ── Campo de formulário reutilizável ─────────────────────────────────────────
+// -- Campo de formulário reutilizável -----------------------------------------
 class _FormField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
@@ -640,7 +640,7 @@ class _FormField extends StatelessWidget {
   }
 }
 
-// ── Seletor de status ─────────────────────────────────────────────────────────
+// -- Seletor de status ---------------------------------------------------------
 class _StatusOption extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -694,7 +694,7 @@ class _StatusOption extends StatelessWidget {
   }
 }
 
-// ── Card do afiliado ──────────────────────────────────────────────────────────
+// -- Card do afiliado ----------------------------------------------------------
 class _AffiliateCard extends StatelessWidget {
   final AdminAffiliate affiliate;
   final VoidCallback onToggle;
@@ -739,7 +739,7 @@ class _AffiliateCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Linha principal: avatar + info + saldo + menu ─────────────
+              // -- Linha principal: avatar + info + saldo + menu -------------
               Row(
                 children: [
                   _AvatarCircle(
@@ -811,7 +811,7 @@ class _AffiliateCard extends StatelessWidget {
 
               const Divider(height: 16),
 
-              // ── Linha de stats ────────────────────────────────────────────
+              // -- Linha de stats --------------------------------------------
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -855,7 +855,7 @@ class _AffiliateCard extends StatelessWidget {
   }
 }
 
-// ── Menu de ações (3 pontos) ──────────────────────────────────────────────────
+// -- Menu de ações (3 pontos) --------------------------------------------------
 class _ActionMenu extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -926,7 +926,7 @@ class _ActionMenu extends StatelessWidget {
   }
 }
 
-// ── Widgets auxiliares ────────────────────────────────────────────────────────
+// -- Widgets auxiliares --------------------------------------------------------
 class _AvatarCircle extends StatelessWidget {
   final String nome;
   final String status;
@@ -1102,7 +1102,7 @@ class _FinanceItem extends StatelessWidget {
   }
 }
 
-// ── Modal de detalhes do afiliado com abas ────────────────────────────────────
+// -- Modal de detalhes do afiliado com abas ------------------------------------
 class _AffiliateDetailSheet extends StatefulWidget {
   final AdminAffiliate affiliate;
   final AdminService svc;
@@ -1312,7 +1312,7 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
               child: TabBarView(
                 controller: _tab,
                 children: [
-                  // ── Aba Dados ──────────────────────────────────────────────
+                  // -- Aba Dados ----------------------------------------------
                   ListView(
                     controller: scrollCtrl,
                     padding: const EdgeInsets.all(20),
@@ -1328,12 +1328,12 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                       _DetailRow(
                           label: 'CPF',
                           value:
-                              a.cpf.isNotEmpty ? a.cpf : '—'),
+                              a.cpf.isNotEmpty ? a.cpf : ' - '),
                       _DetailRow(
                           label: 'Telefone',
                           value: a.telefone.isNotEmpty
                               ? a.telefone
-                              : '—'),
+                              : ' - '),
                       if (a.pixKey != null && a.pixKey!.isNotEmpty)
                         _DetailRow(
                             label: 'Chave PIX', value: a.pixKey!),
@@ -1372,7 +1372,7 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                                   MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  '${subsAtivas.length} assinatura${subsAtivas.length != 1 ? 's' : ''} ativa${subsAtivas.length != 1 ? 's' : ''}',
+                                  '${subsAtivas.length} assinatura${subsAtivas.length != 1 ?'s':''} ativa${subsAtivas.length != 1 ?'s':''}',
                                   style: const TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textSecondary),
@@ -1401,7 +1401,7 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                     ],
                   ),
 
-                  // ── Aba Histórico ──────────────────────────────────────────
+                  // -- Aba Histórico ------------------------------------------
                   _loadingSubs
                       ? const Center(child: CircularProgressIndicator())
                       : _subs.isEmpty
@@ -1439,7 +1439,7 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
   }
 }
 
-// ── Card de assinatura no histórico ──────────────────────────────────────────
+// -- Card de assinatura no histórico ------------------------------------------
 class _SubHistoryCard extends StatelessWidget {
   final SubscriptionModel sub;
   final NumberFormat fmt;
@@ -1530,7 +1530,7 @@ class _SubHistoryCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary),
                     ),
-                    const Text(' · ',
+                    const Text('-',
                         style:
                             TextStyle(color: AppColors.textHint)),
                     Text(

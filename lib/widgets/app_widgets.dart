@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 
-// ─── LOGO / MARCA ────────────────────────────────────────────
+// --- LOGO / MARCA --------------------------------------------
 class AppLogo extends StatelessWidget {
   final double size;
   final bool showText;
@@ -62,7 +62,7 @@ class AppLogo extends StatelessWidget {
   }
 }
 
-// ─── BOTÃO PRIMÁRIO ───────────────────────────────────────────
+// --- BOTÃO PRIMÁRIO -------------------------------------------
 class PrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -110,7 +110,7 @@ class PrimaryButton extends StatelessWidget {
   }
 }
 
-// ─── CARD DE SALDO ───────────────────────────────────────────
+// --- CARD DE SALDO -------------------------------------------
 class BalanceCard extends StatelessWidget {
   final double saldo;
   final bool isVisible;
@@ -167,7 +167,7 @@ class BalanceCard extends StatelessWidget {
           const SizedBox(height: 12),
           isVisible
               ? Text(
-                  'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}',
+                  'R\$ ${saldo.toStringAsFixed(2).replaceAll('.',',')}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 32,
@@ -207,7 +207,7 @@ class BalanceCard extends StatelessWidget {
   }
 }
 
-// ─── CARD DE ESTATÍSTICAS ───────────────────────────────────
+// --- CARD DE ESTATÍSTICAS -----------------------------------
 class StatsRow extends StatelessWidget {
   final int indicados;
   final int vendas;
@@ -252,7 +252,7 @@ class StatsRow extends StatelessWidget {
               ),
             ],
           ),
-          // Card "A Receber" — só mostra se há valor pendente
+          // Card "A Receber" - só mostra se há valor pendente
           if (comissaoPendente > 0) ...[
             const SizedBox(height: 10),
             Container(
@@ -284,7 +284,7 @@ class StatsRow extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textSecondary)),
                         Text(
-                          'R\$ ${comissaoPendente.toStringAsFixed(2).replaceAll('.', ',')}',
+                          'R\$ ${comissaoPendente.toStringAsFixed(2).replaceAll('.',',')}',
                           style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
@@ -363,7 +363,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ─── LINK DE AFILIADO ─────────────────────────────────────────
+// --- LINK DE AFILIADO -----------------------------------------
 class AffiliateLinkCard extends StatelessWidget {
   final String link;
   final String code;
@@ -434,7 +434,7 @@ class AffiliateLinkCard extends StatelessWidget {
                     Clipboard.setData(ClipboardData(text: 'https://$link'));
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Link copiado! ✅'),
+                        content: Text('Link copiado!'),
                         backgroundColor: AppColors.success,
                         duration: Duration(seconds: 2),
                       ),
@@ -567,7 +567,7 @@ class _ActionBtn extends StatelessWidget {
   }
 }
 
-// ─── SEÇÃO TÍTULO ─────────────────────────────────────────────
+// --- SEÇÃO TÍTULO ---------------------------------------------
 class SectionTitle extends StatelessWidget {
   final String title;
   final String? actionLabel;
@@ -612,7 +612,7 @@ class SectionTitle extends StatelessWidget {
   }
 }
 
-// ─── LOADING SHIMMER ─────────────────────────────────────────
+// --- LOADING SHIMMER -----------------------------------------
 class LoadingShimmer extends StatelessWidget {
   final double height;
   final double? width;
@@ -638,7 +638,7 @@ class LoadingShimmer extends StatelessWidget {
   }
 }
 
-// ─── STATUS BADGE ─────────────────────────────────────────────
+// --- STATUS BADGE ---------------------------------------------
 class StatusBadge extends StatelessWidget {
   final String status;
 

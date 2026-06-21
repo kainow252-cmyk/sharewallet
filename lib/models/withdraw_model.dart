@@ -90,7 +90,7 @@ class WithdrawModel {
     }
   }
 
-  String get valorFormatado => 'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
+  String get valorFormatado => 'R\$ ${valor.toStringAsFixed(2).replaceAll('.',',')}';
 
   static String statusLabel(String status) {
     switch (status) {

@@ -38,7 +38,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _pixCtrl      = TextEditingController(
         text: (user?.pixKey.isNotEmpty == true) ? user!.pixKey : (user?.email ?? ''));
 
-    // Recarrega perfil ao abrir — usa D1 como fonte de verdade
+    // Recarrega perfil ao abrir - usa D1 como fonte de verdade
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final auth = context.read<AuthService>();
 
@@ -68,7 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (d1Pix.isNotEmpty)  _pixCtrl.text  = d1Pix;
             else if (email.isNotEmpty) _pixCtrl.text = email;
             if (mounted) setState(() {});
-            return; // D1 carregou com sucesso — não precisa do Firestore
+            return; // D1 carregou com sucesso  -  não precisa do Firestore
           }
         }
       } catch (_) {}
@@ -111,7 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final auth = context.read<AuthService>();
       final uid  = auth.currentUser?.id ?? '';
 
-      // 1️⃣ Salva no Firestore (set+merge — cria se não existir)
+      // 1. Salva no Firestore (set+merge - cria se não existir)
       await FirebaseUserService.atualizarPerfil(
         uid: uid,
         nome: nome,
@@ -122,7 +122,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         affiliateCode: auth.currentUser?.affiliateCode ?? '',
       );
 
-      // 2️⃣ Sincroniza no D1 — aguarda para garantir consistência
+      // 2. Sincroniza no D1 - aguarda para garantir consistência
       await CfApiService.updateAffiliate(uid, {
         'nome': nome,
         'email': auth.currentUser?.email ?? '',
@@ -132,7 +132,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'affiliate_code': auth.currentUser?.affiliateCode ?? '',
       }).catchError((_) => null);
 
-      // 3️⃣ Atualiza o currentUser DIRETAMENTE no AuthService
+      // 3. Atualiza o currentUser DIRETAMENTE no AuthService
       // Evita depender do cache Firestore que pode retornar dados antigos
       auth.updateCurrentUser(
         nome: nome,
@@ -141,14 +141,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         pixKey: pixKey,
       );
 
-      // 4️⃣ Tenta refreshProfile em background para sincronizar com servidor
+      // 4. Tenta refreshProfile em background para sincronizar com servidor
       auth.refreshProfile().catchError((_) {});
 
       if (!mounted) return;
       setState(() { _editMode = false; _saving = false; });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✅ Perfil atualizado com sucesso!'),
+          content: Text('Perfil atualizado com sucesso!'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -175,7 +175,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         key: _formKey,
         child: CustomScrollView(
           slivers: [
-            // ── Header ──────────────────────────────────────────────────────
+            // -- Header ------------------------------------------------------
             SliverAppBar(
               expandedHeight: 200,
               pinned: true,
@@ -294,7 +294,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   const SizedBox(height: 16),
 
-                  // ── Minha Conta ──────────────────────────────────────────
+                  // -- Minha Conta ------------------------------------------
                   _Section(
                     title: 'Minha Conta',
                     trailing: _editMode
@@ -322,7 +322,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               label: 'Nome completo',
                               icon: Icons.person_rounded,
                               validator: (v) =>
-                                  v!.trim().split(' ').length < 2
+                                  v!.trim().split('').length < 2
                                       ? 'Nome e sobrenome'
                                       : null,
                             )
@@ -331,7 +331,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               label: 'Nome',
                               value: user?.nome.isNotEmpty == true
                                   ? user!.nome
-                                  : '—',
+                                  : ' - ',
                             ),
                       const Divider(height: 1, indent: 52),
                       _InfoRow(
@@ -339,7 +339,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         label: 'E-mail',
                         value: user?.email.isNotEmpty == true
                             ? user!.email
-                            : '—',
+                            : ' - ',
                       ),
                       const Divider(height: 1, indent: 52),
                       _editMode
@@ -354,7 +354,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               label: 'Telefone',
                               value: user?.telefone.isNotEmpty == true
                                   ? user!.telefone
-                                  : '—',
+                                  : ' - ',
                             ),
                       const Divider(height: 1, indent: 52),
                       _editMode
@@ -370,14 +370,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               label: 'CPF',
                               value: user?.cpf.isNotEmpty == true
                                   ? _maskCpf(user!.cpf)
-                                  : '—',
+                                  : ' - ',
                             ),
                     ],
                   ),
 
                   const SizedBox(height: 12),
 
-                  // ── PIX ──────────────────────────────────────────────────
+                  // -- PIX --------------------------------------------------
                   _Section(
                     title: 'Recebimento PIX',
                     children: [
@@ -402,7 +402,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _InfoRow(
                         icon: Icons.account_balance_rounded,
                         label: 'Status',
-                        value: 'Ativa ✅',
+                        value: 'Ativa',
                         valueColor: AppColors.success,
                       ),
                     ],
@@ -410,7 +410,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   const SizedBox(height: 12),
 
-                  // ── Salvar (modo edição) ──────────────────────────────────
+                  // -- Salvar (modo edição) ----------------------------------
                   if (_editMode) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -424,7 +424,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 12),
                   ],
 
-                  // ── Configurações ─────────────────────────────────────────
+                  // -- Configurações -----------------------------------------
                   _Section(
                     title: 'Configurações',
                     children: [
@@ -456,7 +456,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   const SizedBox(height: 12),
 
-                  // ── Logout ────────────────────────────────────────────────
+                  // -- Logout ------------------------------------------------
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: OutlinedButton.icon(
@@ -494,7 +494,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // -- Helpers ----------------------------------------------------------------
 
   String _maskCpf(String cpf) {
     final digits = cpf.replaceAll(RegExp(r'\D'), '');
@@ -621,7 +621,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// ── Widgets auxiliares ─────────────────────────────────────────────────────────
+// -- Widgets auxiliares ---------------------------------------------------------
 
 class _Section extends StatelessWidget {
   final String title;
@@ -711,7 +711,7 @@ class _InfoRow extends StatelessWidget {
                         fontSize: 11, color: AppColors.textHint)),
                 const SizedBox(height: 2),
                 Text(
-                  value.isEmpty ? '—' : value,
+                  value.isEmpty ? ' - ' : value,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -847,7 +847,7 @@ class _SupportTile extends StatelessWidget {
   }
 }
 
-// ── Sheet: Termos / Política ──────────────────────────────────────────────────
+// -- Sheet: Termos / Política --------------------------------------------------
 
 class _TermosSheet extends StatelessWidget {
   final String titulo;
@@ -911,7 +911,7 @@ class _TermosSheet extends StatelessWidget {
   }
 }
 
-// ── Sheet: Alterar Senha ──────────────────────────────────────────────────────
+// -- Sheet: Alterar Senha ------------------------------------------------------
 
 class _AlterarSenhaSheet extends StatefulWidget {
   const _AlterarSenhaSheet();
@@ -1044,10 +1044,10 @@ class _AlterarSenhaSheetState extends State<_AlterarSenhaSheet> {
   }
 }
 
-// ── Conteúdo dos Termos ───────────────────────────────────────────────────────
+// -- Conteúdo dos Termos -------------------------------------------------------
 
 const String _termosDeUso = '''
-TERMOS DE USO — SHAREWALLET
+TERMOS DE USO  -  SHAREWALLET
 
 Última atualização: junho de 2025
 
@@ -1058,22 +1058,22 @@ Ao se cadastrar e utilizar o ShareWallet, você concorda com estes Termos de Uso
 O ShareWallet é uma plataforma de marketing de afiliados que permite aos usuários divulgar produtos e receber comissões por vendas realizadas através de seus links rastreáveis.
 
 3. CADASTRO E CONTA
-• Você deve ter pelo menos 18 anos de idade.
-• Forneça informações verdadeiras e mantenha seus dados atualizados.
-• É proibido criar múltiplas contas para burlar o sistema de comissões.
-• Você é responsável pela segurança da sua senha.
+* Você deve ter pelo menos 18 anos de idade.
+* Forneça informações verdadeiras e mantenha seus dados atualizados.
+* É proibido criar múltiplas contas para burlar o sistema de comissões.
+* Você é responsável pela segurança da sua senha.
 
 4. COMISSÕES E PAGAMENTOS
-• As comissões são pagas via PIX após confirmação do pagamento do cliente final.
-• O prazo para liberação das comissões é de até 7 dias úteis após a confirmação.
-• O valor mínimo para saque é de R\$ 50,00.
-• Comissões estornadas por cancelamento ou chargeback serão descontadas do saldo.
+* As comissões são pagas via PIX após confirmação do pagamento do cliente final.
+* O prazo para liberação das comissões é de até 7 dias úteis após a confirmação.
+* O valor mínimo para saque é de R\$ 50,00.
+* Comissões estornadas por cancelamento ou chargeback serão descontadas do saldo.
 
 5. CONDUTAS PROIBIDAS
-• Spam ou divulgação não autorizada.
-• Uso de informações falsas ou enganosas.
-• Tentativa de fraude ou manipulação do sistema.
-• Uso indevido da marca ShareWallet.
+* Spam ou divulgação não autorizada.
+* Uso de informações falsas ou enganosas.
+* Tentativa de fraude ou manipulação do sistema.
+* Uso indevido da marca ShareWallet.
 
 6. RESCISÃO
 O ShareWallet reserva-se o direito de suspender ou encerrar contas que violem estes termos, sem aviso prévio, com o estorno das comissões pendentes em casos de fraude comprovada.
@@ -1089,7 +1089,7 @@ Dúvidas: suporte@sharewallet.com.br
 ''';
 
 const String _politicaDePrivacidade = '''
-POLÍTICA DE PRIVACIDADE — SHAREWALLET
+POLÍTICA DE PRIVACIDADE  -  SHAREWALLET
 
 Última atualização: junho de 2025
 
@@ -1097,15 +1097,15 @@ POLÍTICA DE PRIVACIDADE — SHAREWALLET
 Coletamos: nome completo, CPF, e-mail, telefone, endereço IP e dados de uso da plataforma.
 
 2. USO DOS DADOS
-• Processamento de comissões e pagamentos PIX.
-• Comunicação sobre sua conta e transações.
-• Melhoria dos nossos serviços.
-• Cumprimento de obrigações legais.
+* Processamento de comissões e pagamentos PIX.
+* Comunicação sobre sua conta e transações.
+* Melhoria dos nossos serviços.
+* Cumprimento de obrigações legais.
 
 3. COMPARTILHAMENTO
 Seus dados são compartilhados apenas com:
-• Mercado Pago (processamento de pagamentos).
-• Autoridades quando exigido por lei.
+* Mercado Pago (processamento de pagamentos).
+* Autoridades quando exigido por lei.
 Nunca vendemos seus dados a terceiros.
 
 4. SEGURANÇA

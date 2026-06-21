@@ -67,7 +67,7 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen>
     super.dispose();
   }
 
-  // ── Polling de status ─────────────────────────────────────────────────────
+  // -- Polling de status -----------------------------------------------------
 
   void _startPolling() {
     _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
@@ -118,7 +118,7 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen>
     );
   }
 
-  // ── Formatar tempo restante ───────────────────────────────────────────────
+  // -- Formatar tempo restante -----------------------------------------------
 
   String get _timeLeft {
     final m = (_secondsLeft ~/ 60).toString().padLeft(2, '0');
@@ -126,7 +126,7 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen>
     return '$m:$s';
   }
 
-  // ── UI ────────────────────────────────────────────────────────────────────
+  // -- UI --------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -144,11 +144,11 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen>
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              // ── Produto + Valor ─────────────────────────────────────────
+              // -- Produto + Valor -----------------------------------------
               _ProductHeader(charge: widget.charge),
               const SizedBox(height: 24),
 
-              // ── QR Code ─────────────────────────────────────────────────
+              // -- QR Code -------------------------------------------------
               if (_secondsLeft > 0 && !_paid)
                 _QrCodeCard(
                   brCode: widget.charge.brCode,
@@ -161,7 +161,7 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen>
 
               const SizedBox(height: 20),
 
-              // ── Countdown ───────────────────────────────────────────────
+              // -- Countdown -----------------------------------------------
               if (_secondsLeft > 0 && !_paid)
                 _CountdownBar(
                   timeLeft: _timeLeft,
@@ -170,18 +170,18 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen>
 
               const SizedBox(height: 20),
 
-              // ── Copia-e-cola ─────────────────────────────────────────────
+              // -- Copia-e-cola ---------------------------------------------
               if (!_paid && widget.charge.brCode.isNotEmpty)
                 _CopyPasteSection(brCode: widget.charge.brCode),
 
               const SizedBox(height: 20),
 
-              // ── Comissão a receber ───────────────────────────────────────
+              // -- Comissão a receber ---------------------------------------
               _CommissionPreview(charge: widget.charge),
 
               const SizedBox(height: 16),
 
-              // ── Status indicator ─────────────────────────────────────────
+              // -- Status indicator -----------------------------------------
               _StatusIndicator(status: _status),
             ],
           ),
@@ -221,7 +221,7 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen>
   }
 }
 
-// ─── Widgets internos ─────────────────────────────────────────────────────────
+// --- Widgets internos ---------------------------------------------------------
 
 class _ProductHeader extends StatelessWidget {
   final ChargeResult charge;
@@ -259,7 +259,7 @@ class _ProductHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'R\$ ${charge.totalValueInReais.toStringAsFixed(2).replaceAll('.', ',')}',
+                  'R\$ ${charge.totalValueInReais.toStringAsFixed(2).replaceAll('.',',')}',
                   style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
@@ -446,7 +446,7 @@ class _CopyPasteSection extends StatelessWidget {
                   Clipboard.setData(ClipboardData(text: brCode));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Código PIX copiado! ✅'),
+                      content: Text('Código PIX copiado!'),
                       backgroundColor: AppColors.success,
                       duration: Duration(seconds: 2),
                     ),
@@ -485,7 +485,7 @@ class _CommissionPreview extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Text('🏆', style: TextStyle(fontSize: 24)),
+          const Text('', style: TextStyle(fontSize: 24)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -497,7 +497,7 @@ class _CommissionPreview extends StatelessWidget {
                       fontSize: 12, color: AppColors.textSecondary),
                 ),
                 Text(
-                  'R\$ ${charge.commissionInReais.toStringAsFixed(2).replaceAll('.', ',')}',
+                  'R\$ ${charge.commissionInReais.toStringAsFixed(2).replaceAll('.',',')}',
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
@@ -647,7 +647,7 @@ class _PaymentSuccessDialog extends StatelessWidget {
                   const Icon(Icons.check_rounded, color: Colors.white, size: 44),
             ),
             const SizedBox(height: 20),
-            const Text('PIX Recebido! 🎉',
+            const Text('PIX Recebido!',
                 style:
                     TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
             const SizedBox(height: 8),
@@ -666,14 +666,14 @@ class _PaymentSuccessDialog extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  const Text('💰 Comissão creditada',
+                  const Text('Comissão creditada',
                       style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                           fontSize: 13)),
                   const SizedBox(height: 4),
                   Text(
-                    'R\$ ${commissionValue.toStringAsFixed(2).replaceAll('.', ',')}',
+                    'R\$ ${commissionValue.toStringAsFixed(2).replaceAll('.',',')}',
                     style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,

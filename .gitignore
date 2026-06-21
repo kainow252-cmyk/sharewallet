@@ -43,3 +43,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Large binary font assets — mantidos no disco para build, não no git
+# (evita HTTP 413 no push para repositório com limite de tamanho)
+assets/fonts/NotoColorEmoji.ttf
+
+# Core dumps e binários grandes do sistema
+core
+core.*
+*.core
+cloudflare-worker/core

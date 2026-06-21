@@ -75,7 +75,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     final pending = svc.withdrawals.where((w) => w.status == 'pendente').length;
     final isWide = MediaQuery.of(context).size.width >= 800;
 
-    // ── Layout Desktop (NavigationRail) ──────────────────────────────────────
+    // -- Layout Desktop (NavigationRail) --------------------------------------
     if (isWide) {
       return Scaffold(
         appBar: AppBar(
@@ -200,7 +200,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
       );
     }
 
-    // ── Layout Mobile (BottomNavigationBar) ──────────────────────────────────
+    // -- Layout Mobile (BottomNavigationBar) ----------------------------------
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF071A10),
@@ -321,7 +321,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
   }
 }
 
-// ── Sidebar item ──────────────────────────────────────────────────────────────
+// -- Sidebar item --------------------------------------------------------------
 class _SidebarItem extends StatelessWidget {
   final IconData icon;
   final String label;

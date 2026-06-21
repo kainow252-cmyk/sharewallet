@@ -120,7 +120,7 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // ── Logo ──────────────────────────────────────────────
+                    // -- Logo ----------------------------------------------
                     ScaleTransition(
                       scale: _logoScale,
                       child: FadeTransition(
@@ -131,7 +131,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                     const SizedBox(height: 32),
 
-                    // ── Nome + tagline ────────────────────────────────────
+                    // -- Nome + tagline ------------------------------------
                     SlideTransition(
                       position: _textSlide,
                       child: FadeTransition(
@@ -200,7 +200,7 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
 
-              // ── Loading indicator no rodapé ───────────────────────────
+              // -- Loading indicator no rodapé ---------------------------
               Positioned(
                 bottom: 48,
                 left: 0,
@@ -271,7 +271,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-// ── Widget: Logo ShareWallet ──────────────────────────────────────────────────
+// -- Widget: Logo ShareWallet --------------------------------------------------
 class _ShareWalletLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -329,7 +329,7 @@ class _FallbackLogo extends StatelessWidget {
   }
 }
 
-// ── Widget: Círculo com glow ──────────────────────────────────────────────────
+// -- Widget: Círculo com glow --------------------------------------------------
 class _GlowCircle extends StatelessWidget {
   final double size;
   final Color color;

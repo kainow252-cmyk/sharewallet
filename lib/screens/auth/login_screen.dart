@@ -80,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ── Login com Google ──────────────────────────────────────────────────────────
+  // -- Login com Google ----------------------------------------------------------
   Future<void> _loginWithGoogle() async {
     setState(() => _socialLoading = true);
     final auth = context.read<AuthService>();
@@ -106,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       final err = result.error ?? '';
       if (err == 'REDIRECT_INITIATED') {
-        // Redirect iniciado — página vai recarregar, não mostrar erro
+        // Redirect iniciado - página vai recarregar, não mostrar erro
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -125,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ── Login com Facebook ────────────────────────────────────────────────────────
+  // -- Login com Facebook --------------------------------------------------------
   Future<void> _loginWithFacebook() async {
     setState(() => _socialLoading = true);
     final auth = context.read<AuthService>();
@@ -135,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _socialLoading = false);
 
     if (result.success) {
-      // Em modo Dev do Meta, email pode vir null — usar uid como fallback
+      // Em modo Dev do Meta, email pode vir null - usar uid como fallback
       final fbEmail = (result.email?.isNotEmpty == true)
           ? result.email!
           : '${result.uid}@facebook-login.com';
@@ -174,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ── Esqueceu a senha ──────────────────────────────────────────────────────────
+  // -- Esqueceu a senha ----------------------------------------------------------
   Future<void> _forgotPassword() async {
     final email = _emailController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
@@ -201,7 +201,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ── Dialog: Facebook não configurado ─────────────────────────────────────────
+  // -- Dialog: Facebook não configurado -----------------------------------------
   void _showFacebookConfigError() {
     showDialog(
       context: context,
@@ -213,7 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Facebook Login — Configuração necessária',
+                'Facebook Login  -  Configuração necessária',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
             ),
@@ -230,7 +230,7 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 14),
             _StepItem(
               step: '1',
-              text: 'Acesse developers.facebook.com → Crie ou use um app existente',
+              text: 'Acesse developers.facebook.com -> Crie ou use um app existente',
             ),
             _StepItem(
               step: '2',
@@ -242,11 +242,11 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             _StepItem(
               step: '4',
-              text: 'No Firebase Console → Authentication → Sign-in method → Facebook → ative e cole o App ID + Secret',
+              text: 'No Firebase Console -> Authentication -> Sign-in method -> Facebook -> ative e cole o App ID + Secret',
             ),
             _StepItem(
               step: '5',
-              text: 'No Meta Console → Configurações → Login do Facebook → URIs de redirecionamento OAuth válidos → adicione:\nhttps://affiliate-wallet-75853.firebaseapp.com/__/auth/handler',
+              text: 'No Meta Console -> Configurações -> Login do Facebook -> URIs de redirecionamento OAuth válidos -> adicione:\nhttps://affiliate-wallet-75853.firebaseapp.com/__/auth/handler',
             ),
             const SizedBox(height: 12),
             Container(
@@ -258,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 border: Border.all(color: const Color(0xFF1877F2).withValues(alpha: 0.25)),
               ),
               child: const Text(
-                '💡 Enquanto isso, use login com Google ou e-mail e senha.',
+                'Enquanto isso, use login com Google ou e-mail e senha.',
                 style: TextStyle(
                   fontSize: 12,
                   color: Color(0xFF1877F2),
@@ -288,7 +288,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ── Dialog: Facebook — domínio não autorizado ─────────────────────────────────
+  // -- Dialog: Facebook - domínio não autorizado ---------------------------------
   void _showFacebookDomainError() {
     showDialog(
       context: context,
@@ -317,7 +317,7 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 14),
             _StepItem(
               step: '1',
-              text: 'Acesse developers.facebook.com → Seu App → Configurações → Básico',
+              text: 'Acesse developers.facebook.com -> Seu App -> Configurações -> Básico',
             ),
             _StepItem(
               step: '2',
@@ -337,7 +337,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
               ),
               child: const Text(
-                '💡 Enquanto isso, use login com Google ou e-mail e senha.',
+                'Enquanto isso, use login com Google ou e-mail e senha.',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.primary,
@@ -395,11 +395,11 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 14),
             _StepItem(
               step: '1',
-              text: 'Acesse Firebase Console → Authentication → Settings',
+              text: 'Acesse Firebase Console -> Authentication -> Settings',
             ),
             _StepItem(
               step: '2',
-              text: 'Aba "Authorized domains" → clique em Add domain',
+              text: 'Aba "Authorized domains" -> clique em Add domain',
             ),
             _StepItem(
               step: '3',
@@ -415,7 +415,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
               ),
               child: const Text(
-                '💡 Enquanto isso, use login com e-mail e senha — funciona normalmente.',
+                'Enquanto isso, use login com e-mail e senha  -  funciona normalmente.',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.primary,
@@ -602,7 +602,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             icon: Icons.login_rounded,
                           ),
 
-                          // ── Divisor "ou" ──────────────────────────────────
+                          // -- Divisor "ou" ----------------------------------
                           const SizedBox(height: 24),
                           Row(
                             children: [
@@ -632,7 +632,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // ── Botões sociais ────────────────────────────────
+                          // -- Botões sociais --------------------------------
                           Row(
                             children: [
                               // Google
@@ -669,7 +669,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Text('Não tem conta? ',
+                              const Text('Não tem conta?',
                                   style: TextStyle(color: AppColors.textSecondary)),
                               GestureDetector(
                                 onTap: () =>
@@ -699,7 +699,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ── Widget: Botão Social (Google / Facebook) ──────────────────────────────────
+// -- Widget: Botão Social (Google / Facebook) ----------------------------------
 
 class _SocialButton extends StatelessWidget {
   final String label;
@@ -754,7 +754,7 @@ class _SocialButton extends StatelessWidget {
   }
 }
 
-// ── Widget: Ícone Google (letras coloridas G) ─────────────────────────────────
+// -- Widget: Ícone Google (letras coloridas G) ---------------------------------
 
 class _GoogleIcon extends StatelessWidget {
   const _GoogleIcon();
@@ -834,7 +834,7 @@ class _GoogleIconPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ── Widget: Step item para o dialog de erro de domínio ───────────────────────
+// -- Widget: Step item para o dialog de erro de domínio -----------------------
 
 class _StepItem extends StatelessWidget {
   final String step;

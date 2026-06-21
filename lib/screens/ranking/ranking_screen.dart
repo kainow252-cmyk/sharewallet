@@ -26,7 +26,7 @@ class _RankingScreenState extends State<RankingScreen> {
     try {
       final list = await CfApiService.getRanking();
 
-      // ── Normalizar campos do D1 para o formato esperado pela UI ──────────
+      // -- Normalizar campos do D1 para o formato esperado pela UI ----------
       // Worker retorna: total_assinaturas, total_comissoes
       // UI mostra APENAS: código do afiliado + posição (sem nome completo)
       final normalized = list.asMap().entries.map((entry) {
@@ -35,10 +35,10 @@ class _RankingScreenState extends State<RankingScreen> {
 
         final assinaturas   = (item['total_assinaturas'] as num?)?.toInt() ?? 0;
         final comissaoTotal = (item['total_comissoes']   as num?)?.toDouble() ?? 0.0;
-        // Código do afiliado (preserva privacidade — não exibe nome completo)
+        // Código do afiliado (preserva privacidade - não exibe nome completo)
         final codigo = item['affiliate_code']?.toString()
             ?? item['code']?.toString()
-            ?? '#${pos.toString().padLeft(3, '0')}';
+            ?? '#${pos.toString().padLeft(3,'0')}';
 
         // Calcula nível com base nas assinaturas
         String nivel;
@@ -88,7 +88,7 @@ class _RankingScreenState extends State<RankingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // top3 pode ter 1, 2 ou 3 itens — layout adaptativo
+    // top3 pode ter 1, 2 ou 3 itens - layout adaptativo
     final top3 = _ranking.take(3).toList();
     // resto = itens da posição 4 em diante
     final resto = _ranking.length > 3 ? _ranking.skip(3).toList() : <Map<String, dynamic>>[];
@@ -100,7 +100,7 @@ class _RankingScreenState extends State<RankingScreen> {
         color: const Color(0xFFFFD740),
         child: CustomScrollView(
           slivers: [
-            // ── AppBar ─────────────────────────────────────────────────
+            // -- AppBar -------------------------------------------------
             SliverAppBar(
               expandedHeight: 140,
               pinned: true,
@@ -193,12 +193,12 @@ class _RankingScreenState extends State<RankingScreen> {
                             children: [
                               const SizedBox(height: 8),
 
-                              // ── Pódio / Destaque Top (1, 2 ou 3 itens) ──
+                              // -- Pódio / Destaque Top (1, 2 ou 3 itens) --
                               if (top3.isNotEmpty) _Podium(top3: top3, fmt: _fmt),
 
                               const SizedBox(height: 24),
 
-                              // ── Posições 4–10 ───────────────────────────
+                              // -- Posições 4-10 ---------------------------
                               ...resto.asMap().entries.map((entry) {
                                 final pos = entry.key + 4;
                                 final item = entry.value;
@@ -225,7 +225,7 @@ class _RankingScreenState extends State<RankingScreen> {
   }
 }
 
-// ── Pódio (adaptativo: funciona com 1, 2 ou 3 afiliados) ──────────────────────
+// -- Pódio (adaptativo: funciona com 1, 2 ou 3 afiliados) ----------------------
 class _Podium extends StatelessWidget {
   final List<Map<String, dynamic>> top3; // pode ter 1, 2 ou 3 itens
   final NumberFormat fmt;
@@ -243,7 +243,7 @@ class _Podium extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final count = top3.length;
-    final title = count == 1 ? '🏆 Líder do Mês' : '🏆 Top $count do Mês';
+    final title = count == 1 ? 'Líder do Mês' : 'Top $count do Mês';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -264,7 +264,7 @@ class _Podium extends StatelessWidget {
                   fontSize: 16)),
           const SizedBox(height: 20),
 
-          // ── Layout: 1 afiliado — card centralizado de destaque ───────────
+          // -- Layout: 1 afiliado - card centralizado de destaque -----------
           if (count == 1)
             _PodiumItem(
               position: 1,
@@ -272,10 +272,10 @@ class _Podium extends StatelessWidget {
               assinaturas: _ass(top3[0]),
               height: 120,
               medalColor: const Color(0xFFFFD740),
-              emoji: '🥇',
+              emoji: '',
             ),
 
-          // ── Layout: 2 afiliados — 1º maior, 2º menor ────────────────────
+          // -- Layout: 2 afiliados - 1o maior, 2o menor --------------------
           if (count == 2)
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -287,7 +287,7 @@ class _Podium extends StatelessWidget {
                     assinaturas: _ass(top3[0]),
                     height: 120,
                     medalColor: const Color(0xFFFFD740),
-                    emoji: '🥇',
+                    emoji: '',
                   ),
                 ),
                 Expanded(
@@ -297,18 +297,18 @@ class _Podium extends StatelessWidget {
                     assinaturas: _ass(top3[1]),
                     height: 90,
                     medalColor: const Color(0xFFBDBDBD),
-                    emoji: '🥈',
+                    emoji: '',
                   ),
                 ),
               ],
             ),
 
-          // ── Layout: 3+ afiliados — pódio clássico 2°/1°/3° ─────────────
+          // -- Layout: 3+ afiliados - pódio clássico 2o/1o/3o -------------
           if (count >= 3)
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // 2º lugar
+                // 2o lugar
                 Expanded(
                   child: _PodiumItem(
                     position: 2,
@@ -316,10 +316,10 @@ class _Podium extends StatelessWidget {
                     assinaturas: _ass(top3[1]),
                     height: 90,
                     medalColor: const Color(0xFFBDBDBD),
-                    emoji: '🥈',
+                    emoji: '',
                   ),
                 ),
-                // 1º lugar (centro, maior)
+                // 1o lugar (centro, maior)
                 Expanded(
                   child: _PodiumItem(
                     position: 1,
@@ -327,10 +327,10 @@ class _Podium extends StatelessWidget {
                     assinaturas: _ass(top3[0]),
                     height: 120,
                     medalColor: const Color(0xFFFFD740),
-                    emoji: '🥇',
+                    emoji: '',
                   ),
                 ),
-                // 3º lugar
+                // 3o lugar
                 Expanded(
                   child: _PodiumItem(
                     position: 3,
@@ -338,7 +338,7 @@ class _Podium extends StatelessWidget {
                     assinaturas: _ass(top3[2]),
                     height: 70,
                     medalColor: const Color(0xFFCD7F32),
-                    emoji: '🥉',
+                    emoji: '',
                   ),
                 ),
               ],
@@ -395,7 +395,7 @@ class _PodiumItem extends StatelessWidget {
           ),
           child: Center(
             child: Text(
-              '$position°',
+              '${position}o',
               style: TextStyle(
                 color: medalColor,
                 fontWeight: FontWeight.w900,
@@ -409,7 +409,7 @@ class _PodiumItem extends StatelessWidget {
   }
 }
 
-// ── Tile de ranking (pos 4–10) ────────────────────────────────────────────────
+// -- Tile de ranking (pos 4-10) ------------------------------------------------
 class _RankingTile extends StatelessWidget {
   final int position;
   final String codigo;   // código do afiliado (preserva privacidade)
@@ -445,7 +445,7 @@ class _RankingTile extends StatelessWidget {
           SizedBox(
             width: 32,
             child: Text(
-              '$position°',
+              '${position}o',
               style: const TextStyle(
                   color: AppColors.textHint,
                   fontWeight: FontWeight.w700,

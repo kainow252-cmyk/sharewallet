@@ -40,7 +40,7 @@ class WalletService extends ChangeNotifier {
         .fold(0.0, (sum, s) => sum + s.comissao);
   }
 
-  // ── Carregar dados via Cloudflare D1 ──────────────────────────────────────
+  // -- Carregar dados via Cloudflare D1 --------------------------------------
   Future<void> loadData({String? userId, bool forceRefresh = false}) async {
     if (!forceRefresh && (_sales.isNotEmpty || _saldoCarteira > 0)) return;
 
@@ -62,7 +62,7 @@ class WalletService extends ChangeNotifier {
         CfApiService.getWithdrawalsByUser(uid),
       ]);
 
-      // Carteira — trata {"wallet":{...}} ou objeto direto com saldo_disponivel
+      // Carteira - trata {"wallet":{...}} ou objeto direto com saldo_disponivel
       final walletRaw = results[0] as Map<String, dynamic>?;
       final wallet = (walletRaw?['wallet'] as Map<String, dynamic>?)
                   ?? (walletRaw?.containsKey('saldo_disponivel') == true ? walletRaw : null);
@@ -85,9 +85,9 @@ class WalletService extends ChangeNotifier {
       _withdraws = wdsList.map((r) => WithdrawModel.fromD1(r as Map<String, dynamic>)).toList();
 
       if (kDebugMode) {
-        debugPrint('[WalletService] D1 — uid=$uid '
-            'saldo=R\$$_saldoCarteira '
-            'wallet=${wallet != null} '
+        debugPrint('[WalletService] D1  -  uid=$uid'
+            'saldo=R\$$_saldoCarteira'
+            'wallet=${wallet != null}'
             'sales=${_sales.length} withdrawals=${_withdraws.length}');
       }
     } catch (e) {
@@ -99,7 +99,7 @@ class WalletService extends ChangeNotifier {
   }
 
 
-  // ── Solicitar Saque via D1 + MercadoPago automático ───────────────────────
+  // -- Solicitar Saque via D1 + MercadoPago automático -----------------------
   Future<WithdrawResult> solicitarSaque({
     required double valor,
     required String pixKey,
@@ -121,7 +121,7 @@ class WalletService extends ChangeNotifier {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-      // 1️⃣ Registra o saque no D1 com status 'pendente'
+      // 1. Registra o saque no D1 com status 'pendente'
       final result = await CfApiService.createWithdrawal({
         'userId': uid,
         'valor': valor,
@@ -139,7 +139,7 @@ class WalletService extends ChangeNotifier {
 
       final withdrawalId = result['id']?.toString() ?? '';
 
-      // 2️⃣ Dispara PIX via MercadoPago automaticamente
+      // 2. Dispara PIX via MercadoPago automaticamente
       final mpResult = await _enviarPixMercadoPago(
         withdrawalId: withdrawalId,
         valor: valor,
@@ -163,7 +163,7 @@ class WalletService extends ChangeNotifier {
         notifyListeners();
         return WithdrawResult(
           success: true,
-          message: 'PIX enviado com sucesso! 🎉',
+          message: 'PIX enviado com sucesso!',
           value: valor,
           pixKey: pixKey,
         );
@@ -193,7 +193,7 @@ class WalletService extends ChangeNotifier {
     return WithdrawResult(success: false, message: 'Erro ao solicitar saque. Tente novamente.');
   }
 
-  // ── Enviar PIX via MercadoPago (delega ao Worker para evitar CORS) ────────
+  // -- Enviar PIX via MercadoPago (delega ao Worker para evitar CORS) --------
   Future<_MpPixResult> _enviarPixMercadoPago({
     required String withdrawalId,
     required double valor,
@@ -234,7 +234,7 @@ class WalletService extends ChangeNotifier {
     }
   }
 
-  // ── Chama o Worker que processa o PIX server-side ─────────────────────────
+  // -- Chama o Worker que processa o PIX server-side -------------------------
   Future<_MpPixResult> _enviarPixViaWorker({
     required String withdrawalId,
     required double valor,
@@ -263,7 +263,7 @@ class WalletService extends ChangeNotifier {
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (kDebugMode) debugPrint('[WalletService] Worker /pay response (${res.statusCode}): $body');
 
-      // HTTP 200 + success:true → PIX enviado com sucesso
+      // HTTP 200 + success:true -> PIX enviado com sucesso
       if (res.statusCode == 200 && body['success'] == true) {
         final result = body['result'] as Map<String, dynamic>? ?? {};
         final txId = result['tx_id']?.toString()
@@ -272,7 +272,7 @@ class WalletService extends ChangeNotifier {
         return _MpPixResult(success: true, txId: txId);
       }
 
-      // HTTP 202 + pending:true → MP falhou mas saque registrado (pendente manual)
+      // HTTP 202 + pending:true -> MP falhou mas saque registrado (pendente manual)
       if (res.statusCode == 202 && body['pending'] == true) {
         if (kDebugMode) debugPrint('[WalletService] Saque pendente manual: ${body['error']}');
         return _MpPixResult(
@@ -339,10 +339,10 @@ class WalletService extends ChangeNotifier {
   }
 }
 
-// ── Resultado interno do PIX MercadoPago ─────────────────────────────────────
+// -- Resultado interno do PIX MercadoPago -------------------------------------
 class _MpPixResult {
   final bool success;
-  final bool pending; // true = saque registrado mas MP falhou → admin processa
+  final bool pending; // true = saque registrado mas MP falhou -> admin processa
   final String? txId;
   final String? error;
   const _MpPixResult({

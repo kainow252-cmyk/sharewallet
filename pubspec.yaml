@@ -1,5 +1,5 @@
 name: affiliate_wallet
-description: ShareWallet — plataforma de afiliados com carteira digital e pagamentos via Pix
+description: ShareWallet  -  plataforma de afiliados com carteira digital e pagamentos via Pix
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -44,6 +44,12 @@ dependencies:
   pdf: 3.10.8
   printing: 5.13.2
 
+  # Foto de perfil
+  image_picker: 1.1.2
+  firebase_storage: 12.3.2
+
+
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -54,4 +60,9 @@ flutter:
 
   assets:
     - assets/images/
-    - assets/icons/
+    - assets/icon/
+
+  fonts:
+    - family: NotoColorEmoji
+      fonts:
+        - asset: assets/fonts/NotoColorEmoji.ttf

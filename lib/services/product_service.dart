@@ -34,16 +34,16 @@ class ProductService extends ChangeNotifier {
   };
 
   static const Map<String, String> categoryIcons = {
-    'seguros': '🛡️',
-    'entretenimento': '🎯',
-    'beneficios': '🎁',
-    'assistencia': '🔧',
-    'cursos': '📚',
-    'garantias': '✅',
-    'geral': '📦',
+    'seguros': '',
+    'entretenimento': '',
+    'beneficios': '',
+    'assistencia': '',
+    'cursos': '',
+    'garantias': '',
+    'geral': '',
   };
 
-  // ── Carregar produtos via Cloudflare D1 ───────────────────────────────────
+  // -- Carregar produtos via Cloudflare D1 -----------------------------------
   Future<void> loadProducts({bool forceRefresh = false}) async {
     if (!forceRefresh && _products.isNotEmpty) return;
 
@@ -83,7 +83,7 @@ class ProductService extends ChangeNotifier {
     };
   }
 
-  // D1 usa snake_case — normaliza para o ProductModel.fromJson
+  // D1 usa snake_case - normaliza para o ProductModel.fromJson
   static Map<String, dynamic> _normalize(Map<String, dynamic> r) => {
     'id': r['id'],
     'nome': r['nome'],

@@ -5,7 +5,7 @@ import '../models/product_model.dart';
 import '../models/subscription_model.dart';
 import 'cf_api_service.dart';
 
-// ── Modelo Afiliado (visão admin) ─────────────────────────────────────────────
+// -- Modelo Afiliado (visão admin) ---------------------------------------------
 class AdminAffiliate {
   final String id;
   final String nome;
@@ -66,7 +66,7 @@ class AdminAffiliate {
       v != null ? DateTime.tryParse(v.toString()) ?? DateTime.now() : DateTime.now();
 }
 
-// ── Modelo Saque (visão admin) ────────────────────────────────────────────────
+// -- Modelo Saque (visão admin) ------------------------------------------------
 class AdminWithdrawal {
   final String id;
   final String affiliateId;
@@ -138,7 +138,7 @@ class AdminWithdrawal {
   }
 }
 
-// ── Métricas gerais ───────────────────────────────────────────────────────────
+// -- Métricas gerais -----------------------------------------------------------
 class AdminMetrics {
   final double receitaTotal;
   final double receitaMes;
@@ -184,11 +184,11 @@ class AdminMetrics {
       );
 }
 
-// ── AdminService ──────────────────────────────────────────────────────────────
+// -- AdminService --------------------------------------------------------------
 class AdminService extends ChangeNotifier {
   // _isLoading: usado APENAS para operações de escrita (saveProduct, adminLogin)
   // _isLoadingData: loading geral de leitura das listas (affiliates, subs, withdrawals)
-  // _isLoadingProducts: loading isolado de produtos — não bloqueia tela de relatórios
+  // _isLoadingProducts: loading isolado de produtos - não bloqueia tela de relatórios
   bool _isLoading = false;
   bool _isLoadingData = false;
   bool _isLoadingProducts = false;
@@ -204,7 +204,7 @@ class AdminService extends ChangeNotifier {
   bool get isLoading => _isLoading;
   // isLoadingData: true enquanto affiliates/subs/withdrawals/metrics carregam
   bool get isLoadingData => _isLoadingData;
-  // isLoadingProducts: true apenas durante loadProducts() — não afeta relatórios
+  // isLoadingProducts: true apenas durante loadProducts() - não afeta relatórios
   bool get isLoadingProducts => _isLoadingProducts;
   String? get error => _error;
   bool get isAdmin => _isAdmin;
@@ -217,7 +217,7 @@ class AdminService extends ChangeNotifier {
   // Credencial admin email
   static const String _adminEmail = 'admin@affiliatewallet.com';
 
-  // ── Login Admin ───────────────────────────────────────────────────────────
+  // -- Login Admin -----------------------------------------------------------
   Future<bool> adminLogin(String email, String password) async {
     _isLoading = true;
     _error = null;
@@ -237,7 +237,7 @@ class AdminService extends ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        // Logou mas não é admin — deslogar
+        // Logou mas não é admin - deslogar
         await FirebaseAuth.instance.signOut();
         _error = 'Acesso negado: não é conta admin';
         _isLoading = false;
@@ -245,7 +245,7 @@ class AdminService extends ChangeNotifier {
         return false;
       }
     } on FirebaseAuthException catch (e) {
-      debugPrint('[AdminService] Erro auth: ${e.code} — ${e.message}');
+      debugPrint('[AdminService] Erro auth: ${e.code}  -  ${e.message}');
     } catch (e) {
       debugPrint('[AdminService] Erro inesperado: $e');
     }
@@ -265,10 +265,10 @@ class AdminService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Carregar tudo via D1 (paralelo) ────────────────────────────────────────
+  // -- Carregar tudo via D1 (paralelo) ----------------------------------------
   // CRÍTICO: sempre usa try/catch/finally para garantir que _isLoadingData
   // seja resetado para false mesmo se qualquer sub-chamada lançar exceção.
-  // Sem isso, _isLoadingData ficaria true para sempre → spinner eterno.
+  // Sem isso, _isLoadingData ficaria true para sempre -> spinner eterno.
   Future<void> loadAll() async {
     _isLoadingData = true;
     _error = null;
@@ -293,7 +293,7 @@ class AdminService extends ChangeNotifier {
     }
   }
 
-  // ── Métricas via D1 ──────────────────────────────────────────────────────
+  // -- Métricas via D1 ------------------------------------------------------
   Future<void> loadMetrics() async {
     try {
       final data = await CfApiService.getMetrics();
@@ -316,7 +316,7 @@ class AdminService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Afiliados via D1 ─────────────────────────────────────────────────────
+  // -- Afiliados via D1 -----------------------------------------------------
   Future<void> loadAffiliates() async {
     try {
       final rows = await CfApiService.getAffiliates();
@@ -388,7 +388,7 @@ class AdminService extends ChangeNotifier {
     }
   }
 
-  // ── Assinaturas via D1 ───────────────────────────────────────────────────
+  // -- Assinaturas via D1 ---------------------------------------------------
   Future<void> loadSubscriptions() async {
     try {
       final rows = await CfApiService.getSubscriptions();
@@ -417,7 +417,7 @@ class AdminService extends ChangeNotifier {
     return false;
   }
 
-  // ── Saques via D1 ────────────────────────────────────────────────────────
+  // -- Saques via D1 --------------------------------------------------------
   Future<void> loadWithdrawals() async {
     try {
       final rows = await CfApiService.getWithdrawals();
@@ -461,11 +461,11 @@ class AdminService extends ChangeNotifier {
     }
   }
 
-  // ── Produtos (CRUD admin) via D1 ──────────────────────────────────────────
+  // -- Produtos (CRUD admin) via D1 ------------------------------------------
   //
-  // silent=true → não toca _isLoading nem _isLoadingProducts
+  // silent=true -> não toca _isLoading nem _isLoadingProducts
   //   (usado internamente por loadAll() para não bloquear tela de relatórios)
-  // silent=false (padrão) → seta _isLoadingProducts, usado pela tela de produtos
+  // silent=false (padrão) -> seta _isLoadingProducts, usado pela tela de produtos
   Future<void> loadProducts({bool silent = false}) async {
     if (!silent) {
       _isLoadingProducts = true;
@@ -497,7 +497,7 @@ class AdminService extends ChangeNotifier {
   };
 
   Future<bool> saveProduct(ProductModel product, {bool isNew = false}) async {
-    // saveProduct usa _isLoading (escrita) — comportamento original preservado
+    // saveProduct usa _isLoading (escrita) - comportamento original preservado
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -546,7 +546,7 @@ class AdminService extends ChangeNotifier {
     }
   }
 
-  // ── Converter linha D1 → SubscriptionModel ───────────────────────────────
+  // -- Converter linha D1 -> SubscriptionModel -------------------------------
   static SubscriptionModel _subFromD1(Map<String, dynamic> r) {
     SubscriptionStatus status;
     switch (r['status']?.toString() ?? 'ativa') {
@@ -580,7 +580,7 @@ class AdminService extends ChangeNotifier {
     );
   }
 
-  // ── Mock data (fallback — desativado, mantido para referência) ──────────────
+  // -- Mock data (fallback - desativado, mantido para referência) --------------
   // ignore: unused_field
   static final List<AdminAffiliate> _mockAffiliates = [
     AdminAffiliate(
@@ -709,7 +709,7 @@ class AdminService extends ChangeNotifier {
       status: 'recusado',
       solicitadoEm: DateTime.now().subtract(const Duration(days: 7)),
       processadoEm: DateTime.now().subtract(const Duration(days: 6)),
-      motivo: 'Conta suspensa — aguardando verificação',
+      motivo: 'Conta suspensa  -  aguardando verificação',
     ),
   ];
 }

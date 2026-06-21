@@ -48,7 +48,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
       backgroundColor: AppColors.background,
       body: Column(
         children: [
-          // ── TabBar ─────────────────────────────────────────────────────
+          // -- TabBar -----------------------------------------------------
           Container(
             color: const Color(0xFF071A10),
             child: TabBar(
@@ -93,7 +93,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
             ),
           ),
 
-          // ── Banner pendentes (só quando na tab de saques) ─────────────
+          // -- Banner pendentes (só quando na tab de saques) -------------
           if (pendentes.isNotEmpty)
             Container(
               margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -111,7 +111,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '${pendentes.length} saques pendentes — ${fmt.format(totalPendente)} a processar',
+                      '${pendentes.length} saques pendentes  -  ${fmt.format(totalPendente)} a processar',
                       style: const TextStyle(
                           color: AppColors.warning,
                           fontWeight: FontWeight.w600,
@@ -124,10 +124,10 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
           const SizedBox(height: 8),
           const Divider(height: 1),
 
-          // ── Barra de filtro ativo (tab Afiliados) ─────────────────────
-          // [removida — afiliados agora têm tela própria]
+          // -- Barra de filtro ativo (tab Afiliados) ---------------------
+          // [removida - afiliados agora têm tela própria]
 
-          // ── TabBarView ─────────────────────────────────────────────────
+          // -- TabBarView -------------------------------------------------
           Expanded(
             child: svc.isLoadingData
                 ? const Center(child: CircularProgressIndicator())
@@ -295,7 +295,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
   }
 }
 
-// ── Lista de saques ───────────────────────────────────────────────────────────
+// -- Lista de saques -----------------------------------------------------------
 class _WithdrawalList extends StatelessWidget {
   final List<AdminWithdrawal> withdrawals;
   final bool showActions;
@@ -340,7 +340,7 @@ class _WithdrawalList extends StatelessWidget {
   }
 }
 
-// ── Card do saque ─────────────────────────────────────────────────────────────
+// -- Card do saque -------------------------------------------------------------
 class _WithdrawalCard extends StatelessWidget {
   final AdminWithdrawal withdrawal;
   final bool showActions;
@@ -580,7 +580,7 @@ class _WithdrawalCard extends StatelessWidget {
   }
 }
 
-// ── Linha de confirmação ──────────────────────────────────────────────────────
+// -- Linha de confirmação ------------------------------------------------------
 class _ConfirmRow extends StatelessWidget {
   final String label;
   final String value;

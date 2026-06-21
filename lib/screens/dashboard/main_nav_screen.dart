@@ -7,7 +7,7 @@ import '../indicacoes/indicacoes_screen.dart';
 import '../ranking/ranking_screen.dart';
 import '../profile/profile_screen.dart';
 
-// ── Controlador global de navegação ──────────────────────────────────────────
+// -- Controlador global de navegação ------------------------------------------
 class MainNavController extends ChangeNotifier {
   static final MainNavController _instance = MainNavController._();
   factory MainNavController() => _instance;
@@ -110,7 +110,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
       body: IndexedStack(
         index: idx,
         children: List.generate(_screens.length, (i) {
-          // Lazy: só monta a tela quando for visitada pela 1ª vez
+          // Lazy: só monta a tela quando for visitada pela 1a vez
           if (!_visitadas.contains(i)) {
             return const SizedBox.shrink();
           }
@@ -129,7 +129,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
   }
 }
 
-// ── Bottom Nav personalizado ──────────────────────────────────────────────────
+// -- Bottom Nav personalizado --------------------------------------------------
 class _BottomNav extends StatelessWidget {
   final int currentIndex;
   final List<_NavItem> items;

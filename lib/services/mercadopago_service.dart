@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'cf_api_service.dart';
 
-// ── Modelos ───────────────────────────────────────────────────────────────────
+// -- Modelos -------------------------------------------------------------------
 
 class MpCredentials {
   final String accessToken;
@@ -23,11 +23,11 @@ class MpCredentials {
     required this.verified,
   });
 
-  // publicKey é opcional para PIX — só accessToken é obrigatório
+  // publicKey é opcional para PIX - só accessToken é obrigatório
   bool get isEmpty => accessToken.isEmpty;
 
   factory MpCredentials.empty() => const MpCredentials(
-        accessToken: '', publicKey: '', userId: '', verified: false);
+        accessToken: '', publicKey:'', userId:'', verified: false);
 
   factory MpCredentials.fromMap(Map<String, dynamic> m) => MpCredentials(
         accessToken: m['access_token'] as String? ?? '',
@@ -75,7 +75,7 @@ class MpConfig {
   MpCredentials get active => isSandbox ? sandbox : production;
 
   factory MpConfig.defaultConfig() => MpConfig(
-        // Credenciais de produção MercadoPago — conta kainow
+        // Credenciais de produção MercadoPago - conta kainow
         // Token renovado automaticamente via client_credentials (expira 6h)
         mode:         'production',
         clientId:     '6134195606061357',
@@ -88,7 +88,7 @@ class MpConfig {
           'verified':     true,
         }),
         comissaoPercent: 0.20,
-        // Worker direto — sharewallet.com.br/api/* redireciona 302 para /app (não chega no MP)
+        // Worker direto - sharewallet.com.br/api/* redireciona 302 para /app (não chega no MP)
         notificationUrl: 'https://api.sharewallet.com.br/api/webhook/mp',
         backUrlSuccess:  'https://sharewallet.com.br/app/#/checkout/success',
         backUrlFailure:  'https://sharewallet.com.br/app/#/checkout/failure',
@@ -164,7 +164,7 @@ class MpCheckoutResult {
       MpCheckoutResult(success: false, errorMessage: msg);
 }
 
-// ── MercadoPagoService ────────────────────────────────────────────────────────
+// -- MercadoPagoService --------------------------------------------------------
 
 class MercadoPagoService extends ChangeNotifier {
   static const String _baseUrl = 'https://api.mercadopago.com';
@@ -180,12 +180,12 @@ class MercadoPagoService extends ChangeNotifier {
   static String? _getMpDeviceId() {
     if (!kIsWeb) return null;
     try {
-      // Tenta 1ª opção: window.MP_DEVICE_SESSION_ID
+      // Tenta 1a opção: window.MP_DEVICE_SESSION_ID
       final win = html.window as dynamic;
       final v1  = win['MP_DEVICE_SESSION_ID'];
       if (v1 is String && v1.isNotEmpty) return v1;
 
-      // Tenta 2ª opção: window._mpInstance.deviceSessionId (definido no index.html)
+      // Tenta 2a opção: window._mpInstance.deviceSessionId (definido no index.html)
       final inst = win['_mpInstance'];
       if (inst != null) {
         final v2 = inst['deviceSessionId'];
@@ -201,7 +201,7 @@ class MercadoPagoService extends ChangeNotifier {
   // ignore: unused_field
   static const String _configDocPath = 'config/mercadopago';
 
-  // Config em memória — carregada do Firestore
+  // Config em memória - carregada do Firestore
   MpConfig _config = MpConfig.defaultConfig();
   bool _isLoading = false;
   bool _isConfigLoaded = false;
@@ -214,7 +214,7 @@ class MercadoPagoService extends ChangeNotifier {
   String? get lastError => _lastError;
   MpPreference? get lastPreference => _lastPreference;
 
-  // ── Instância Firestore (banco affiliatewalletwallet) ────────────────────
+  // -- Instância Firestore (banco affiliatewalletwallet) --------------------
   static const _databaseId = 'affiliatewalletwallet';
   static FirebaseFirestore? _dbInst;
   static FirebaseFirestore? get _db {
@@ -246,7 +246,7 @@ class MercadoPagoService extends ChangeNotifier {
   static CollectionReference<Map<String, dynamic>>? get _cfgCollection =>
       _db?.collection('config');
 
-  // ── Carregar config do Firestore ──────────────────────────────────────────
+  // -- Carregar config do Firestore ------------------------------------------
 
   Future<void> loadConfig() async {
     // Evita carregamento duplo simultâneo
@@ -256,7 +256,7 @@ class MercadoPagoService extends ChangeNotifier {
     try {
       final collection = _cfgCollection;
       if (collection == null) {
-        // Firestore não inicializado — usa defaults hardcoded silenciosamente
+        // Firestore não inicializado - usa defaults hardcoded silenciosamente
         _isConfigLoaded = true;
         _isLoading = false;
         notifyListeners();
@@ -282,7 +282,7 @@ class MercadoPagoService extends ChangeNotifier {
         }
       }
 
-      // 2. Tenta rede com timeout de 10s (era 6s — muito curto para conexões lentas)
+      // 2. Tenta rede com timeout de 10s (era 6s - muito curto para conexões lentas)
       if (snap == null || !snap.exists) {
         snap = await collection
             .doc('mercadopago')
@@ -295,12 +295,12 @@ class MercadoPagoService extends ChangeNotifier {
         _isConfigLoaded = true;
         _isLoading = false;
         if (kDebugMode) {
-          debugPrint('[MP] Config carregada — modo: ${_config.mode}');
+          debugPrint('[MP] Config carregada  -  modo: ${_config.mode}');
           debugPrint('[MP] Token ativo: ${_config.active.accessToken.isNotEmpty ? "${_config.active.accessToken.substring(0, 20)}..." : "(vazio)"}');
         }
         notifyListeners();
       } else {
-        // Documento não existe — criar com defaults e usar defaults
+        // Documento não existe - criar com defaults e usar defaults
         _isConfigLoaded = true;
         _isLoading = false;
         notifyListeners();
@@ -308,15 +308,15 @@ class MercadoPagoService extends ChangeNotifier {
         _saveConfigToFirestore(_config).catchError((_) {});
       }
     } catch (e) {
-      debugPrint('[MP] Erro ao carregar config: $e — usando defaults hardcoded');
-      // Usa defaults hardcoded como fallback — app continua funcionando
+      debugPrint('[MP] Erro ao carregar config: $e  -  usando defaults hardcoded');
+      // Usa defaults hardcoded como fallback - app continua funcionando
       _isConfigLoaded = true;
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // ── Salvar config no Firestore ────────────────────────────────────────────
+  // -- Salvar config no Firestore --------------------------------------------
 
   Future<bool> saveConfig(MpConfig newConfig) async {
     _isLoading = true;
@@ -363,7 +363,7 @@ class MercadoPagoService extends ChangeNotifier {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'key': 'mp_config', 'value': mpCfgJson}),
       ).timeout(const Duration(seconds: 10));
-      if (kDebugMode) debugPrint('[MP] ✅ mp_config sincronizado no D1');
+      if (kDebugMode) debugPrint('[MP] mp_config sincronizado no D1');
     } catch (e) {
       if (kDebugMode) debugPrint('[MP] Aviso D1 sync: $e');
     }
@@ -374,11 +374,11 @@ class MercadoPagoService extends ChangeNotifier {
       'mode': cfg.mode,
       'sandbox': {
         ...cfg.sandbox.toMap(),
-        'label': '🧪 Sandbox (Testes)',
+        'label': 'Sandbox (Testes)',
       },
       'production': {
         ...cfg.production.toMap(),
-        'label': '🔴 Produção',
+        'label': 'Produção',
       },
       'comissao_percent': cfg.comissaoPercent,
       'notification_url': cfg.notificationUrl,
@@ -391,7 +391,7 @@ class MercadoPagoService extends ChangeNotifier {
     });
   }
 
-  // ── Renovar token via OAuth client_credentials (token expira em 6h) ─────────
+  // -- Renovar token via OAuth client_credentials (token expira em 6h) ---------
 
   Future<bool> _renovarToken() async {
     final cid = _config.clientId;
@@ -441,7 +441,7 @@ class MercadoPagoService extends ChangeNotifier {
         }, SetOptions(merge: true)).catchError((_) {});
 
         notifyListeners();
-        if (kDebugMode) debugPrint('[MP] ✅ Token renovado: ${newToken.substring(0, 25)}...');
+        if (kDebugMode) debugPrint('[MP] Token renovado: ${newToken.substring(0, 25)}...');
         return true;
       }
     } catch (e) {
@@ -450,7 +450,7 @@ class MercadoPagoService extends ChangeNotifier {
     return false;
   }
 
-  // ── Trocar modo (sandbox ↔ produção) ──────────────────────────────────────
+  // -- Trocar modo (sandbox <-> produção) --------------------------------------
 
   Future<bool> setMode(String mode) async {
     if (mode == _config.mode) return true;
@@ -472,7 +472,7 @@ class MercadoPagoService extends ChangeNotifier {
     return saveConfig(newCfg);
   }
 
-  // ── Verificar credenciais via API ─────────────────────────────────────────
+  // -- Verificar credenciais via API -----------------------------------------
 
   Future<Map<String, dynamic>> verifyCredentials(String accessToken) async {
     try {
@@ -501,7 +501,7 @@ class MercadoPagoService extends ChangeNotifier {
   /// Busca informações de qualidade da conta MP.
   /// Retorna: status_detail, status, sinpe, site_id, level_id, etc.
   ///
-  /// ⚠️ Não chama api.mercadopago.com diretamente do browser (CORS bloqueado).
+  ///  Não chama api.mercadopago.com diretamente do browser (CORS bloqueado).
   ///    A chamada é feita via proxy no Cloudflare Worker (/api/mp/account-info)
   ///    que usa o MP_ACCESS_TOKEN configurado como secret server-side.
   Future<Map<String, dynamic>> getAccountQualityInfo() async {
@@ -536,7 +536,7 @@ class MercadoPagoService extends ChangeNotifier {
     }
   }
 
-  // ── Criar Preferência de Assinatura ──────────────────────────────────────
+  // -- Criar Preferência de Assinatura --------------------------------------
 
   Future<MpCheckoutResult> criarPreferenciaAssinatura({
     required String produtoId,
@@ -570,35 +570,35 @@ class MercadoPagoService extends ChangeNotifier {
       final externalRef =
           'SW_${affiliateCode}_${produtoId}_${DateTime.now().millisecondsSinceEpoch}';
 
-      // ── Sanitização dos dados do pagador ─────────────────────────────────
-      // MP rejeita se email/nome forem vazios — garantir valores válidos
+      // -- Sanitização dos dados do pagador ---------------------------------
+      // MP rejeita se email/nome forem vazios - garantir valores válidos
       final nomeAssinatura   = clienteNome.trim().isNotEmpty ? clienteNome.trim() : 'Cliente';
-      final partesAssinatura = nomeAssinatura.split(' ');
+      final partesAssinatura = nomeAssinatura.split('');
       final firstNameA       = partesAssinatura.first;
       final lastNameA        = partesAssinatura.length > 1
-          ? partesAssinatura.sublist(1).join(' ')
+          ? partesAssinatura.sublist(1).join('')
           : 'ShareWallet';                                      // last_name obrigatório
       final emailAssinatura  = clienteEmail.trim().contains('@')
           ? clienteEmail.trim()
           : 'cliente@sharewallet.com.br';                       // payer.email obrigatório
       final descricaoItem    = produtoDescricao.trim().isNotEmpty
           ? produtoDescricao.trim()
-          : 'Assinatura $produtoNome — plataforma ShareWallet'; // items.description obrigatório
+          : 'Assinatura $produtoNome  -  plataforma ShareWallet'; // items.description obrigatório
 
       final body = {
         'items': [{
           'id':          produtoId,
           'title':       produtoNome,
-          'description': descricaoItem,          // ✅ items.description obrigatório
+          'description': descricaoItem,          //  items.description obrigatório
           'quantity':    1,
           'currency_id': 'BRL',
           'unit_price':  valor,
-          'category_id': 'services',             // ✅ categoria do item
+          'category_id': 'services',             //  categoria do item
         }],
         'payer': {
           'name':       firstNameA,
-          'surname':    lastNameA,               // ✅ payer.last_name (campo 'surname' no Preferences)
-          'email':      emailAssinatura,         // ✅ payer.email obrigatório
+          'surname':    lastNameA,               //  payer.last_name (campo 'surname' no Preferences)
+          'email':      emailAssinatura,         //  payer.email obrigatório
           if (clienteCpf != null && clienteCpf.isNotEmpty)
             'identification': {
               'type':   'CPF',
@@ -624,12 +624,12 @@ class MercadoPagoService extends ChangeNotifier {
         },
         'auto_return':          'approved',
         'notification_url':     '${_config.notificationUrl}?ref=$externalRef',
-        'statement_descriptor': 'SHAREWALLET',  // ✅ já existia
+        'statement_descriptor': 'SHAREWALLET',  //  já existia
         'expires':              false,
       };
 
       if (kDebugMode) {
-        debugPrint('[MP] Criando preferência — modo: ${_config.mode}');
+        debugPrint('[MP] Criando preferência  -  modo: ${_config.mode}');
         debugPrint('[MP] Produto: $produtoNome | Valor: R\$${valor.toStringAsFixed(2)}');
       }
 
@@ -640,7 +640,7 @@ class MercadoPagoService extends ChangeNotifier {
           'Content-Type':      'application/json',
           'X-Idempotency-Key': externalRef,
           if (_getMpDeviceId() != null)
-            'X-Device-Session-Id': _getMpDeviceId()!,  // ✅ device_id para Quality Score
+            'X-Device-Session-Id': _getMpDeviceId()!,  //  device_id para Quality Score
         },
         body: jsonEncode(body),
       );
@@ -690,7 +690,7 @@ class MercadoPagoService extends ChangeNotifier {
     }
   }
 
-  // ── Criar Pix direto ──────────────────────────────────────────────────────
+  // -- Criar Pix direto ------------------------------------------------------
 
   Future<MpCheckoutResult> criarPix({
     required String produtoId,
@@ -720,30 +720,30 @@ class MercadoPagoService extends ChangeNotifier {
       final externalRef =
           'PIX_${affiliateCode}_${produtoId}_${DateTime.now().millisecondsSinceEpoch}';
 
-      // ── Sanitização dos dados do pagador ─────────────────────────────────
+      // -- Sanitização dos dados do pagador ---------------------------------
       // MercadoPago rejeita com rejected_high_risk se email/CPF forem null ou vazios
       final nomeTrimmed   = clienteNome.trim();
       final emailTrimmed  = clienteEmail.trim();
       final cpfSanitized  = clienteCpf.replaceAll(RegExp(r'\D'), '');
-      final partes        = nomeTrimmed.isNotEmpty ? nomeTrimmed.split(' ') : ['Cliente'];
+      final partes        = nomeTrimmed.isNotEmpty ? nomeTrimmed.split('') : ['Cliente'];
       final firstName     = partes.first.isNotEmpty ? partes.first : 'Cliente';
-      final lastName      = partes.length > 1 ? partes.sublist(1).join(' ') : 'ShareWallet';
+      final lastName      = partes.length > 1 ? partes.sublist(1).join('') : 'ShareWallet';
       // Email obrigatório: usa o fornecido ou gera um baseado no CPF/código para garantir unicidade
       final emailFinal    = emailTrimmed.contains('@')
           ? emailTrimmed
           : 'cliente.${cpfSanitized.isNotEmpty ? cpfSanitized : affiliateCode}@sharewallet.com.br';
-      // CPF: deve ter 11 dígitos — se inválido usa placeholder (MP aceita para PIX)
+      // CPF: deve ter 11 dígitos - se inválido usa placeholder (MP aceita para PIX)
       final cpfFinal      = cpfSanitized.length == 11 ? cpfSanitized : '00000000000';
 
       final body = {
         'transaction_amount': valor,
         'description':        produtoNome.isNotEmpty ? produtoNome : 'Produto ShareWallet',
         'payment_method_id':  'pix',
-        // statement_descriptor é ignorado pelo MP em PIX (bank_transfer) — mantido por documentação
+        // statement_descriptor é ignorado pelo MP em PIX (bank_transfer) - mantido por documentação
         'payer': {
           'email':      emailFinal,
-          'first_name': firstName,   // ✅ obrigatório Quality Score
-          'last_name':  lastName,    // ✅ obrigatório Quality Score
+          'first_name': firstName,   //  obrigatório Quality Score
+          'last_name':  lastName,    //  obrigatório Quality Score
           'identification': {
             'type':   'CPF',
             'number': cpfFinal,
@@ -758,18 +758,18 @@ class MercadoPagoService extends ChangeNotifier {
         },
         'notification_url': _config.notificationUrl,
         'additional_info': {
-          // ── items[] — contexto anti-fraude (obrigatório Quality Score) ──
+          // -- items[] - contexto anti-fraude (obrigatório Quality Score) --
           'items': [{
             'id':          produtoId,
             'title':       produtoNome.isNotEmpty ? produtoNome : 'Produto ShareWallet',
             'description': produtoNome.isNotEmpty
-                ? 'Pagamento via PIX — $produtoNome — plataforma ShareWallet'
-                : 'Pagamento via PIX — plataforma ShareWallet',
-            'quantity':    1,           // int — MP rejeita double aqui
+                ? 'Pagamento via PIX  -  $produtoNome  -  plataforma ShareWallet'
+                : 'Pagamento via PIX  -  plataforma ShareWallet',
+            'quantity':    1,           // int  -  MP rejeita double aqui
             'unit_price':  valor,
             'category_id': 'services',
           }],
-          // ── payer info adicional — melhora score anti-fraude ──────────
+          // -- payer info adicional - melhora score anti-fraude ----------
           'payer': {
             'first_name':            firstName,
             'last_name':             lastName,
@@ -778,7 +778,7 @@ class MercadoPagoService extends ChangeNotifier {
             'is_first_purchase_online': false,
             'authentication_type':   'Gmail',
           },
-          // ── platform info — identifica a integração ───────────────────
+          // -- platform info - identifica a integração -------------------
           'platform': 'flutter_web',
         },
       };
@@ -790,14 +790,14 @@ class MercadoPagoService extends ChangeNotifier {
           'Content-Type':      'application/json',
           'X-Idempotency-Key': externalRef,
           if (_getMpDeviceId() != null)
-            'X-Device-Session-Id': _getMpDeviceId()!,  // ✅ device_id para Quality Score
+            'X-Device-Session-Id': _getMpDeviceId()!,  //  device_id para Quality Score
         },
         body: jsonEncode(body),
       );
 
-      // Token expirado (6h) → renovar via client_credentials e tentar de novo
+      // Token expirado (6h) -> renovar via client_credentials e tentar de novo
       if (response.statusCode == 401) {
-        if (kDebugMode) debugPrint('[MP] 401 — tentando renovar token...');
+        if (kDebugMode) debugPrint('[MP] 401  -  tentando renovar token...');
         final renovado = await _renovarToken();
         if (renovado) {
           final newCreds = _config.active;
@@ -808,7 +808,7 @@ class MercadoPagoService extends ChangeNotifier {
               'Content-Type':      'application/json',
               'X-Idempotency-Key': '${externalRef}_retry',
               if (_getMpDeviceId() != null)
-                'X-Device-Session-Id': _getMpDeviceId()!,  // ✅ device_id no retry
+                'X-Device-Session-Id': _getMpDeviceId()!,  //  device_id no retry
             },
             body: jsonEncode(body),
           );
@@ -817,7 +817,7 @@ class MercadoPagoService extends ChangeNotifier {
             final txData  = json['point_of_interaction']?['transaction_data'];
             final paymentId = json['id']?.toString();
 
-            // ── Criar subscription no D1 após retry bem-sucedido ──────────
+            // -- Criar subscription no D1 após retry bem-sucedido ----------
             await _criarSubscriptionD1(
               paymentId:     paymentId ?? externalRef,
               externalRef:   externalRef,
@@ -843,7 +843,7 @@ class MercadoPagoService extends ChangeNotifier {
           notifyListeners();
           return MpCheckoutResult.error(_lastError!);
         }
-        _lastError = 'Token expirado. Acesse Admin → Pagamentos e salve as credenciais novamente.';
+        _lastError = 'Token expirado. Acesse Admin -> Pagamentos e salve as credenciais novamente.';
         _isLoading = false;
         notifyListeners();
         return MpCheckoutResult.error(_lastError!);
@@ -856,8 +856,8 @@ class MercadoPagoService extends ChangeNotifier {
         final pixQr    = txData?['qr_code_base64'] as String?;
         final paymentId = json['id']?.toString();
 
-        // ── Criar subscription no D1 com status "pendente" ─────────────────
-        // Admin lista assinaturas do D1 → precisa existir aqui
+        // -- Criar subscription no D1 com status "pendente" -----------------
+        // Admin lista assinaturas do D1 -> precisa existir aqui
         await _criarSubscriptionD1(
           paymentId:     paymentId ?? externalRef,
           externalRef:   externalRef,
@@ -890,7 +890,7 @@ class MercadoPagoService extends ChangeNotifier {
     }
   }
 
-  // ── Abrir Checkout ────────────────────────────────────────────────────────
+  // -- Abrir Checkout --------------------------------------------------------
 
   Future<bool> abrirCheckout(String url) async {
     try {
@@ -906,7 +906,7 @@ class MercadoPagoService extends ChangeNotifier {
     }
   }
 
-  // ── Simular Pagamento Aprovado (sandbox) ──────────────────────────────────
+  // -- Simular Pagamento Aprovado (sandbox) ----------------------------------
 
   Future<bool> simularPagamentoAprovado({
     required String userId,
@@ -1002,7 +1002,7 @@ class MercadoPagoService extends ChangeNotifier {
     }
   }
 
-  // ── Criar Subscription no D1 (admin lista do D1!) ────────────────────────
+  // -- Criar Subscription no D1 (admin lista do D1!) ------------------------
 
   Future<void> _criarSubscriptionD1({
     required String paymentId,
@@ -1033,12 +1033,12 @@ class MercadoPagoService extends ChangeNotifier {
       });
       if (kDebugMode) debugPrint('[MP] Subscription criada no D1: sub_pix_$paymentId');
     } catch (e) {
-      // Não bloqueia — PIX já foi gerado com sucesso
+      // Não bloqueia - PIX já foi gerado com sucesso
       debugPrint('[MP] Aviso: erro ao criar subscription no D1: $e');
     }
   }
 
-  // ── Salvar Preferência no Firestore ──────────────────────────────────────
+  // -- Salvar Preferência no Firestore --------------------------------------
 
   Future<void> _salvarPreferenciaFirestore({
     required String preferenceId,
@@ -1083,16 +1083,16 @@ class MercadoPagoService extends ChangeNotifier {
     );
   }
 
-  // ── Getters estáticos (compatibilidade) ───────────────────────────────────
+  // -- Getters estáticos (compatibilidade) -----------------------------------
 
   String get publicKey       => _config.active.publicKey;
   String get userId          => _config.active.userId;
   bool   get isSandbox       => _config.isSandbox;
   double get comissaoPercent => _config.comissaoPercent;
 
-  // Instância — usa a comissão carregada do Firestore
+  // Instância - usa a comissão carregada do Firestore
   double calcularComissaoAtual(double valor) => valor * _config.comissaoPercent;
 
-  // Estático — compatibilidade com código legado (usa 20% fixo)
+  // Estático - compatibilidade com código legado (usa 20% fixo)
   static double calcularComissao(double valor) => valor * 0.20;
 }

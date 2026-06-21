@@ -67,7 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // ── Logo ícone (sem texto) ──────────────────────
+                          // -- Logo ícone (sem texto) ----------------------
                           Container(
                             width: 36,
                             height: 36,
@@ -82,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          // ── ShareWallet + saudação ──────────────────────
+                          // -- ShareWallet + saudação ----------------------
                           Expanded(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -99,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                                 Text(
-                                  'Olá, ${user?.primeiroNome ?? 'Afiliado'}! 👋',
+                                  'Olá, ${user?.primeiroNome ??'Afiliado'}!',
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.85),
                                     fontSize: 15,
@@ -110,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                             ),
                           ),
-                          // ── Notificação + Avatar ────────────────────────
+                          // -- Notificação + Avatar ------------------------
                           IconButton(
                             onPressed: () {},
                             icon: const Icon(Icons.notifications_rounded,
@@ -149,9 +149,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const SizedBox(height: 16),
 
-                  // ── Card Minha Carteira ─────────────────────────────
+                  // -- Card Minha Carteira -----------------------------
                   // Usa SEMPRE wallet.saldoCarteira (D1/Cloudflare) como fonte
-                  // única de verdade — sincroniza dashboard com performance
+                  // única de verdade - sincroniza dashboard com performance
                   _WalletSummaryCard(
                     saldo: wallet.saldoCarteira,
                     isVisible: _saldoVisible,
@@ -318,8 +318,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildMonthlyPerformance(WalletService wallet) {
-    // Performance usa mesma fonte D1 — wallet.comissoesEsteMes
-    // e wallet.saldoCarteira — garantindo consistência com dashboard
+    // Performance usa mesma fonte D1 - wallet.comissoesEsteMes
+    // e wallet.saldoCarteira - garantindo consistência com dashboard
     final comissoesMes = wallet.comissoesEsteMes;
     final saldoDisp    = wallet.saldoCarteira;
     final totalReceb   = wallet.totalRecebido;
@@ -465,7 +465,7 @@ class _WalletSummaryCard extends StatelessWidget {
                 const Icon(Icons.account_balance_wallet_rounded,
                     color: Color(0xFF00E5B4), size: 20),
                 const SizedBox(width: 8),
-                const Text('💰 Minha Carteira',
+                const Text('Minha Carteira',
                     style: TextStyle(
                         color: Colors.white70,
                         fontSize: 14,
@@ -489,8 +489,8 @@ class _WalletSummaryCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               isVisible
-                  ? 'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}'
-                  : 'R\$ ••••••',
+                  ? 'R\$ ${saldo.toStringAsFixed(2).replaceAll('.',',')}'
+                  : 'R\$ ******',
               style: const TextStyle(
                 color: Color(0xFF00E5B4),
                 fontSize: 28,
@@ -539,8 +539,8 @@ class _WalletSummaryCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         podesSacar
-                            ? '✅ Pronto para sacar!'
-                            : 'Faltam R\$ ${faltam.toStringAsFixed(2).replaceAll('.', ',')} — ${(pct * 100).toStringAsFixed(0)}%',
+                            ? 'Pronto para sacar!'
+                            : 'Faltam R\$ ${faltam.toStringAsFixed(2).replaceAll('.',',')}  -  ${(pct * 100).toStringAsFixed(0)}%',
                         style: TextStyle(
                           color: podesSacar
                               ? const Color(0xFF00E5B4)

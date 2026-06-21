@@ -10,7 +10,7 @@ import 'package:flutter/foundation.dart';
 class FirestoreService {
   static const String _databaseId = 'affiliatewalletwallet';
 
-  /// Timeout padrão para todas as queries — evita spinner infinito em 3G/4G fraco
+  /// Timeout padrão para todas as queries - evita spinner infinito em 3G/4G fraco
   static const Duration kQueryTimeout = Duration(seconds: 8);
 
   static FirebaseFirestore? _instance;
@@ -20,7 +20,7 @@ class FirestoreService {
 
     try {
       if (Firebase.apps.isEmpty) {
-        debugPrint('[FirestoreService] Firebase não inicializado — modo demo');
+        debugPrint('[FirestoreService] Firebase não inicializado  -  modo demo');
         return null;
       }
 
@@ -29,7 +29,7 @@ class FirestoreService {
         databaseId: _databaseId,
       );
 
-      // Habilita cache offline — próximas visitas carregam do cache instantaneamente
+      // Habilita cache offline - próximas visitas carregam do cache instantaneamente
       _instance!.settings = const Settings(
         persistenceEnabled: true,
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
@@ -49,7 +49,7 @@ class FirestoreService {
   /// Verifica se o Firestore está disponível (Firebase inicializado).
   static bool get isAvailable => Firebase.apps.isNotEmpty;
 
-  // ── Coleções ──────────────────────────────────────────────────────────────
+  // -- Coleções --------------------------------------------------------------
 
   static CollectionReference<Map<String, dynamic>>? collection(String name) {
     return db?.collection(name);
@@ -73,9 +73,9 @@ class FirestoreService {
   static CollectionReference<Map<String, dynamic>>? get config =>
       collection('config');
 
-  // ── Helpers de query com timeout ──────────────────────────────────────────
+  // -- Helpers de query com timeout ------------------------------------------
 
-  /// Executa um get() com timeout — evita spinner infinito em rede lenta.
+  /// Executa um get() com timeout - evita spinner infinito em rede lenta.
   /// Tenta cache primeiro (instantâneo), depois rede.
   static Future<QuerySnapshot<Map<String, dynamic>>?> getWithTimeout(
     Query<Map<String, dynamic>>? query, {
@@ -90,7 +90,7 @@ class FirestoreService {
             .timeout(const Duration(seconds: 1));
         if (cached.docs.isNotEmpty) return cached;
       } catch (_) {
-        // Cache vazio ou expirado — vai para rede
+        // Cache vazio ou expirado - vai para rede
       }
       // 2. Busca na rede com timeout
       return await query.get().timeout(timeout);
@@ -122,7 +122,7 @@ class FirestoreService {
     }
   }
 
-  // ── Helpers de conversão ──────────────────────────────────────────────────
+  // -- Helpers de conversão --------------------------------------------------
 
   static DateTime? toDateTime(dynamic value) {
     if (value == null) return null;
