@@ -18,6 +18,39 @@
       }
     }
   </script>
+
+  <script>
+    // Bloqueia window.open() do Firebase Auth em ambientes com COOP: same-origin.
+    // O Firebase SDK abre popups OAuth e faz polling de popup.closed, o que dispara
+    // "Cross-Origin-Opener-Policy policy would block the window.closed call" no Chrome.
+    // Como o Dart ja usa signInWithRedirect nesses ambientes, nenhum popup OAuth e
+    // necessario. Substituimos window.open por um stub com closed=true, fazendo o
+    // SDK desistir imediatamente do popup sem disparar COOP.
+    (function() {
+      var _isCOOPEnv = (
+        window.location.hostname.indexOf('sandbox.novita') !== -1 ||
+        window.location.hostname.indexOf('genspark')       !== -1 ||
+        window.location.hostname.indexOf('pages.dev')      !== -1 ||
+        window.location.hostname.indexOf('netlify')        !== -1 ||
+        window.location.hostname.indexOf('vercel')         !== -1
+      );
+      if (_isCOOPEnv) {
+        var _origOpen = window.open.bind(window);
+        window.open = function(url, name, features) {
+          if (url && typeof url === 'string' &&
+              (url.indexOf('accounts.google.com') !== -1 ||
+               url.indexOf('facebook.com/dialog') !== -1 ||
+               url.indexOf('appleid.apple.com')   !== -1 ||
+               url.indexOf('/__/auth/')            !== -1)) {
+            return { closed: true, close: function(){}, focus: function(){},
+                     postMessage: function(){}, location: { href: '' } };
+          }
+          return _origOpen(url, name, features);
+        };
+      }
+    })();
+  </script>
+
   <!--
     If you are serving your web app in a path other than the root, change the
     href value below to reflect the base path you are serving from.
