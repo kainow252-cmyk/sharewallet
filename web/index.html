@@ -110,13 +110,19 @@
     // O NotoColorEmoji.ttf esta carregado como fallback local (via FontLoader no
     // main.dart), cobrindo a maioria dos casos. Para os demais, suprimimos o
     // console.warn para evitar poluicao no console de producao.
+    //
+    // Tambem suprime "Cross-Origin-Opener-Policy policy would block the window.closed call"
+    // emitido pelo Firebase Auth SDK (popup.ts:309) quando o servidor de preview
+    // tem COOP: same-origin. O app ja usa signInWithRedirect nesses ambientes,
+    // portanto o warning e cosmético e inofensivo.
     (function() {
       var _origWarn = console.warn.bind(console);
       console.warn = function() {
         var msg = arguments[0];
-        if (typeof msg === 'string' && msg.indexOf('Could not find a set of Noto fonts') !== -1) {
-          // Silencia este warning especifico -- e apenas cosmético em producao
-          return;
+        if (typeof msg === 'string') {
+          if (msg.indexOf('Could not find a set of Noto fonts') !== -1) return;
+          if (msg.indexOf('Cross-Origin-Opener-Policy') !== -1 &&
+              msg.indexOf('window.closed') !== -1) return;
         }
         return _origWarn.apply(console, arguments);
       };

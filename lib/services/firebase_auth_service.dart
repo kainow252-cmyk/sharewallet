@@ -209,13 +209,59 @@ class FirebaseAuthService {
     );
   }
 
+  /// Retorna true se o ambiente tem COOP restritivo (same-origin),
+  /// o que bloqueia window.closed no popup OAuth e gera o warning
+  /// "Cross-Origin-Opener-Policy policy would block the window.closed call".
+  /// Nesse caso, signInWithRedirect e mais confiavel que signInWithPopup.
+  static bool _hasCOOPRestriction() {
+    try {
+      // ignore: avoid_web_libraries_in_flutter
+      final meta = _getCoopHeader();
+      return meta == 'same-origin';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ignore: avoid_web_libraries_in_flutter
+  static String _getCoopHeader() {
+    try {
+      // Tenta abrir e fechar uma janela de teste para verificar se COOP bloqueia
+      // Nao e possivel ler o header diretamente do JS, mas podemos detectar via
+      // performance.getEntriesByType ou simplesmente usar redirect sempre em
+      // ambientes conhecidos por ter COOP (proxies como Genspark/Novita/Cloudflare Pages)
+      final hostname = Uri.base.host;
+      if (hostname.contains('sandbox.novita') ||
+          hostname.contains('genspark') ||
+          hostname.contains('pages.dev') ||
+          hostname.contains('netlify') ||
+          hostname.contains('vercel')) {
+        return 'same-origin';
+      }
+      return '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   static Future<FirebaseAuthResult> _signInWithGoogleWeb() async {
     final GoogleAuthProvider googleProvider = GoogleAuthProvider();
     googleProvider.addScope('email');
     googleProvider.addScope('profile');
 
+    // Se o ambiente tem COOP restritivo (proxies como Novita/Genspark/Pages),
+    // signInWithPopup gera "Cross-Origin-Opener-Policy would block window.closed".
+    // Usa redirect diretamente nesses ambientes para evitar o warning.
+    if (_hasCOOPRestriction()) {
+      await _auth.signInWithRedirect(googleProvider);
+      return FirebaseAuthResult.failure(
+        'REDIRECT_INITIATED',
+        provider: FirebaseAuthProvider.google,
+      );
+    }
+
     try {
-      // Tenta popup primeiro; se bloqueado/falhar, cai no redirect
+      // Popup: funciona em dominios sem COOP restritivo (producao normal)
       final userCredential = await _auth.signInWithPopup(googleProvider);
       final idToken = await userCredential.user?.getIdToken();
       return FirebaseAuthResult(
@@ -238,14 +284,15 @@ class FirebaseAuthService {
         );
       }
 
-      // Se popup bloqueado ou domínio com problema -> tenta redirect
+      // Qualquer problema com popup (bloqueado, COOP, dominio) -> redirect
       if (code == 'popup-blocked' ||
           code == 'unauthorized-domain' ||
           msg.contains('domain') ||
           msg.contains('not authorized') ||
           msg.contains('origin') ||
-          msg.contains('popup')) {
-        // Redireciona para auth do Google - resultado capturado no getRedirectResult()
+          msg.contains('popup') ||
+          msg.contains('cross-origin') ||
+          msg.contains('coop')) {
         await _auth.signInWithRedirect(googleProvider);
         return FirebaseAuthResult.failure(
           'REDIRECT_INITIATED',
@@ -259,7 +306,8 @@ class FirebaseAuthService {
       );
     } catch (e) {
       final s = e.toString().toLowerCase();
-      if (s.contains('popup') || s.contains('blocked')) {
+      if (s.contains('popup') || s.contains('blocked') ||
+          s.contains('cross-origin') || s.contains('coop')) {
         final GoogleAuthProvider gp2 = GoogleAuthProvider();
         await _auth.signInWithRedirect(gp2);
         return FirebaseAuthResult.failure(
@@ -371,6 +419,15 @@ class FirebaseAuthService {
 
   static Future<FirebaseAuthResult> _signInWithFacebookWeb() async {
     final provider = FacebookAuthProvider();
+
+    // Mesma logica do Google: usa redirect em ambientes com COOP restritivo
+    if (_hasCOOPRestriction()) {
+      await _auth.signInWithRedirect(provider);
+      return FirebaseAuthResult.failure(
+        'REDIRECT_INITIATED',
+        provider: FirebaseAuthProvider.facebook,
+      );
+    }
 
     try {
       final userCredential = await _auth.signInWithPopup(provider);
