@@ -1,6 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script>
+    // Desregistra Service Workers antigos que podem estar servindo main.dart.js
+    // desatualizado do cache. Isso garante que o browser busque os arquivos
+    // mais recentes diretamente do servidor a cada load.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (var r of registrations) { r.unregister(); }
+      });
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          for (var name of names) {
+            if (name.indexOf('flutter') !== -1) { caches.delete(name); }
+          }
+        });
+      }
+    }
+  </script>
   <!--
     If you are serving your web app in a path other than the root, change the
     href value below to reflect the base path you are serving from.
