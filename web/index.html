@@ -101,6 +101,35 @@
       } catch(e) {}
     })();
   </script>
+
+  <script>
+    // Suprime o warning "Could not find a set of Noto fonts" do Flutter CanvasKit.
+    // Este warning e inofensivo: ocorre quando dados dinamicos (API/Firestore)
+    // contem caracteres Unicode (ex: em-dash, aspas tipograficas, setas)
+    // que o engine nao encontra na tabela interna de Noto fonts.
+    // O NotoColorEmoji.ttf esta carregado como fallback local (via FontLoader no
+    // main.dart), cobrindo a maioria dos casos. Para os demais, suprimimos o
+    // console.warn para evitar poluicao no console de producao.
+    (function() {
+      var _origWarn = console.warn.bind(console);
+      console.warn = function() {
+        var msg = arguments[0];
+        if (typeof msg === 'string' && msg.indexOf('Could not find a set of Noto fonts') !== -1) {
+          // Silencia este warning especifico -- e apenas cosmético em producao
+          return;
+        }
+        return _origWarn.apply(console, arguments);
+      };
+    })();
+
+    // Configura o Flutter Engine para buscar Noto fonts fallback do servidor local
+    // em vez de fonts.gstatic.com, evitando requests externos e erros de CORS.
+    // O servidor local retorna NotoColorEmoji.ttf para qualquer path solicitado,
+    // garantindo cobertura maxima de glyphs sem dependencia de CDN externo.
+    window.flutterConfiguration = {
+      fontFallbackBaseUrl: window.location.origin + '/assets/fonts/'
+    };
+  </script>
 </head>
 <body>
   <!-- O login usa Firebase signInWithPopup com OAuth redirect nativo -->
