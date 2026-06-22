@@ -240,4 +240,42 @@ class CfApiService {
   static Future<Map<String, dynamic>?> getMetrics() async {
     return await _get('/api/metrics');
   }
+
+  // -- EMAIL -----------------------------------------------------------------
+
+  /// Envia e-mail de confirmação de pagamento via MailChannels (Worker).
+  /// Retorna true se enviado com sucesso.
+  static Future<bool> sendConfirmationEmail({
+    required String toEmail,
+    required String toName,
+    required String productName,
+    required String productDescricao,
+    required double valor,
+    required double comissao,
+    required String affiliateCode,
+    required String paymentId,
+  }) async {
+    try {
+      final res = await _post('/api/send-email', {
+        'toEmail':          toEmail,
+        'toName':           toName,
+        'productName':      productName,
+        'productDescricao': productDescricao,
+        'valor':            valor,
+        'comissao':         comissao,
+        'affiliateCode':    affiliateCode,
+        'paymentId':        paymentId,
+      });
+      return res != null && res['sent'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // -- PAYMENT STATUS --------------------------------------------------------
+
+  /// Consulta o status de um pagamento PIX pelo payment_id numérico do MP.
+  static Future<Map<String, dynamic>?> getPaymentStatus(String paymentId) async {
+    return await _get('/api/payment-status/$paymentId');
+  }
 }

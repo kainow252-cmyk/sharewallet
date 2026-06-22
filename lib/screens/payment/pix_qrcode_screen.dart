@@ -4,14 +4,30 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../services/woovi_service.dart';
 import '../../theme/app_theme.dart';
+import 'payment_confirmed_screen.dart';
 
 /// Tela exibida após criar uma cobrança PIX.
 /// Mostra o QR Code + copia-e-cola + countdown de expiração.
 /// Faz polling a cada 3s para detectar o pagamento automaticamente.
 class PixQrCodeScreen extends StatefulWidget {
   final ChargeResult charge;
+  final String? affiliateCode;
+  final String? clienteNome;
+  final String? clienteEmail;
+  final String? productDescricao;
+  final double? valorProduto;
+  final double? comissaoProduto;
 
-  const PixQrCodeScreen({super.key, required this.charge});
+  const PixQrCodeScreen({
+    super.key,
+    required this.charge,
+    this.affiliateCode,
+    this.clienteNome,
+    this.clienteEmail,
+    this.productDescricao,
+    this.valorProduto,
+    this.comissaoProduto,
+  });
 
   @override
   State<PixQrCodeScreen> createState() => _PixQrCodeScreenState();
@@ -104,18 +120,26 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen>
     _pulseController.stop();
     _successController.forward();
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _PaymentSuccessDialog(
-        commissionValue: widget.charge.commissionInReais,
-        productName: widget.charge.productName,
-        onClose: () {
-          Navigator.of(context).pop(); // fecha dialog
-          Navigator.of(context).pop(); // volta para tela anterior
-        },
-      ),
-    );
+    // Navegar para tela de confirmação com detalhes do produto
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => PaymentConfirmedScreen(
+            paymentId:        widget.charge.saleId,
+            productName:      widget.charge.productName,
+            productDescricao: widget.productDescricao ?? '',
+            valor:            widget.valorProduto ?? widget.charge.totalValueInReais,
+            comissao:         widget.comissaoProduto ?? widget.charge.commissionInReais,
+            affiliateCode:    widget.affiliateCode ?? '',
+            clienteNome:      widget.clienteNome ?? '',
+            clienteEmail:     widget.clienteEmail ?? '',
+            onGoToWallet: () {
+              Navigator.of(context).popUntil((r) => r.isFirst);
+            },
+          ),
+        ),
+      );
+    }
   }
 
   // -- Formatar tempo restante -----------------------------------------------
@@ -615,93 +639,4 @@ class _PaidCard extends StatelessWidget {
   }
 }
 
-class _PaymentSuccessDialog extends StatelessWidget {
-  final double commissionValue;
-  final String productName;
-  final VoidCallback onClose;
-
-  const _PaymentSuccessDialog({
-    required this.commissionValue,
-    required this.productName,
-    required this.onClose,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      contentPadding: EdgeInsets.zero,
-      content: Container(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: AppColors.greenGradient,
-                shape: BoxShape.circle,
-              ),
-              child:
-                  const Icon(Icons.check_rounded, color: Colors.white, size: 44),
-            ),
-            const SizedBox(height: 20),
-            const Text('PIX Recebido!',
-                style:
-                    TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
-            const SizedBox(height: 8),
-            Text(
-              productName,
-              style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: AppColors.goldGradient,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Column(
-                children: [
-                  const Text('Comissão creditada',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(
-                    'R\$ ${commissionValue.toStringAsFixed(2).replaceAll('.',',')}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 32),
-                  ),
-                  const Text('adicionado à sua carteira',
-                      style:
-                          TextStyle(color: Colors.white70, fontSize: 11)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: onClose,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: const Text('Ver minha carteira',
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// _PaymentSuccessDialog removido — substituído por PaymentConfirmedScreen

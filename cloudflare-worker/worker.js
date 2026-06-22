@@ -144,6 +144,150 @@ export default {
   },
 };
 
+// ── Envio de e-mail via MailChannels (Cloudflare Workers native) ──────────────
+// Docs: https://blog.cloudflare.com/sending-email-from-production-workers/
+async function sendConfirmationEmail({ toEmail, toName, productName, productDescricao, valor, comissao, affiliateCode, paymentId, dataPagamento }) {
+  const valorFmt     = `R$ ${Number(valor).toFixed(2).replace('.', ',')}`;
+  const comissaoFmt  = `R$ ${Number(comissao).toFixed(2).replace('.', ',')}`;
+  const dataFmt      = dataPagamento
+    ? new Date(dataPagamento).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    : new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pagamento Confirmado — ShareWallet</title>
+<style>
+  body{margin:0;padding:0;background:#f4f6f9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;}
+  .wrap{max-width:560px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.10);}
+  .header{background:linear-gradient(135deg,#1B5E20,#2E7D32);padding:32px 28px;text-align:center;}
+  .header h1{color:#fff;margin:0;font-size:22px;font-weight:800;}
+  .header p{color:rgba(255,255,255,.85);margin:6px 0 0;font-size:13px;}
+  .check{width:64px;height:64px;background:rgba(255,255,255,.2);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;}
+  .body{padding:28px;}
+  .greeting{font-size:16px;color:#1a1a2e;margin-bottom:20px;}
+  .card{background:#f8fffe;border:1.5px solid #c8e6c9;border-radius:12px;padding:20px;margin-bottom:18px;}
+  .card-title{font-size:11px;font-weight:700;color:#2E7D32;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #e8f5e9;}
+  .row:last-child{border-bottom:none;}
+  .label{font-size:13px;color:#666;}
+  .value{font-size:13px;font-weight:600;color:#1a1a2e;}
+  .value.green{color:#1B5E20;}
+  .commission-box{background:linear-gradient(135deg,#1B5E20,#2E7D32);border-radius:12px;padding:20px;text-align:center;margin-bottom:18px;}
+  .commission-box p{color:rgba(255,255,255,.85);margin:0 0 4px;font-size:13px;}
+  .commission-box .amount{color:#fff;font-size:34px;font-weight:900;margin:4px 0;}
+  .commission-box .sub{color:rgba(255,255,255,.7);font-size:11px;}
+  .code-box{background:#f0f4ff;border:1.5px dashed #7986cb;border-radius:10px;padding:14px;text-align:center;margin-bottom:18px;}
+  .code-box p{margin:0;font-size:12px;color:#555;}
+  .code-box .code{font-size:22px;font-weight:800;letter-spacing:3px;color:#3f51b5;margin:6px 0 0;}
+  .footer{background:#f8f9fa;padding:20px 28px;text-align:center;border-top:1px solid #eee;}
+  .footer p{font-size:11px;color:#999;margin:4px 0;}
+  .footer a{color:#2E7D32;text-decoration:none;font-weight:600;}
+  .badge{display:inline-block;background:#e8f5e9;color:#1B5E20;font-size:10px;font-weight:700;border-radius:20px;padding:3px 10px;text-transform:uppercase;letter-spacing:.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="check">✓</div>
+    <h1>Pagamento Confirmado!</h1>
+    <p>Sua assinatura foi ativada com sucesso</p>
+  </div>
+  <div class="body">
+    <p class="greeting">Olá, <strong>${toName}</strong>! 🎉</p>
+    <p style="font-size:14px;color:#555;margin-top:-8px;">Seu pagamento foi processado e sua assinatura já está ativa.</p>
+
+    <div class="card">
+      <div class="card-title">📦 Produto Contratado</div>
+      <div class="row"><span class="label">Produto</span><span class="value">${productName}</span></div>
+      <div class="row"><span class="label">Descrição</span><span class="value" style="max-width:260px;text-align:right;font-size:12px;">${productDescricao || 'Assinatura mensal'}</span></div>
+      <div class="row"><span class="label">Valor mensal</span><span class="value green">${valorFmt}/mês</span></div>
+      <div class="row"><span class="label">Modalidade</span><span class="value">Pix Recorrente</span></div>
+      <div class="row"><span class="label">Status</span><span class="value green">✅ Ativo</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🧾 Detalhes do Pagamento</div>
+      <div class="row"><span class="label">Nº do Pagamento</span><span class="value" style="font-size:11px;color:#888;">${paymentId}</span></div>
+      <div class="row"><span class="label">Data/hora</span><span class="value">${dataFmt}</span></div>
+      <div class="row"><span class="label">Valor pago</span><span class="value green">${valorFmt}</span></div>
+      <div class="row"><span class="label">Próxima cobrança</span><span class="value">em 30 dias (automática)</span></div>
+    </div>
+
+    <div class="commission-box">
+      <p>💰 Sua comissão creditada</p>
+      <div class="amount">${comissaoFmt}</div>
+      <div class="sub">adicionado à sua carteira ShareWallet</div>
+    </div>
+
+    <div class="code-box">
+      <p>🔑 Seu código de afiliado</p>
+      <div class="code">${affiliateCode}</div>
+      <p style="margin-top:6px;font-size:11px;color:#888;">Compartilhe e ganhe comissão por cada nova assinatura!</p>
+    </div>
+
+    <div style="text-align:center;margin-top:8px;">
+      <span class="badge">Renovação automática todo mês via Pix</span>
+    </div>
+  </div>
+  <div class="footer">
+    <p><strong>ShareWallet</strong> — Plataforma de Afiliados</p>
+    <p>Dúvidas? <a href="mailto:suporte@sharewallet.com.br">suporte@sharewallet.com.br</a></p>
+    <p style="margin-top:8px;font-size:10px;color:#bbb;">Este é um e-mail automático, não responda diretamente.</p>
+  </div>
+</div>
+</body>
+</html>`;
+
+  const payload = {
+    personalizations: [{
+      to: [{ email: toEmail, name: toName }],
+    }],
+    from: { email: 'noreply@sharewallet.com.br', name: 'ShareWallet' },
+    reply_to: { email: 'suporte@sharewallet.com.br', name: 'Suporte ShareWallet' },
+    subject: `✅ Pagamento confirmado — ${productName}`,
+    content: [{ type: 'text/html', value: html }],
+  };
+
+  // Estratégia dupla: tenta MailChannels primeiro, depois Resend como fallback
+  // MailChannels: nativo do Cloudflare Workers, gratuito, requer DNS _mailchannels TXT
+  try {
+    const mcResp = await fetch('https://api.mailchannels.net/tx/v1/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (mcResp.status === 202 || mcResp.status === 200) return true;
+    // MailChannels falhou — tentar Resend como fallback
+  } catch (_) { /* MailChannels indisponível */ }
+
+  // Resend.com fallback (requer RESEND_API_KEY no env do Worker)
+  // Configure em: Cloudflare Dashboard > Workers > sharewallet-api > Settings > Variables
+  // Obtém key gratuitamente em: https://resend.com (3000 emails/mês grátis)
+  try {
+    const resendKey = (typeof env !== 'undefined' && env?.RESEND_API_KEY) ? env.RESEND_API_KEY : null;
+    if (resendKey) {
+      const resendPayload = {
+        from:    'ShareWallet <noreply@sharewallet.com.br>',
+        to:      [toEmail],
+        subject: `✅ Pagamento confirmado — ${productName}`,
+        html:    payload.content[0].value,
+      };
+      const resendResp = await fetch('https://api.resend.com/emails', {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${resendKey}`,
+        },
+        body: JSON.stringify(resendPayload),
+      });
+      return resendResp.ok;
+    }
+  } catch (_) { /* Resend indisponível */ }
+
+  return false;
+}
+
 async function _handleRequest(request, env) {
     const url  = new URL(request.url);
     const path = url.pathname.replace(/\/$/, ''); // remove trailing slash
@@ -1083,12 +1227,57 @@ async function _handleRequest(request, env) {
       }
 
       const sub = await DB.prepare(`SELECT * FROM subscriptions WHERE id=?`).bind(subId).first();
-      return ok({ confirmed: true, sub });
+
+      // ── Enviar e-mail de confirmação após confirmação manual ─────────────
+      if (affiliateCode) {
+        const affRow = await DB.prepare(
+          `SELECT nome, email FROM affiliates WHERE affiliate_code=? LIMIT 1`
+        ).bind(affiliateCode).first().catch(() => null);
+        if (affRow?.email) {
+          const prodDescRow = await DB.prepare(
+            `SELECT descricao FROM products WHERE id=? LIMIT 1`
+          ).bind(produtoId).first().catch(() => null);
+          sendConfirmationEmail({
+            toEmail:          affRow.email,
+            toName:           affRow.nome || 'Cliente',
+            productName:      produtoNome,
+            productDescricao: prodDescRow?.descricao || '',
+            valor,
+            comissao,
+            affiliateCode,
+            paymentId,
+            dataPagamento:    new Date().toISOString(),
+          }).catch(() => {});
+        }
+      }
+
+      return ok({ confirmed: true, sub, emailSent: !!affiliateCode });
     }
 
     // ── /api/health ────────────────────────────────────────────────────────
     if (path === '/api/health') {
       return ok({ status: 'ok', ts: new Date().toISOString() });
+    }
+
+    // ── POST /api/send-email ── envia e-mail de confirmação de pagamento ──
+    if (path === '/api/send-email' && method === 'POST') {
+      try {
+        const b = await request.json();
+        const ok2 = await sendConfirmationEmail({
+          toEmail:          b.toEmail || b.email || '',
+          toName:           b.toName  || b.nome  || 'Cliente',
+          productName:      b.productName  || b.product_nome || '',
+          productDescricao: b.productDescricao || b.descricao || '',
+          valor:            b.valor    || 0,
+          comissao:         b.comissao || 0,
+          affiliateCode:    b.affiliateCode || b.affiliate_code || '',
+          paymentId:        b.paymentId || b.payment_id || '',
+          dataPagamento:    b.dataPagamento || b.created_at || null,
+        });
+        return ok({ sent: ok2 });
+      } catch (e) {
+        return ok({ sent: false, error: String(e) });
+      }
     }
 
     // ── GET /api/mp/account-info ────────────────────────────────────────────
@@ -1303,6 +1492,30 @@ async function _handleRequest(request, env) {
                 }
               }
               // Se existSale: pagamento já processado anteriormente → ignorar (idempotência)
+            }
+          }
+
+          // ── Enviar e-mail de confirmação para o afiliado ────────────────
+          // Busca email do afiliado para envio (fire-and-forget, não bloqueia resposta)
+          if (affiliateCode) {
+            const affEmailRow = await DB.prepare(
+              `SELECT nome, email FROM affiliates WHERE affiliate_code=? LIMIT 1`
+            ).bind(affiliateCode).first().catch(() => null);
+            if (affEmailRow?.email) {
+              const prodDescRow = await DB.prepare(
+                `SELECT descricao FROM products WHERE id=? LIMIT 1`
+              ).bind(produtoId).first().catch(() => null);
+              sendConfirmationEmail({
+                toEmail:          affEmailRow.email,
+                toName:           affEmailRow.nome || 'Cliente',
+                productName:      produtoNome,
+                productDescricao: prodDescRow?.descricao || '',
+                valor,
+                comissao,
+                affiliateCode,
+                paymentId,
+                dataPagamento:    payment.date_approved || new Date().toISOString(),
+              }).catch(() => {}); // fire-and-forget
             }
           }
 

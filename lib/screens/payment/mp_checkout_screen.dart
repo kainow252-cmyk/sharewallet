@@ -6,6 +6,7 @@ import '../../services/mercadopago_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../dashboard/main_nav_screen.dart';
+import 'payment_confirmed_screen.dart';
 
 // -- Tela principal de checkout MP ---------------------------------------------
 
@@ -176,6 +177,28 @@ class _MpCheckoutScreenState extends State<MpCheckoutScreen>
           isLoading: _isLoading,
         );
       case _CheckoutStep.success:
+        // Navegar para tela de confirmação com detalhes completos
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final comissao = MercadoPagoService.calcularComissao(widget.product.valor);
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => PaymentConfirmedScreen(
+                paymentId:        _checkoutResult?.preferenceId ?? '',
+                productName:      widget.product.nome,
+                productDescricao: widget.product.descricao,
+                valor:            widget.product.valor,
+                comissao:         comissao,
+                affiliateCode:    widget.affiliateCode,
+                clienteNome:      _nomeCtrl.text.trim(),
+                clienteEmail:     _emailCtrl.text.trim(),
+                onGoToWallet: () {
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                  MainNavController().goCarteira();
+                },
+              ),
+            ),
+          );
+        });
         return _SuccessStep(
           key: const ValueKey('success'),
           product: widget.product,
