@@ -51,6 +51,12 @@ class AppColors {
 }
 
 class AppTheme {
+  // Lista de fallback aplicada a todos os TextStyles do tema.
+  // NotoColorEmoji cobre emoji + simbolos Unicode nao presentes no Roboto,
+  // eliminando o warning "Could not find a set of Noto fonts" para dados
+  // dinamicos vindos da API / Firestore.
+  static const List<String> _fontFallback = ['NotoColorEmoji'];
+
   static ThemeData get theme => ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -63,10 +69,26 @@ class AppTheme {
         ),
         scaffoldBackgroundColor: AppColors.background,
         fontFamily: 'Roboto',
-        // fontFamilyFallback com NotoColorEmoji como fallback para chars especiais
-        // Elimina o warning "Could not find a set of Noto fonts" para dados dinâmicos
-        textTheme: const TextTheme().apply(
-          fontFamilyFallback: ['NotoColorEmoji'],
+        // Aplica NotoColorEmoji como fallback em TODOS os 14 estilos do TextTheme.
+        // Usa Typography.material2021().black como base para herdar os tamanhos
+        // e pesos corretos do Material Design 3, adicionando o fallback a cada
+        // estilo individualmente (unica forma garantida de funcionar no CanvasKit).
+        textTheme: Typography.material2021().black.copyWith(
+          displayLarge:  Typography.material2021().black.displayLarge?.copyWith(fontFamilyFallback: _fontFallback),
+          displayMedium: Typography.material2021().black.displayMedium?.copyWith(fontFamilyFallback: _fontFallback),
+          displaySmall:  Typography.material2021().black.displaySmall?.copyWith(fontFamilyFallback: _fontFallback),
+          headlineLarge: Typography.material2021().black.headlineLarge?.copyWith(fontFamilyFallback: _fontFallback),
+          headlineMedium:Typography.material2021().black.headlineMedium?.copyWith(fontFamilyFallback: _fontFallback),
+          headlineSmall: Typography.material2021().black.headlineSmall?.copyWith(fontFamilyFallback: _fontFallback),
+          titleLarge:    Typography.material2021().black.titleLarge?.copyWith(fontFamilyFallback: _fontFallback),
+          titleMedium:   Typography.material2021().black.titleMedium?.copyWith(fontFamilyFallback: _fontFallback),
+          titleSmall:    Typography.material2021().black.titleSmall?.copyWith(fontFamilyFallback: _fontFallback),
+          bodyLarge:     Typography.material2021().black.bodyLarge?.copyWith(fontFamilyFallback: _fontFallback),
+          bodyMedium:    Typography.material2021().black.bodyMedium?.copyWith(fontFamilyFallback: _fontFallback),
+          bodySmall:     Typography.material2021().black.bodySmall?.copyWith(fontFamilyFallback: _fontFallback),
+          labelLarge:    Typography.material2021().black.labelLarge?.copyWith(fontFamilyFallback: _fontFallback),
+          labelMedium:   Typography.material2021().black.labelMedium?.copyWith(fontFamilyFallback: _fontFallback),
+          labelSmall:    Typography.material2021().black.labelSmall?.copyWith(fontFamilyFallback: _fontFallback),
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColors.primary,

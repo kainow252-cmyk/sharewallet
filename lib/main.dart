@@ -36,6 +36,23 @@ import 'screens/products/buy_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // -- NotoColorEmoji: pre-carrega como fallback global ----------------------
+  // Evita o warning "Could not find a set of Noto fonts" para dados dinamicos
+  // (strings da API / Firestore com chars especiais).
+  // O FontLoader registra a fonte no FontCollection do CanvasKit ANTES de
+  // qualquer paragraph ser renderizado, tornando-a disponivel como fallback.
+  if (kIsWeb) {
+    try {
+      final loader = FontLoader('NotoColorEmoji')
+        ..addFont(
+          rootBundle.load('assets/fonts/NotoColorEmoji.ttf'),
+        );
+      await loader.load();
+    } catch (e) {
+      debugPrint('[Fonts] NotoColorEmoji nao carregado: $e');
+    }
+  }
+
   // -- Firebase ----------------------------------------------------------------
   try {
     if (Firebase.apps.isEmpty) {
