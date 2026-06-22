@@ -275,6 +275,8 @@ async function _handleRequest(request, env) {
          ON CONFLICT(id) DO UPDATE SET
           nome=excluded.nome, email=excluded.email, cpf=excluded.cpf,
           telefone=excluded.telefone, pix_key=excluded.pix_key,
+          affiliate_code=CASE WHEN excluded.affiliate_code != '' THEN excluded.affiliate_code ELSE affiliates.affiliate_code END,
+          sponsor_code=COALESCE(excluded.sponsor_code, affiliates.sponsor_code),
           status=excluded.status`
       ).bind(
         id, b.nome??'', b.email??'', b.cpf??'', b.telefone??'',
@@ -303,7 +305,9 @@ async function _handleRequest(request, env) {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
             nome=excluded.nome, email=excluded.email, cpf=excluded.cpf,
-            telefone=excluded.telefone, pix_key=excluded.pix_key`
+            telefone=excluded.telefone, pix_key=excluded.pix_key,
+            affiliate_code=CASE WHEN excluded.affiliate_code != '' THEN excluded.affiliate_code ELSE affiliates.affiliate_code END,
+            sponsor_code=COALESCE(excluded.sponsor_code, affiliates.sponsor_code)`
         ).bind(
           id,
           b.nome ?? '',
@@ -322,6 +326,8 @@ async function _handleRequest(request, env) {
         const map = {
           nome:'nome', email:'email', cpf:'cpf', telefone:'telefone',
           pix_key:'pix_key', pixKey:'pix_key', status:'status',
+          affiliate_code:'affiliate_code', affiliateCode:'affiliate_code',
+          sponsor_code:'sponsor_code', sponsorCode:'sponsor_code',
           saldo_disponivel:'saldo_disponivel', saldo_pendente:'saldo_pendente',
           total_comissoes:'total_comissoes', total_sacado:'total_sacado',
           total_indicados:'total_indicados', total_assinaturas:'total_assinaturas'
