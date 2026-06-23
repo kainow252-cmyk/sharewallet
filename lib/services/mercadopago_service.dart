@@ -800,8 +800,10 @@ class MercadoPagoService extends ChangeNotifier {
         if (resp.statusCode == 200 || resp.statusCode == 201) {
           final wrapper = jsonDecode(resp.body) as Map<String, dynamic>;
           if (wrapper['success'] == true) {
+            // Worker retorna { success: true, result: { id, init_point, ... } }
+            final data = wrapper['result'] as Map<String, dynamic>? ?? wrapper;
             return _processarRespostaPreapproval(
-                wrapper, externalRef, affiliateId, affiliateCode,
+                data, externalRef, affiliateId, affiliateCode,
                 produtoId, produtoNome, valor);
           }
           _lastError = wrapper['error']?.toString() ?? 'Erro ao criar assinatura';
