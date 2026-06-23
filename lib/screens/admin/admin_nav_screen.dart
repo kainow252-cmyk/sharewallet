@@ -8,6 +8,7 @@ import 'admin_affiliates_screen.dart';
 import 'admin_subscriptions_screen.dart';
 import 'admin_withdrawals_screen.dart';
 import 'admin_mp_settings_screen.dart';
+import 'admin_sales_screen.dart';
 import 'admin_reports_screen.dart';
 
 class AdminNavScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     _NavItem(icon: Icons.people_rounded, label: 'Afiliados'),
     _NavItem(icon: Icons.repeat_rounded, label: 'Assinaturas'),
     _NavItem(icon: Icons.account_balance_wallet_rounded, label: 'Saques'),
+    _NavItem(icon: Icons.receipt_long_rounded, label: 'Vendas'),
     _NavItem(icon: Icons.payment_rounded, label: 'Pagamentos'),
     _NavItem(icon: Icons.assessment_rounded, label: 'Relatórios'),
   ];
@@ -37,6 +39,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     const AdminAffiliatesScreen(),
     const AdminSubscriptionsScreen(),
     const AdminWithdrawalsScreen(),
+    const AdminSalesScreen(),
     const AdminMpSettingsScreen(),
     const AdminReportsScreen(),
   ];
@@ -103,6 +106,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
                   case 2: s.loadAffiliates(); break;
                   case 3: s.loadSubscriptions(); break;
                   case 4: s.loadWithdrawals(); break;
+                  case 5: s.loadSales(); break;
                   default: s.loadAll(); break;
                 }
               },
@@ -227,7 +231,8 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
                 case 2: svc.loadAffiliates(); break;
                 case 3: svc.loadSubscriptions(); break;
                 case 4: svc.loadWithdrawals(); break;
-                case 6: svc.loadAll(); break; // Relatórios usa dados já carregados
+                case 5: svc.loadSales(); break;
+                case 7: svc.loadAll(); break; // Relatórios usa dados já carregados
                 default: svc.loadAll(); break;
               }
             },

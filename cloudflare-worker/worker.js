@@ -302,6 +302,15 @@ async function _handleRequest(request, env) {
       ).run();
     } catch (_) { /* coluna já existe — ignorar */ }
 
+    // ── Auto-migration: campos extras na tabela sales ─────────────────────────
+    // cliente_nome, cliente_email, payment_id — necessários para relatório de vendas
+    await Promise.allSettled([
+      DB.prepare(`ALTER TABLE sales ADD COLUMN cliente_nome TEXT DEFAULT ''`).run(),
+      DB.prepare(`ALTER TABLE sales ADD COLUMN cliente_email TEXT DEFAULT ''`).run(),
+      DB.prepare(`ALTER TABLE sales ADD COLUMN payment_id TEXT DEFAULT ''`).run(),
+      DB.prepare(`ALTER TABLE sales ADD COLUMN charge_type TEXT DEFAULT 'pixAvulso'`).run(),
+    ]);
+
     // ── /api/products ──────────────────────────────────────────────────────
     if (path === '/api/products' && method === 'GET') {
       const { results } = await DB.prepare(
@@ -1018,10 +1027,12 @@ async function _handleRequest(request, env) {
                   const affId = affs[0]?.id || null;
                   if (affId) {
                     const produtoNome2 = payment.description || produtoId || '';
+                    const p2Nome  = [payment.payer?.first_name, payment.payer?.last_name].filter(Boolean).join(' ') || '';
+                    const p2Email = payment.payer?.email || '';
                     await DB.prepare(
-                      `INSERT INTO sales (id, user_id, product_id, product_nome, valor, comissao, affiliate_code, status, created_at)
-                       VALUES (?,?,?,?,?,?,?,'aprovado',datetime('now'))`
-                    ).bind(saleId, affId, produtoId, produtoNome2, valor, comissao, affiliateCode).run().catch(() => {});
+                      `INSERT INTO sales (id, user_id, product_id, product_nome, valor, comissao, affiliate_code, status, created_at, cliente_nome, cliente_email, payment_id, charge_type)
+                       VALUES (?,?,?,?,?,?,?,'aprovado',datetime('now'),?,?,?,'pixRecorrente')`
+                    ).bind(saleId, affId, produtoId, produtoNome2, valor, comissao, affiliateCode, p2Nome, p2Email, String(paymentId)).run().catch(() => {});
                     for (const a of affs) {
                       await DB.prepare(
                         `INSERT INTO wallets (user_id, saldo_disponivel, saldo_pendente, total_recebido)
@@ -1087,6 +1098,46 @@ async function _handleRequest(request, env) {
       const { results } = await DB.prepare(
         `SELECT * FROM sales WHERE user_id=? ORDER BY created_at DESC LIMIT 100`
       ).bind(salesByUser[1]).all();
+      return ok(results);
+    }
+
+    // ── GET /api/sales — todas as vendas (admin) ────────────────────────────
+    // Suporta query params: ?status=aprovado&product_id=p_xxx&affiliate_code=ABC
+    //                        &date_from=2024-01-01&date_to=2024-12-31&limit=500
+    if (path === '/api/sales' && method === 'GET') {
+      const qStatus       = url.searchParams.get('status');
+      const qProduct      = url.searchParams.get('product_id');
+      const qAffiliate    = url.searchParams.get('affiliate_code');
+      const qDateFrom     = url.searchParams.get('date_from');
+      const qDateTo       = url.searchParams.get('date_to');
+      const qChargeType   = url.searchParams.get('charge_type');
+      const qLimit        = parseInt(url.searchParams.get('limit') || '1000');
+
+      // Constrói query dinâmica com JOIN p/ buscar nome do afiliado
+      const conditions = [];
+      const binds      = [];
+
+      if (qStatus)     { conditions.push(`s.status = ?`);                     binds.push(qStatus); }
+      if (qProduct)    { conditions.push(`s.product_id = ?`);                  binds.push(qProduct); }
+      if (qAffiliate)  { conditions.push(`s.affiliate_code = ?`);              binds.push(qAffiliate); }
+      if (qDateFrom)   { conditions.push(`date(s.created_at) >= date(?)`);     binds.push(qDateFrom); }
+      if (qDateTo)     { conditions.push(`date(s.created_at) <= date(?)`);     binds.push(qDateTo); }
+      if (qChargeType) { conditions.push(`s.charge_type = ?`);                 binds.push(qChargeType); }
+
+      const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+      const sql = `
+        SELECT
+          s.*,
+          a.nome  AS affiliate_nome_join,
+          a.email AS affiliate_email_join
+        FROM sales s
+        LEFT JOIN affiliates a ON a.affiliate_code = s.affiliate_code
+        ${where}
+        ORDER BY s.created_at DESC
+        LIMIT ?`;
+      binds.push(qLimit);
+
+      const { results } = await DB.prepare(sql).bind(...binds).all();
       return ok(results);
     }
 
@@ -1226,10 +1277,12 @@ async function _handleRequest(request, env) {
             await DB.prepare(
               `INSERT INTO sales
                 (id, user_id, product_id, product_nome, valor, comissao,
-                 affiliate_code, status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'aprovado', datetime('now'))`
+                 affiliate_code, status, created_at,
+                 cliente_nome, cliente_email, payment_id, charge_type)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'aprovado', datetime('now'), ?, ?, ?, ?)`
             ).bind(
-              saleId, affId, produtoId, produtoNome, valor, comissao, affiliateCode
+              saleId, affId, produtoId, produtoNome, valor, comissao, affiliateCode,
+              '', '', String(paymentId), 'pixRecorrente'
             ).run();
 
             await DB.prepare(
@@ -1474,14 +1527,18 @@ async function _handleRequest(request, env) {
               if (!existSale) {
                 // ── INSERT na tabela sales ─────────────────────────────────
                 // CRÍTICO: sem isso receitaTotal e comissoesTotal ficam 0 nos relatórios
+                const payerNome  = [payment.payer?.first_name, payment.payer?.last_name].filter(Boolean).join(' ') || '';
+                const payerEmail = payment.payer?.email || '';
                 await DB.prepare(
                   `INSERT INTO sales
                     (id, user_id, product_id, product_nome, valor, comissao,
-                     affiliate_code, status, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 'aprovado', datetime('now'))`
+                     affiliate_code, status, created_at,
+                     cliente_nome, cliente_email, payment_id, charge_type)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 'aprovado', datetime('now'), ?, ?, ?, ?)`
                 ).bind(
                   saleId, affId, produtoId, produtoNome,
-                  valor, comissao, affiliateCode
+                  valor, comissao, affiliateCode,
+                  payerNome, payerEmail, String(paymentId), 'pixRecorrente'
                 ).run();
 
                 // ── Creditar na carteira de TODOS os IDs associados ─────────

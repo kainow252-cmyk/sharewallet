@@ -71,6 +71,97 @@ class AdminAffiliate {
       v != null ? DateTime.tryParse(v.toString()) ?? DateTime.now() : DateTime.now();
 }
 
+// -- Modelo Venda (visão admin) ------------------------------------------------
+class AdminSale {
+  final String id;
+  final String userId;
+  final String productId;
+  final String productNome;
+  final double valor;
+  final double comissao;
+  final String affiliateCode;
+  final String affiliateNome;   // affiliate_nome_join via LEFT JOIN
+  final String affiliateEmail;  // affiliate_email_join via LEFT JOIN
+  final String status;          // aprovado, pendente, cancelado
+  final String clienteNome;
+  final String clienteEmail;
+  final String paymentId;
+  final String chargeType;      // pixRecorrente, pixAvulso
+  final DateTime createdAt;
+
+  const AdminSale({
+    required this.id,
+    required this.userId,
+    required this.productId,
+    required this.productNome,
+    required this.valor,
+    required this.comissao,
+    required this.affiliateCode,
+    this.affiliateNome = '',
+    this.affiliateEmail = '',
+    required this.status,
+    this.clienteNome = '',
+    this.clienteEmail = '',
+    this.paymentId = '',
+    this.chargeType = 'pixAvulso',
+    required this.createdAt,
+  });
+
+  static String _s(dynamic v, {String fb = ''}) => v?.toString().trim() ?? fb;
+  static double _d(dynamic v) => (v as num?)?.toDouble() ?? 0.0;
+
+  factory AdminSale.fromJson(Map<String, dynamic> j) => AdminSale(
+        id: _s(j['id']),
+        userId: _s(j['user_id']),
+        productId: _s(j['product_id']),
+        productNome: _s(j['product_nome'], fb: 'Produto'),
+        valor: _d(j['valor']),
+        comissao: _d(j['comissao']),
+        affiliateCode: _s(j['affiliate_code']),
+        affiliateNome: _s(j['affiliate_nome_join']),
+        affiliateEmail: _s(j['affiliate_email_join']),
+        status: _s(j['status'], fb: 'aprovado'),
+        clienteNome: _s(j['cliente_nome']),
+        clienteEmail: _s(j['cliente_email']),
+        paymentId: _s(j['payment_id']),
+        chargeType: _s(j['charge_type'], fb: 'pixAvulso'),
+        createdAt: j['created_at'] != null
+            ? DateTime.tryParse(j['created_at'].toString()) ?? DateTime.now()
+            : DateTime.now(),
+      );
+
+  /// Rótulo legível para tipo de cobrança
+  String get chargeTypeLabel =>
+      chargeType == 'pixRecorrente' ? 'Mensal' : 'Único';
+
+  /// Cor de status
+  Color get statusColor {
+    switch (status) {
+      case 'aprovado':
+        return const Color(0xFF2E7D32);
+      case 'cancelado':
+        return const Color(0xFFD32F2F);
+      case 'estornado':
+        return const Color(0xFF6A1B9A);
+      default:
+        return const Color(0xFFF57C00); // pendente
+    }
+  }
+
+  String get statusLabel {
+    switch (status) {
+      case 'aprovado':
+        return 'Aprovado';
+      case 'cancelado':
+        return 'Cancelado';
+      case 'estornado':
+        return 'Estornado';
+      default:
+        return 'Pendente';
+    }
+  }
+}
+
 // -- Modelo Saque (visão admin) ------------------------------------------------
 class AdminWithdrawal {
   final String id;
@@ -204,6 +295,7 @@ class AdminService extends ChangeNotifier {
   List<SubscriptionModel> _subscriptions = [];
   List<AdminWithdrawal> _withdrawals = [];
   List<ProductModel> _products = [];
+  List<AdminSale> _sales = [];
   AdminMetrics? _metrics;
 
   bool get isLoading => _isLoading;
@@ -217,6 +309,7 @@ class AdminService extends ChangeNotifier {
   List<SubscriptionModel> get subscriptions => _subscriptions;
   List<AdminWithdrawal> get withdrawals => _withdrawals;
   List<ProductModel> get products => _products;
+  List<AdminSale> get sales => _sales;
   AdminMetrics? get metrics => _metrics;
 
   // Credencial admin email
@@ -266,6 +359,7 @@ class AdminService extends ChangeNotifier {
     _affiliates = [];
     _subscriptions = [];
     _withdrawals = [];
+    _sales = [];
     _metrics = null;
     notifyListeners();
   }
@@ -284,6 +378,7 @@ class AdminService extends ChangeNotifier {
         loadAffiliates(),
         loadSubscriptions(),
         loadWithdrawals(),
+        loadSales(),
         // loadProducts com silent=true: não toca _isLoadingProducts
         // não bloqueia a tela de relatórios enquanto produtos carregam
         loadProducts(silent: true),
@@ -433,6 +528,20 @@ class AdminService extends ChangeNotifier {
     } catch (e) {
       debugPrint('[AdminService] Erro saques: $e');
       _withdrawals = [];
+    }
+    notifyListeners();
+  }
+
+  // -- Vendas (admin) via D1 -------------------------------------------------
+  Future<void> loadSales() async {
+    try {
+      final rows = await CfApiService.getAllSales(limit: 1000);
+      _sales = rows.map((r) => AdminSale.fromJson(r)).toList();
+      _sales.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (kDebugMode) debugPrint('[AdminService] ${_sales.length} vendas (D1)');
+    } catch (e) {
+      debugPrint('[AdminService] Erro vendas: $e');
+      _sales = [];
     }
     notifyListeners();
   }

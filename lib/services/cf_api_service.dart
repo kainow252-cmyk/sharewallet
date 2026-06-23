@@ -227,6 +227,34 @@ class CfApiService {
     return await _post('/api/sales', data);
   }
 
+  /// Admin: lista todas as vendas com filtros opcionais.
+  /// Parâmetros aceitos pelo worker: status, product_id, affiliate_code,
+  /// date_from, date_to, charge_type (pixRecorrente|pixAvulso), limit.
+  static Future<List<Map<String, dynamic>>> getAllSales({
+    String? status,
+    String? productId,
+    String? affiliateCode,
+    String? dateFrom,
+    String? dateTo,
+    String? chargeType,
+    int limit = 500,
+  }) async {
+    final params = <String, String>{};
+    if (status != null && status.isNotEmpty) params['status'] = status;
+    if (productId != null && productId.isNotEmpty) params['product_id'] = productId;
+    if (affiliateCode != null && affiliateCode.isNotEmpty) params['affiliate_code'] = affiliateCode;
+    if (dateFrom != null && dateFrom.isNotEmpty) params['date_from'] = dateFrom;
+    if (dateTo != null && dateTo.isNotEmpty) params['date_to'] = dateTo;
+    if (chargeType != null && chargeType.isNotEmpty) params['charge_type'] = chargeType;
+    params['limit'] = '$limit';
+
+    final query = params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&');
+    final path = '/api/sales${query.isNotEmpty ? '?$query' : ''}';
+    final res = await _get(path);
+    if (res == null) return [];
+    return List<Map<String, dynamic>>.from(res);
+  }
+
   // -- RANKING ---------------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> getRanking() async {
