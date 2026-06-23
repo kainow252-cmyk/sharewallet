@@ -24,9 +24,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
   late TabController _tab;
   // 3 bools separados - um por aba - evita que o loading de uma aba
   // afete as outras (bug anterior: _exporting único compartilhado).
-  bool _exportingAfiliados = false;
-  bool _exportingSaques    = false;
-  bool _exportingAssinaturas = false;
+  bool _exportingAfiliados    = false;
+  bool _exportingSaques       = false;
+  bool _exportingAssinaturas  = false;
+  bool _exportingVendas       = false;
   bool _refreshing = false;
 
   // Filtros de data
@@ -43,7 +44,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
     // Recarregar dados sempre que a tela for montada
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AdminService>().loadAll();
@@ -124,6 +125,157 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
     }
   }
 
+  /// Gera PDF via data URI base64 com HTML/CSS estilizado.
+  /// Abre nova aba com tabela formatada e botão de impressão.
+  void _printPdf(String title, String htmlTable) {
+    try {
+      final now = DateTime.now().toString().substring(0, 16);
+      final htmlContent = '''<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>$title</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a2e; padding: 20px; }
+  h1 { font-size: 18px; color: #0D5C3D; margin-bottom: 4px; }
+  .sub { font-size: 11px; color: #666; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #0D5C3D; color: white; padding: 7px 8px; text-align: left; font-size: 11px; }
+  td { padding: 6px 8px; border-bottom: 1px solid #e8f5e9; font-size: 11px; }
+  tr:nth-child(even) td { background: #f8fffe; }
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 10px; }
+  .badge-green { background: #e8f5e9; color: #1B5E20; }
+  .badge-blue  { background: #e3f2fd; color: #0D47A1; }
+  .badge-amber { background: #fff8e1; color: #F57F17; }
+  .badge-red   { background: #fce4ec; color: #B71C1C; }
+  @media print { body { padding: 0; } button { display: none; } }
+</style>
+</head>
+<body>
+<h1>$title</h1>
+<p class="sub">Gerado em: $now | ShareWallet Admin</p>
+<button onclick="window.print()" style="margin-bottom:12px;padding:6px 16px;background:#0D5C3D;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;">Imprimir / Salvar PDF</button>
+$htmlTable
+</body></html>''';
+      // Abrir como data URI - evita problemas com document.write e popups
+      final encoded = base64Encode(utf8.encode(htmlContent));
+      final dataUri = 'data:text/html;charset=utf-8;base64,$encoded';
+      html.window.open(dataUri, '_blank');
+    } catch (e) {
+      debugPrint('[Reports] Erro PDF: \$e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao gerar PDF: \$e'), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  // -- HTML tables para PDF ----------------------------------------------------
+
+  String _htmlAfiliados(List<AdminAffiliate> rows) {
+    final buf = StringBuffer();
+    buf.write('<table><tr>');
+    for (final h in ['Nome','Email','Código','Status','Comissões','Saldo','Assinaturas','Cadastro']) {
+      buf.write('<th>\$h</th>');
+    }
+    buf.write('</tr>');
+    for (final a in rows) {
+      final sc = a.status == 'ativo' ? 'green' : 'amber';
+      buf.write('<tr>'
+        '<td>\${a.nome}</td>'
+        '<td>\${a.email}</td>'
+        '<td>\${a.affiliateCode}</td>'
+        '<td><span class="badge badge-\$sc">\${a.status}</span></td>'
+        '<td>R\$ \${a.totalComissoes.toStringAsFixed(2)}</td>'
+        '<td>R\$ \${a.saldoDisponivel.toStringAsFixed(2)}</td>'
+        '<td>\${a.totalAssinaturas}</td>'
+        '<td>\${_dateFmt.format(a.createdAt)}</td>'
+        '</tr>');
+    }
+    buf.write('</table>');
+    return buf.toString();
+  }
+
+  String _htmlSaques(List<AdminWithdrawal> rows) {
+    final buf = StringBuffer();
+    buf.write('<table><tr>');
+    for (final h in ['Afiliado','Código','Valor','Chave PIX','Status','Solicitado','Tx ID']) {
+      buf.write('<th>\$h</th>');
+    }
+    buf.write('</tr>');
+    for (final w in rows) {
+      final sc = w.status == 'aprovado' ? 'green' : w.status == 'recusado' ? 'red' : 'amber';
+      buf.write('<tr>'
+        '<td>\${w.affiliateNome}</td>'
+        '<td>\${w.affiliateCode}</td>'
+        '<td><strong>R\$ \${w.valor.toStringAsFixed(2)}</strong></td>'
+        '<td>\${w.pixKey}</td>'
+        '<td><span class="badge badge-\$sc">\${w.statusLabel}</span></td>'
+        '<td>\${_dateFmt.format(w.solicitadoEm)}</td>'
+        '<td>\${w.txId ?? ""}</td>'
+        '</tr>');
+    }
+    buf.write('</table>');
+    return buf.toString();
+  }
+
+  String _htmlAssinaturas(List<SubscriptionModel> rows) {
+    final buf = StringBuffer();
+    buf.write('<table><tr>');
+    for (final h in ['Produto','Afiliado','Código','Tipo','Valor','Comissão','Status','Início','Próx. Cobr.']) {
+      buf.write('<th>\$h</th>');
+    }
+    buf.write('</tr>');
+    for (final s in rows) {
+      final sc = s.status == SubscriptionStatus.ativa ? 'green' :
+                 s.status == SubscriptionStatus.cancelada ? 'red' : 'amber';
+      final tc = s.chargeType == ChargeType.pixRecorrente ? 'blue' : 'amber';
+      final tipo = s.chargeType == ChargeType.pixRecorrente ? 'Mensal' : 'Único';
+      buf.write('<tr>'
+        '<td>\${s.productNome}</td>'
+        '<td>\${s.affiliateNome ?? s.affiliateCode}</td>'
+        '<td>\${s.affiliateCode}</td>'
+        '<td><span class="badge badge-\$tc">\$tipo</span></td>'
+        '<td>R\$ \${s.valor.toStringAsFixed(2)}</td>'
+        '<td>R\$ \${s.valorComissao.toStringAsFixed(2)} (\${s.comissaoPercent}%)</td>'
+        '<td><span class="badge badge-\$sc">\${s.statusLabel}</span></td>'
+        '<td>\${_dateFmt.format(s.dataInicio)}</td>'
+        '<td>\${s.chargeType == ChargeType.pixRecorrente ? "Dia \${s.diaCobranca}" : "N/A"}</td>'
+        '</tr>');
+    }
+    buf.write('</table>');
+    return buf.toString();
+  }
+
+  String _htmlVendas(List<AdminSale> rows) {
+    final buf = StringBuffer();
+    buf.write('<table><tr>');
+    for (final h in ['Data','Cliente','Produto','Afiliado','Tipo','Valor','Comissão','Status','Payment ID']) {
+      buf.write('<th>\$h</th>');
+    }
+    buf.write('</tr>');
+    final df = DateFormat('dd/MM/yyyy HH:mm');
+    for (final v in rows) {
+      final sc = v.status == 'aprovado' ? 'green' : v.status == 'cancelado' ? 'red' : 'amber';
+      final tc = v.chargeType == 'pixRecorrente' ? 'blue' : 'amber';
+      final cliente = v.clienteNome.isNotEmpty ? v.clienteNome :
+                      v.clienteEmail.isNotEmpty ? v.clienteEmail : 'N/A';
+      buf.write('<tr>'
+        '<td>\${df.format(v.createdAt)}</td>'
+        '<td>\$cliente</td>'
+        '<td>\${v.productNome}</td>'
+        '<td>\${v.affiliateNome.isNotEmpty ? v.affiliateNome : v.affiliateCode}</td>'
+        '<td><span class="badge badge-\$tc">\${v.chargeTypeLabel}</span></td>'
+        '<td><strong>R\$ \${v.valor.toStringAsFixed(2)}</strong></td>'
+        '<td>R\$ \${v.comissao.toStringAsFixed(2)}</td>'
+        '<td><span class="badge badge-\$sc">\${v.statusLabel}</span></td>'
+        '<td style="font-size:10px;color:#999;">\${v.paymentId.isNotEmpty ? v.paymentId : "-"}</td>'
+        '</tr>');
+    }
+    buf.write('</table>');
+    return buf.toString();
+  }
+
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -132,6 +284,31 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
         backgroundColor: AppColors.success,
       ),
     );
+  }
+
+  // -- Gerador CSV - Vendas -----------------------------------------------------
+
+  String _csvVendas(List<AdminSale> rows) {
+    final buf = StringBuffer();
+    buf.writeln('Data,Cliente Nome,Cliente Email,Produto,Afiliado Código,Afiliado Nome,'
+        'Tipo,Valor (R\$),Comissão (R\$),Status,Payment ID');
+    final df = DateFormat('dd/MM/yyyy HH:mm');
+    for (final v in rows) {
+      buf.writeln([
+        _esc(df.format(v.createdAt)),
+        _esc(v.clienteNome.isNotEmpty ? v.clienteNome : 'N/A'),
+        _esc(v.clienteEmail.isNotEmpty ? v.clienteEmail : 'N/A'),
+        _esc(v.productNome),
+        _esc(v.affiliateCode),
+        _esc(v.affiliateNome.isNotEmpty ? v.affiliateNome : 'N/A'),
+        _esc(v.chargeTypeLabel),
+        v.valor.toStringAsFixed(2),
+        v.comissao.toStringAsFixed(2),
+        _esc(v.statusLabel),
+        _esc(v.paymentId.isNotEmpty ? v.paymentId : 'N/A'),
+      ].join(','));
+    }
+    return buf.toString();
   }
 
   // -- Gerador CSV - Afiliados ------------------------------------------------
@@ -350,6 +527,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                   icon: const Icon(Icons.repeat_rounded, size: 18),
                   text: 'Assinaturas',
                 ),
+              Tab(
+                  icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                  text: 'Vendas',
+                ),
               ],
             ),
           ),
@@ -469,6 +650,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                         onDownloadCsv: _downloadCsv,
                         onDownloadJson: _downloadJson,
                         onCopy: _copyToClipboard,
+                        onDownloadPdf: (rows) => _printPdf(
+                          'Relatório de Afiliados',
+                          _htmlAfiliados(rows),
+                        ),
                         exporting: _exportingAfiliados,
                         onExportingChange: (v) =>
                             setState(() => _exportingAfiliados = v),
@@ -537,6 +722,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                         onDownloadCsv: _downloadCsv,
                         onDownloadJson: _downloadJson,
                         onCopy: _copyToClipboard,
+                        onDownloadPdf: (rows) => _printPdf(
+                          'Relatório de Saques',
+                          _htmlSaques(rows),
+                        ),
                         exporting: _exportingSaques,
                         onExportingChange: (v) =>
                             setState(() => _exportingSaques = v),
@@ -626,6 +815,78 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                         exporting: _exportingAssinaturas,
                         onExportingChange: (v) =>
                             setState(() => _exportingAssinaturas = v),
+                        onDownloadPdf: (rows) => _printPdf(
+                          'Relatório de Assinaturas',
+                          _htmlAssinaturas(rows),
+                        ),
+                      ),
+
+                      // -- Vendas ---------------------------------------------
+                      _ReportTab<AdminSale>(
+                        items: svc.sales,
+                        dateOf: (v) => v.createdAt,
+                        filter: _inRange,
+                        typeFilter: _tipoFiltro,
+                        typeFilterGetter: (v) =>
+                            v.chargeType == 'pixRecorrente' ? 'mensal' : 'unico',
+                        typeFilterWidget: _buildTipoFilterChips(),
+                        csvBuilder: _csvVendas,
+                        jsonBuilder: (rows) => jsonEncode(rows.map((v) => {
+                              'data': v.createdAt.toIso8601String(),
+                              'cliente_nome': v.clienteNome,
+                              'cliente_email': v.clienteEmail,
+                              'produto': v.productNome,
+                              'affiliate_code': v.affiliateCode,
+                              'affiliate_nome': v.affiliateNome,
+                              'tipo': v.chargeType,
+                              'valor': v.valor,
+                              'comissao': v.comissao,
+                              'status': v.status,
+                              'payment_id': v.paymentId,
+                            }).toList()),
+                        filenameBase: 'vendas',
+                        summaryWidgets: (rows) {
+                          final aprov = rows.where((v) => v.status == 'aprovado').toList();
+                          final volume  = aprov.fold(0.0, (s, v) => s + v.valor);
+                          final comiss  = aprov.fold(0.0, (s, v) => s + v.comissao);
+                          return [
+                            _SummaryKpi(
+                              label: 'Total',
+                              value: rows.length.toString(),
+                              icon: Icons.receipt_long_rounded,
+                              color: AppColors.primary,
+                            ),
+                            _SummaryKpi(
+                              label: 'Aprovadas',
+                              value: aprov.length.toString(),
+                              icon: Icons.check_circle_rounded,
+                              color: AppColors.success,
+                            ),
+                            _SummaryKpi(
+                              label: 'Volume',
+                              value: _fmt.format(volume),
+                              icon: Icons.attach_money_rounded,
+                              color: AppColors.gold,
+                            ),
+                            _SummaryKpi(
+                              label: 'Comissões',
+                              value: _fmt.format(comiss),
+                              icon: Icons.volunteer_activism_rounded,
+                              color: AppColors.info,
+                            ),
+                          ];
+                        },
+                        rowBuilder: (v) => _VendaRow(v: v, fmt: _fmt),
+                        onDownloadCsv: _downloadCsv,
+                        onDownloadJson: _downloadJson,
+                        onCopy: _copyToClipboard,
+                        onDownloadPdf: (rows) => _printPdf(
+                          'Relatório de Vendas',
+                          _htmlVendas(rows),
+                        ),
+                        exporting: _exportingVendas,
+                        onExportingChange: (v) =>
+                            setState(() => _exportingVendas = v),
                       ),
       ],
     );
@@ -807,6 +1068,8 @@ class _ReportTab<T> extends StatelessWidget {
   final void Function(String, String) onDownloadCsv;
   final void Function(String, String) onDownloadJson;
   final void Function(String) onCopy;
+  // PDF opcional — se null, botão Gerar PDF não aparece
+  final void Function(List<T>)? onDownloadPdf;
   final bool exporting;
   final void Function(bool) onExportingChange;
 
@@ -825,6 +1088,7 @@ class _ReportTab<T> extends StatelessWidget {
     required this.onDownloadCsv,
     required this.onDownloadJson,
     required this.onCopy,
+    this.onDownloadPdf,
     required this.exporting,
     required this.onExportingChange,
   });
@@ -858,6 +1122,9 @@ class _ReportTab<T> extends StatelessWidget {
       } else if (format == 'clipboard') {
         final csv = csvBuilder(rows);
         onCopy(csv);
+      } else if (format == 'pdf') {
+        onDownloadPdf!(rows);
+        if (ctx.mounted) _showSnack(ctx, '\u2705 PDF gerado! (${rows.length} registros)');
       }
     } catch (e) {
       if (ctx.mounted) _showSnack(ctx, 'Erro ao exportar: $e', isError: true);
@@ -969,10 +1236,26 @@ class _ReportTab<T> extends StatelessWidget {
                     ),
                   ],
                 ),
+                // -- Botão PDF (só aparece se onDownloadPdf foi passado) ------
+                if (onDownloadPdf != null) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: _ExportButton(
+                      label: 'Gerar PDF',
+                      icon: Icons.picture_as_pdf_rounded,
+                      color: const Color(0xFFD32F2F),
+                      loading: exporting,
+                      onTap: () => _doExport(context, 'pdf'),
+                      fullWidth: true,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
         ),
+
 
         // -- Tabela / Lista ------------------------------------------------
         Expanded(
@@ -1030,6 +1313,7 @@ class _ExportButton extends StatelessWidget {
   final Color color;
   final bool loading;
   final VoidCallback onTap;
+  final bool fullWidth;
 
   const _ExportButton({
     required this.label,
@@ -1037,6 +1321,7 @@ class _ExportButton extends StatelessWidget {
     required this.color,
     required this.loading,
     required this.onTap,
+    this.fullWidth = false,
   });
 
   @override
@@ -1045,30 +1330,52 @@ class _ExportButton extends StatelessWidget {
       onTap: loading ? null : onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: EdgeInsets.symmetric(
+            vertical: fullWidth ? 9 : 10,
+            horizontal: fullWidth ? 16 : 0),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
-        child: Column(
-          children: [
-            loading
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: color),
-                  )
-                : Icon(icon, color: color, size: 18),
-            const SizedBox(height: 4),
-            Text(label,
-                style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11)),
-          ],
-        ),
+        child: fullWidth
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  loading
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: color),
+                        )
+                      : Icon(icon, color: color, size: 16),
+                  const SizedBox(width: 8),
+                  Text(label,
+                      style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12)),
+                ],
+              )
+            : Column(
+                children: [
+                  loading
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: color),
+                        )
+                      : Icon(icon, color: color, size: 18),
+                  const SizedBox(height: 4),
+                  Text(label,
+                      style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11)),
+                ],
+              ),
       ),
     );
   }
@@ -1373,6 +1680,172 @@ class _SubscriptionRow extends StatelessWidget {
                           label: 'Próx. cobr.',
                           value: 'Dia ${s.diaCobranca}'),
                     ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// -- Row: Venda ----------------------------------------------------------------
+class _VendaRow extends StatelessWidget {
+  final AdminSale v;
+  final NumberFormat fmt;
+  const _VendaRow({required this.v, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final df = DateFormat('dd/MM/yyyy HH:mm');
+    final isMensal = v.chargeType == 'pixRecorrente';
+    final tipoColor = isMensal ? const Color(0xFF0D7A5A) : AppColors.info;
+    final tipoLabel = isMensal ? 'Mensal' : 'Único';
+    final tipoIcon  = isMensal ? Icons.autorenew_rounded : Icons.pix_rounded;
+    final cliente   = v.clienteNome.isNotEmpty ? v.clienteNome
+                    : v.clienteEmail.isNotEmpty ? v.clienteEmail
+                    : 'Cliente não identificado';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: v.statusColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Ícone com badge de tipo
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: tipoColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(tipoIcon, color: tipoColor, size: 20),
+              ),
+              Positioned(
+                right: -4, top: -4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: tipoColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(tipoLabel,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Linha 1: produto + valor
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(v.productNome,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: AppColors.textPrimary),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(fmt.format(v.valor),
+                            style: TextStyle(
+                                color: v.statusColor,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13)),
+                        if (v.comissao > 0)
+                          Text('+ ${fmt.format(v.comissao)} comissão',
+                              style: const TextStyle(
+                                  color: AppColors.gold,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                // Linha 2: cliente nome + email
+                Row(
+                  children: [
+                    const Icon(Icons.person_rounded,
+                        size: 11, color: AppColors.textHint),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(cliente,
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w500),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+                if (v.clienteNome.isNotEmpty && v.clienteEmail.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 15),
+                    child: Text(v.clienteEmail,
+                        style: const TextStyle(
+                            fontSize: 10, color: AppColors.textHint),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                const SizedBox(height: 3),
+                // Linha 3: afiliado
+                if (v.affiliateCode.isNotEmpty)
+                  Row(
+                    children: [
+                      const Icon(Icons.handshake_rounded,
+                          size: 11, color: AppColors.textHint),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          v.affiliateNome.isNotEmpty
+                              ? '${v.affiliateNome} (${v.affiliateCode})'
+                              : v.affiliateCode,
+                          style: const TextStyle(
+                              fontSize: 11, color: AppColors.textSecondary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 5),
+                // Linha 4: status + data + payment_id
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 4,
+                  children: [
+                    _Mini(
+                        label: 'Status',
+                        value: v.statusLabel,
+                        color: v.statusColor),
+                    _Mini(
+                        label: 'Data',
+                        value: df.format(v.createdAt)),
+                    if (v.paymentId.isNotEmpty)
+                      _Mini(
+                          label: 'Payment ID',
+                          value: v.paymentId.length > 10
+                              ? '${v.paymentId.substring(0, 10)}…'
+                              : v.paymentId,
+                          color: AppColors.textHint),
                   ],
                 ),
               ],
