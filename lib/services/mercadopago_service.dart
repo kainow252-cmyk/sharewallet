@@ -746,33 +746,25 @@ class MercadoPagoService extends ChangeNotifier {
           ? produtoDescricao.trim()
           : 'Assinatura $produtoNome - ShareWallet';
 
-      // Data de início: +2 horas no futuro
-      // O MP rejeita start_date no passado ou muito próximo do "agora".
-      // +1h às vezes não é suficiente (threshold interno do MP + latência de rede).
-      // +2h garante margem segura sem impactar a experiência do usuário.
-      final agora    = DateTime.now().toUtc().add(const Duration(hours: 2));
-      final startIso = agora.toIso8601String().replaceFirst(RegExp(r'\.\d+Z$'), '.000Z');
-
-      // Body da API /preapproval
+      // Body novo: Worker usa fluxo 2 passos (preapproval_plan → init_point com Pix)
+      // O Worker cuida de criar/reutilizar o plano e retornar o checkout URL.
       final body = {
-        'reason':             descClean,
+        // Identificação do produto (Worker agrupa por produto_id para reutilizar plano)
+        'produto_id':         produtoId,
+        'produto_nome':       produtoNome,
+        'valor':              valor,
+        // Referência externa para rastrear este cliente específico
         'external_reference': externalRef,
         'payer_email':        emailClean,
-        'back_url':           '${_config.backUrlSuccess}?ref=$externalRef',
+        'back_url':           _config.backUrlSuccess,
+        'notification_url':
+            _config.notificationUrl.replaceFirst('/mp', '/mp/preapproval'),
+        // Campos legados (Worker ignora, mas mantém compatibilidade)
+        'reason': descClean,
         'auto_recurring': {
-          'frequency':          1,
-          'frequency_type':     'months',
           'transaction_amount': valor,
           'currency_id':        'BRL',
-          'start_date':         startIso,
         },
-        'payment_methods_allowed': {
-          'payment_types': [
-            {'id': 'bank_transfer'},   // Pix = bank_transfer no MP
-          ],
-        },
-        'notification_url':
-            '${_config.notificationUrl.replaceFirst('/mp', '/mp/preapproval')}?ref=$externalRef',
         'metadata': {
           'affiliate_id':       affiliateId,
           'affiliate_code':     affiliateCode,
@@ -786,28 +778,11 @@ class MercadoPagoService extends ChangeNotifier {
       };
 
       if (kDebugMode) {
-        debugPrint('[MP Preapproval] Criando: $nomeClean | $produtoNome | R\$${valor.toStringAsFixed(2)}');
-        // Log do body completo para debug
-        debugPrint('[MP Preapproval] Body enviado: ${jsonEncode(body)}');
+        debugPrint('[MP Preapproval] Criando via plano: $produtoNome | R\$${valor.toStringAsFixed(2)} | produto_id: $produtoId');
       }
 
       // ── Web: proxy via Worker (sem CORS) ────────────────────────────────
       if (kIsWeb) {
-        // DEBUG: capturar body exato via endpoint de diagnóstico
-        if (kDebugMode) {
-          try {
-            final dbgResp = await http.post(
-              Uri.parse('https://api.sharewallet.com.br/api/mp/preapproval/debug'),
-              headers: {
-                'Content-Type':      'application/json',
-                'X-Idempotency-Key': '${externalRef}_dbg',
-              },
-              body: jsonEncode(body),
-            );
-            debugPrint('[MP Preapproval DEBUG] Echo body: ${dbgResp.body}');
-          } catch (_) {}
-        }
-
         final resp = await http.post(
           Uri.parse('https://api.sharewallet.com.br/api/mp/preapproval'),
           headers: {

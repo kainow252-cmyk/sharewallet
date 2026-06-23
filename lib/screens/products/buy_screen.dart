@@ -1387,10 +1387,10 @@ class _HowItWorks extends StatelessWidget {
   Widget build(BuildContext context) {
     final steps = product.isPixRecorrente ? [
       '1. Preencha seus dados e clique em "Assinar agora"',
-      '2. Você será redirecionado ao Mercado Pago — escolha seu banco (Nubank, BB, Itaú...)',
-      '3. Autorize o débito automático via Pix no app do seu banco — só precisa fazer isso uma vez',
-      '4. Pronto! Assinatura ativa. Todo mês o valor é debitado automaticamente',
-      '5. Cancele quando quiser pelo app do seu banco, sem multa',
+      '2. Você será redirecionado ao checkout seguro do Mercado Pago',
+      '3. Escolha: Pix Automático (Nubank, BB, Itaú...), conta Mercado Pago ou cartão',
+      '4. Autorize uma única vez — o MP cobra automaticamente todo mês',
+      '5. Cancele quando quiser, sem multa',
     ] : [
       '1. Preencha seus dados cadastrais acima',
       '2. Clique em "Gerar QR Code PIX"',
@@ -1413,7 +1413,7 @@ class _HowItWorks extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               product.isPixRecorrente
-                  ? 'Como funciona o Pix Automático'
+                  ? 'Como funciona a Assinatura'
                   : 'Como funciona o Pix Único',
               style: const TextStyle(fontWeight: FontWeight.w700,
                   color: Color(0xFF1976D2), fontSize: 13),
@@ -1752,15 +1752,15 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
                 const SizedBox(height: 12),
                 _buildStep(
                   numero: '2',
-                  titulo: 'Escolha seu banco',
-                  descricao: 'Nubank, Itaú, Bradesco, Banco do Brasil, Caixa e outros.',
+                  titulo: 'Escolha como pagar',
+                  descricao: 'Pix Automático (Nubank, BB, Itaú...), conta Mercado Pago ou cartão.',
                   cor: const Color(0xFF4CAF50),
                 ),
                 const SizedBox(height: 12),
                 _buildStep(
                   numero: '3',
-                  titulo: 'Autorize via app do banco',
-                  descricao: 'Você verá o valor e a frequência. Autorize — é só uma vez.',
+                  titulo: 'Autorize uma única vez',
+                  descricao: 'Se escolher Pix: autorize no app do seu banco. É só uma vez.',
                   cor: const Color(0xFFFF9800),
                 ),
                 const SizedBox(height: 12),
