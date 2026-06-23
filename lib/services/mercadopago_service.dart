@@ -246,17 +246,33 @@ class MercadoPagoService extends ChangeNotifier {
   static CollectionReference<Map<String, dynamic>>? get _cfgCollection =>
       _db?.collection('config');
 
-  // -- Carregar config do Firestore ------------------------------------------
+  // -- Carregar config -------------------------------------------------------
+  // No web: usa defaultConfig() hardcoded diretamente (evita WebChannel Firestore
+  //         que causa loop de reconexão e bloqueia a inicialização no browser).
+  // No mobile: tenta cache local → servidor Firestore → fallback defaults.
 
   Future<void> loadConfig() async {
     // Evita carregamento duplo simultâneo
     if (_isLoading) return;
     _isLoading = true;
 
+    // ── Web: pular Firestore completamente ──────────────────────────────────
+    // O SDK do Firestore abre um WebChannel persistente (SSE/gRPC-web) que
+    // falha com CORS/timeout em produção → não chega a retornar a config →
+    // criarPix() falha com 'credenciais não configuradas'.
+    // defaultConfig() já tem todos os valores de produção hardcoded.
+    if (kIsWeb) {
+      _isConfigLoaded = true;
+      _isLoading = false;
+      if (kDebugMode) debugPrint('[MP] Web: usando defaultConfig() (skip Firestore)');
+      notifyListeners();
+      return;
+    }
+
+    // ── Mobile: Firestore com cache + fallback ────────────────────────────
     try {
       final collection = _cfgCollection;
       if (collection == null) {
-        // Firestore não inicializado - usa defaults hardcoded silenciosamente
         _isConfigLoaded = true;
         _isLoading = false;
         notifyListeners();
@@ -265,24 +281,21 @@ class MercadoPagoService extends ChangeNotifier {
 
       DocumentSnapshot<Map<String, dynamic>>? snap;
 
-      // 1. Tenta cache local primeiro (instantâneo, funciona offline)
-      if (!kIsWeb) {
-        // Cache offline só faz sentido no mobile (web desabilitamos persistência)
-        try {
-          snap = await collection
-              .doc('mercadopago')
-              .get(const GetOptions(source: Source.cache));
-          if (snap != null && snap.exists) {
-            if (kDebugMode) debugPrint('[MP] Config carregada do cache local');
-          } else {
-            snap = null;
-          }
-        } catch (_) {
+      // 1. Cache local (instantâneo, funciona offline)
+      try {
+        snap = await collection
+            .doc('mercadopago')
+            .get(const GetOptions(source: Source.cache));
+        if (snap != null && snap.exists) {
+          if (kDebugMode) debugPrint('[MP] Config carregada do cache local');
+        } else {
           snap = null;
         }
+      } catch (_) {
+        snap = null;
       }
 
-      // 2. Tenta rede com timeout de 10s (era 6s - muito curto para conexões lentas)
+      // 2. Rede com timeout
       if (snap == null || !snap.exists) {
         snap = await collection
             .doc('mercadopago')
@@ -296,20 +309,16 @@ class MercadoPagoService extends ChangeNotifier {
         _isLoading = false;
         if (kDebugMode) {
           debugPrint('[MP] Config carregada  -  modo: ${_config.mode}');
-          debugPrint('[MP] Token ativo: ${_config.active.accessToken.isNotEmpty ? "${_config.active.accessToken.substring(0, 20)}..." : "(vazio)"}');
         }
         notifyListeners();
       } else {
-        // Documento não existe - criar com defaults e usar defaults
         _isConfigLoaded = true;
         _isLoading = false;
         notifyListeners();
-        // Cria o documento com os defaults para próximas cargas
         _saveConfigToFirestore(_config).catchError((_) {});
       }
     } catch (e) {
       debugPrint('[MP] Erro ao carregar config: $e  -  usando defaults hardcoded');
-      // Usa defaults hardcoded como fallback - app continua funcionando
       _isConfigLoaded = true;
       _isLoading = false;
       notifyListeners();
@@ -1020,112 +1029,144 @@ class MercadoPagoService extends ChangeNotifier {
         },
       };
 
-      final response = await http.post(
-        Uri.parse('$_baseUrl/v1/payments'),
-        headers: {
-          'Authorization':     'Bearer ${creds.accessToken}',
-          'Content-Type':      'application/json',
-          'X-Idempotency-Key': externalRef,
-          if (_getMpDeviceId() != null)
-            'X-Device-Session-Id': _getMpDeviceId()!,  //  device_id para Quality Score
-        },
-        body: jsonEncode(body),
-      );
+      // ── Chamada HTTP ────────────────────────────────────────────────────
+      // No web: roteamos pelo Worker (/api/mp/pix) porque o browser bloqueia
+      //         chamadas diretas a api.mercadopago.com com CORS.
+      // No mobile: chamada direta ao MP (sem restrição de CORS).
+      final pixEndpoint = kIsWeb
+          ? Uri.parse('https://api.sharewallet.com.br/api/mp/pix')
+          : Uri.parse('$_baseUrl/v1/payments');
 
-      // Token expirado (6h) -> renovar via client_credentials e tentar de novo
-      if (response.statusCode == 401) {
-        if (kDebugMode) debugPrint('[MP] 401  -  tentando renovar token...');
-        final renovado = await _renovarToken();
-        if (renovado) {
-          final newCreds = _config.active;
-          final retryResp = await http.post(
-            Uri.parse('$_baseUrl/v1/payments'),
-            headers: {
-              'Authorization':     'Bearer ${newCreds.accessToken}',
+      final Map<String, String> pixHeaders = kIsWeb
+          ? {
               'Content-Type':      'application/json',
-              'X-Idempotency-Key': '${externalRef}_retry',
+              'X-Idempotency-Key': externalRef,
+            }
+          : {
+              'Authorization':     'Bearer ${creds.accessToken}',
+              'Content-Type':      'application/json',
+              'X-Idempotency-Key': externalRef,
               if (_getMpDeviceId() != null)
-                'X-Device-Session-Id': _getMpDeviceId()!,  //  device_id no retry
-            },
-            body: jsonEncode(body),
-          );
-          if (retryResp.statusCode == 201 || retryResp.statusCode == 200) {
-            final json    = jsonDecode(retryResp.body) as Map<String, dynamic>;
-            final txData  = json['point_of_interaction']?['transaction_data'];
-            final paymentId = json['id']?.toString();
+                'X-Device-Session-Id': _getMpDeviceId()!,
+            };
 
-            // -- Criar subscription no D1 após retry bem-sucedido ----------
-            await _criarSubscriptionD1(
-              paymentId:     paymentId ?? externalRef,
-              externalRef:   externalRef,
-              produtoId:     produtoId,
-              produtoNome:   produtoNome,
-              valor:         valor,
-              affiliateId:   affiliateId,
-              affiliateCode: affiliateCode,
-              recorrente:    recorrente,
-            );
+      http.Response response;
+      try {
+        response = await http.post(
+          pixEndpoint,
+          headers: pixHeaders,
+          body: jsonEncode(body),
+        ).timeout(const Duration(seconds: 30));
+      } catch (e) {
+        _isLoading = false;
+        notifyListeners();
+        return MpCheckoutResult.error('Erro de conexão ao gerar PIX: $e');
+      }
 
-            _isLoading    = false;
-            notifyListeners();
-            return MpCheckoutResult(
-              success:      true,
-              preferenceId: paymentId,
-              pixCode:      txData?['qr_code']        as String?,
-              pixQrBase64:  txData?['qr_code_base64'] as String?,
-            );
-          }
-          final errBody2 = jsonDecode(retryResp.body);
-          _lastError  = errBody2['message'] ?? 'Token inválido após renovação';
-          _isLoading  = false;
+      // Worker retorna {success:true, result:{id,status,point_of_interaction,...}}
+      // MP direto retorna o objeto de pagamento diretamente
+      Map<String, dynamic> json;
+      if (kIsWeb) {
+        final wrapper = jsonDecode(response.body) as Map<String, dynamic>;
+        if (wrapper['success'] != true) {
+          _lastError = wrapper['error']?.toString() ?? 'Erro ao gerar PIX via proxy';
+          _isLoading = false;
           notifyListeners();
           return MpCheckoutResult.error(_lastError!);
         }
-        _lastError = 'Token expirado. Acesse Admin -> Pagamentos e salve as credenciais novamente.';
-        _isLoading = false;
-        notifyListeners();
-        return MpCheckoutResult.error(_lastError!);
-      }
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final json     = jsonDecode(response.body) as Map<String, dynamic>;
-        final txData   = json['point_of_interaction']?['transaction_data'];
-        final pixCode  = txData?['qr_code']        as String?;
-        final pixQr    = txData?['qr_code_base64'] as String?;
-        final paymentId = json['id']?.toString();
-
-        // -- Criar subscription no D1 com status "pendente" -----------------
-        // Admin lista assinaturas do D1 -> precisa existir aqui
-        await _criarSubscriptionD1(
-          paymentId:     paymentId ?? externalRef,
-          externalRef:   externalRef,
-          produtoId:     produtoId,
-          produtoNome:   produtoNome,
-          valor:         valor,
-          affiliateId:   affiliateId,
-          affiliateCode: affiliateCode,
-          recorrente:    recorrente,
-        );
-
-        _isLoading = false;
-        notifyListeners();
-        return MpCheckoutResult(
-          success:      true,
-          preferenceId: paymentId,
-          pixCode:      pixCode,
-          pixQrBase64:  pixQr,
-        );
+        json = Map<String, dynamic>.from(wrapper['result'] as Map);
       } else {
-        final errBody = jsonDecode(response.body);
-        _lastError    = errBody['message'] ?? 'Erro ao gerar Pix';
-        _isLoading    = false;
-        notifyListeners();
-        return MpCheckoutResult.error(_lastError!);
+        // Mobile: resposta direta do MP (trata 401 com renovação de token)
+        if (response.statusCode == 401) {
+          if (kDebugMode) debugPrint('[MP] 401 - tentando renovar token...');
+          final renovado = await _renovarToken();
+          if (renovado) {
+            final newCreds = _config.active;
+            final retryResp = await http.post(
+              Uri.parse('$_baseUrl/v1/payments'),
+              headers: {
+                'Authorization':     'Bearer ${newCreds.accessToken}',
+                'Content-Type':      'application/json',
+                'X-Idempotency-Key': '${externalRef}_retry',
+                if (_getMpDeviceId() != null)
+                  'X-Device-Session-Id': _getMpDeviceId()!,
+              },
+              body: jsonEncode(body),
+            );
+            if (retryResp.statusCode == 201 || retryResp.statusCode == 200) {
+              final j2 = jsonDecode(retryResp.body) as Map<String, dynamic>;
+              final tx2 = j2['point_of_interaction']?['transaction_data'];
+              final pid2 = j2['id']?.toString();
+              await _criarSubscriptionD1(
+                paymentId:     pid2 ?? externalRef,
+                externalRef:   externalRef,
+                produtoId:     produtoId,
+                produtoNome:   produtoNome,
+                valor:         valor,
+                affiliateId:   affiliateId,
+                affiliateCode: affiliateCode,
+                recorrente:    recorrente,
+              );
+              _isLoading = false;
+              notifyListeners();
+              return MpCheckoutResult(
+                success:      true,
+                preferenceId: pid2,
+                pixCode:      tx2?['qr_code']        as String?,
+                pixQrBase64:  tx2?['qr_code_base64'] as String?,
+              );
+            }
+            final e2 = jsonDecode(retryResp.body);
+            _lastError = e2['message'] ?? 'Token inválido após renovação';
+            _isLoading = false;
+            notifyListeners();
+            return MpCheckoutResult.error(_lastError!);
+          }
+          _lastError = 'Token expirado. Acesse Admin -> Pagamentos e salve as credenciais novamente.';
+          _isLoading = false;
+          notifyListeners();
+          return MpCheckoutResult.error(_lastError!);
+        }
+        if (response.statusCode != 201 && response.statusCode != 200) {
+          final errBody = jsonDecode(response.body);
+          _lastError = errBody['message'] ?? 'Erro ao gerar Pix';
+          _isLoading = false;
+          notifyListeners();
+          return MpCheckoutResult.error(_lastError!);
+        }
+        json = jsonDecode(response.body) as Map<String, dynamic>;
       }
+
+      // ── Processar resposta ──────────────────────────────────────────────
+      final txData   = json['point_of_interaction']?['transaction_data'];
+      final pixCode  = txData?['qr_code']        as String?;
+      final pixQr    = txData?['qr_code_base64'] as String?;
+      final paymentId = json['id']?.toString();
+
+      // Criar subscription no D1 com status 'pendente'
+      await _criarSubscriptionD1(
+        paymentId:     paymentId ?? externalRef,
+        externalRef:   externalRef,
+        produtoId:     produtoId,
+        produtoNome:   produtoNome,
+        valor:         valor,
+        affiliateId:   affiliateId,
+        affiliateCode: affiliateCode,
+        recorrente:    recorrente,
+      );
+
+      _isLoading = false;
+      notifyListeners();
+      return MpCheckoutResult(
+        success:      true,
+        preferenceId: paymentId,
+        pixCode:      pixCode,
+        pixQrBase64:  pixQr,
+      );
     } catch (e) {
       _isLoading = false;
       notifyListeners();
-      return MpCheckoutResult.error('Erro de conexão: $e');
+      return MpCheckoutResult.error('Erro ao gerar PIX: $e');
     }
   }
 
