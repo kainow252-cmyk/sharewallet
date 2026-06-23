@@ -310,6 +310,21 @@ async function _handleRequest(request, env) {
       DB.prepare(`ALTER TABLE subscriptions ADD COLUMN cliente_cpf   TEXT DEFAULT ''`).run(),
     ]);
 
+    // ── Auto-migration: recriar mp_plans sem coluna init_point (nova estrutura) ─
+    // A versão anterior tinha init_point; agora o init_point vem do preapproval
+    // individual (passo 2), não do plano. Dropamos e recriamos para garantir.
+    await DB.prepare(`CREATE TABLE IF NOT EXISTS mp_plans (
+      produto_id TEXT PRIMARY KEY,
+      plan_id    TEXT NOT NULL,
+      valor      REAL NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`).run().catch(() => {});
+    // Remove planos antigos que tinham init_point (criados sem Pix bank_transfer+pix)
+    // Na próxima assinatura um novo plano correto será criado automaticamente
+    await DB.prepare(`DELETE FROM mp_plans WHERE plan_id IN (
+      SELECT plan_id FROM mp_plans WHERE created_at < '2026-06-24'
+    )`).run().catch(() => {});
+
     // ── /api/products ──────────────────────────────────────────────────────
     if (path === '/api/products' && method === 'GET') {
       const { results } = await DB.prepare(
@@ -1532,21 +1547,20 @@ async function _handleRequest(request, env) {
           produto_id TEXT PRIMARY KEY,
           plan_id    TEXT NOT NULL,
           valor      REAL NOT NULL,
-          init_point TEXT NOT NULL,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )`).run().catch(() => {});
 
         const existingPlan = await DB.prepare(
-          `SELECT plan_id, init_point, valor FROM mp_plans WHERE produto_id = ?`
+          `SELECT plan_id, valor FROM mp_plans WHERE produto_id = ?`
         ).bind(produtoId).first().catch(() => null);
 
         // Reutilizar se valor não mudou
         if (existingPlan && Math.abs(existingPlan.valor - valor) < 0.01) {
           console.log('[Plan] Reutilizando plano existente:', existingPlan.plan_id);
-          return ok({ plan_id: existingPlan.plan_id, init_point: existingPlan.init_point, reused: true });
+          return ok({ plan_id: existingPlan.plan_id, reused: true });
         }
 
-        // 3. Criar novo plano no MP
+        // 3. Criar novo plano no MP com Pix habilitado (doc oficial)
         const planBody = {
           reason:       `${produtoNome} - ShareWallet`,
           back_url:     backUrl,
@@ -1558,10 +1572,10 @@ async function _handleRequest(request, env) {
           },
           payment_methods_allowed: {
             payment_types: [
-              { id: 'bank_transfer' },   // Pix = bank_transfer
-              { id: 'account_money' },   // Saldo conta MP
-              { id: 'debit_card'    },   // Débito
-              { id: 'credit_card'   },   // Crédito
+              { id: 'bank_transfer' },   // ← habilita Pix Automático BACEN
+            ],
+            payment_methods: [
+              { id: 'pix' },             // ← especifica método pix
             ],
           },
           ...(notificationUrl ? { notification_url: notificationUrl } : {}),
@@ -1587,12 +1601,12 @@ async function _handleRequest(request, env) {
           }), { status: mpResp.status, headers: { 'Content-Type': 'application/json', ...CORS } });
         }
 
-        // 4. Salvar plan no D1
+        // 4. Salvar plan no D1 (sem init_point — vem do preapproval individual)
         await DB.prepare(
-          `INSERT OR REPLACE INTO mp_plans (produto_id, plan_id, valor, init_point) VALUES (?, ?, ?, ?)`
-        ).bind(produtoId, mpData.id, valor, mpData.init_point).run().catch(() => {});
+          `INSERT OR REPLACE INTO mp_plans (produto_id, plan_id, valor) VALUES (?, ?, ?)`
+        ).bind(produtoId, mpData.id, valor).run().catch(() => {});
 
-        return ok({ plan_id: mpData.id, init_point: mpData.init_point, reused: false });
+        return ok({ plan_id: mpData.id, reused: false });
 
       } catch (e) {
         return err(`Erro ao criar plano MP: ${e.message}`, 500);
@@ -1600,15 +1614,25 @@ async function _handleRequest(request, env) {
     }
 
     // ── /api/mp/preapproval  ──────────────────────────────────────────────
-    // Fluxo 2 passos: cria preapproval_plan (com Pix habilitado) → gera link
-    // de checkout do PLANO para o cliente assinar.
-    // O init_point do plano mostra: Pix Automático, conta MP, cartão.
+    // Fluxo CORRETO 2 passos (doc oficial MP):
+    //
+    //  PASSO 1 — POST /preapproval_plan
+    //    Cria (ou reutiliza via D1) um plano com:
+    //      payment_methods_allowed.payment_types: [bank_transfer]
+    //      payment_methods_allowed.payment_methods: [pix]
+    //    → Guarda plan_id no D1 (reutiliza se mesmo produto_id + valor)
+    //
+    //  PASSO 2 — POST /preapproval
+    //    Cria assinatura individual para o cliente:
+    //      { preapproval_plan_id, payer_email, status: "pending" }
+    //    → Retorna init_point DESTE preapproval (tem Pix + QR Code)
+    //
     // Flutter envia: { produto_id, produto_nome, valor, payer_email,
-    //                  affiliateCode, notification_url, back_url, metadata }
-    // Retorna: { success, id (plan_id), status, init_point, external_reference }
+    //                  external_reference, notification_url, back_url, metadata }
+    // Retorna: { success, id (preapproval_id), status, init_point, plan_id, external_reference }
     if (path === '/api/mp/preapproval' && method === 'POST') {
       try {
-        // 1. Access token
+        // ── 0. Access token ──────────────────────────────────────────────
         let accessToken = null;
         const mpCfgRow = await DB.prepare(
           `SELECT value FROM config WHERE key='mp_config' LIMIT 1`
@@ -1622,47 +1646,49 @@ async function _handleRequest(request, env) {
         if (!accessToken && env?.MP_ACCESS_TOKEN) accessToken = env.MP_ACCESS_TOKEN;
         if (!accessToken) return err('Token MP não configurado', 500);
 
-        // 2. Ler body do Flutter
+        // ── 1. Ler body do Flutter ───────────────────────────────────────
         const preBody = await request.json().catch(() => null);
         if (!preBody) return err('Body inválido', 400);
 
-        console.log('[Preapproval] Body recebido do Flutter:', JSON.stringify(preBody));
+        console.log('[Preapproval] Body Flutter:', JSON.stringify(preBody));
 
-        const produtoId   = preBody.produto_id   || (preBody.metadata?.produto_id) || 'default';
-        const produtoNome = preBody.produto_nome  || preBody.reason || 'Assinatura';
+        const produtoId   = preBody.produto_id   || preBody.metadata?.produto_id || 'default';
+        const produtoNome = preBody.produto_nome  || preBody.reason               || 'Assinatura ShareWallet';
+        const payerEmail  = preBody.payer_email   || '';
         const safeAmount  = Math.round(parseFloat(
           preBody.valor ?? preBody.auto_recurring?.transaction_amount ?? 0
         ) * 100) / 100;
-        const backUrl     = preBody.back_url      || 'https://sharewallet.com.br';
-        const notifUrl    = preBody.notification_url || '';
+        const backUrl     = preBody.back_url           || 'https://sharewallet.com.br';
+        const notifUrl    = preBody.notification_url   || '';
         const extRef      = preBody.external_reference || `REC_${Date.now()}`;
 
-        if (safeAmount <= 0) return err('Valor inválido', 400);
+        if (safeAmount <= 0)  return err('Valor inválido', 400);
+        if (!payerEmail)      return err('payer_email obrigatório', 400);
 
-        // 3. Criar/reutilizar preapproval_plan para este produto
+        // ── 2. PASSO 1: Criar/reutilizar preapproval_plan ────────────────
         await DB.prepare(`CREATE TABLE IF NOT EXISTS mp_plans (
           produto_id TEXT PRIMARY KEY,
           plan_id    TEXT NOT NULL,
           valor      REAL NOT NULL,
-          init_point TEXT NOT NULL,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )`).run().catch(() => {});
 
         const existingPlan = await DB.prepare(
-          `SELECT plan_id, init_point, valor FROM mp_plans WHERE produto_id = ?`
+          `SELECT plan_id, valor FROM mp_plans WHERE produto_id = ?`
         ).bind(produtoId).first().catch(() => null);
 
-        let planId, planInitPoint;
+        let planId;
 
         if (existingPlan && Math.abs(existingPlan.valor - safeAmount) < 0.01) {
-          // Reutilizar plano existente
-          planId         = existingPlan.plan_id;
-          planInitPoint  = existingPlan.init_point;
-          console.log('[Preapproval] Reutilizando plano:', planId);
+          // Reutilizar plano existente (mesmo produto + mesmo valor)
+          planId = existingPlan.plan_id;
+          console.log('[Preapproval] Passo 1: reutilizando plano existente:', planId);
         } else {
-          // Criar novo plano com Pix habilitado
+          // Criar novo plano conforme doc oficial MP:
+          // payment_methods_allowed.payment_types  → bank_transfer (habilita Pix)
+          // payment_methods_allowed.payment_methods → pix (especifica método pix)
           const planBody = {
-            reason:   `${produtoNome} - ShareWallet`,
+            reason: `${produtoNome} - ShareWallet`,
             back_url: backUrl,
             auto_recurring: {
               frequency:          1,
@@ -1670,62 +1696,97 @@ async function _handleRequest(request, env) {
               transaction_amount: safeAmount,
               currency_id:        'BRL',
             },
-            // Habilitar TODOS os métodos: Pix, conta MP, débito, crédito
             payment_methods_allowed: {
               payment_types: [
-                { id: 'bank_transfer' },  // ← Pix Automático
-                { id: 'account_money' },  // ← Saldo conta MP
-                { id: 'debit_card'    },  // ← Débito
-                { id: 'credit_card'   },  // ← Crédito
+                { id: 'bank_transfer' },  // ← habilita Pix Automático BACEN
+              ],
+              payment_methods: [
+                { id: 'pix' },            // ← especifica método pix
               ],
             },
             ...(notifUrl ? { notification_url: notifUrl } : {}),
           };
+
+          console.log('[Preapproval] Passo 1: criando plano. Body:', JSON.stringify(planBody));
 
           const planResp = await fetch('https://api.mercadopago.com/preapproval_plan', {
             method:  'POST',
             headers: {
               'Authorization':     `Bearer ${accessToken}`,
               'Content-Type':      'application/json',
-              'X-Idempotency-Key': `plan_${produtoId}_${safeAmount}`,
+              'X-Idempotency-Key': `plan_${produtoId}_${safeAmount}_${Date.now()}`,
             },
             body: JSON.stringify(planBody),
           });
 
           const planData = await planResp.json().catch(() => ({}));
-          console.log('[Preapproval] Plano MP status:', planResp.status, '| id:', planData?.id || '-');
+          console.log('[Preapproval] Passo 1 resp:', planResp.status, '| plan_id:', planData?.id || '-');
 
           if (!planResp.ok) {
             return new Response(JSON.stringify({
-              success: false, status: planResp.status,
-              error: planData?.message || `Erro criar plano MP ${planResp.status}`,
+              success: false,
+              error:   planData?.message || `Erro criar plano: ${planResp.status}`,
               mp_data: planData,
+              sent_body: planBody,
             }), { status: planResp.status, headers: { 'Content-Type': 'application/json', ...CORS } });
           }
 
-          planId        = planData.id;
-          planInitPoint = planData.init_point;
+          planId = planData.id;
 
-          // Salvar no D1
+          // Salvar plan_id no D1 para reutilização
           await DB.prepare(
-            `INSERT OR REPLACE INTO mp_plans (produto_id, plan_id, valor, init_point) VALUES (?, ?, ?, ?)`
-          ).bind(produtoId, planId, safeAmount, planInitPoint).run().catch(() => {});
+            `INSERT OR REPLACE INTO mp_plans (produto_id, plan_id, valor) VALUES (?, ?, ?)`
+          ).bind(produtoId, planId, safeAmount).run().catch(() => {});
         }
 
-        // 4. Retornar o init_point do PLANO (não do preapproval individual)
-        // O link do plano já mostra Pix Automático, conta MP e cartão.
-        // O external_reference é adicionado como parâmetro para rastrear o cliente.
-        const checkoutUrl = `${planInitPoint}&external_reference=${encodeURIComponent(extRef)}`;
+        // ── 3. PASSO 2: Criar preapproval individual para o cliente ──────
+        // Conforme doc MP: envia preapproval_plan_id + payer_email + status pending
+        // O init_point DESTE preapproval mostra Pix + QR Code para o cliente
+        const subBody = {
+          preapproval_plan_id: planId,
+          payer_email:         payerEmail,
+          status:              'pending',
+          back_url:            backUrl,
+          external_reference:  extRef,
+          ...(notifUrl ? { notification_url: notifUrl } : {}),
+        };
 
-        console.log('[Preapproval] Checkout URL com Pix:', checkoutUrl.substring(0, 100));
+        console.log('[Preapproval] Passo 2: criando preapproval. Body:', JSON.stringify(subBody));
 
+        const subResp = await fetch('https://api.mercadopago.com/preapproval', {
+          method:  'POST',
+          headers: {
+            'Authorization':     `Bearer ${accessToken}`,
+            'Content-Type':      'application/json',
+            'X-Idempotency-Key': `sub_${extRef}_${Date.now()}`,
+          },
+          body: JSON.stringify(subBody),
+        });
+
+        const subData = await subResp.json().catch(() => ({}));
+        console.log('[Preapproval] Passo 2 resp:', subResp.status,
+                    '| preapproval_id:', subData?.id || '-',
+                    '| init_point:', subData?.init_point?.substring(0, 60) || '-');
+
+        if (!subResp.ok) {
+          return new Response(JSON.stringify({
+            success:   false,
+            error:     subData?.message || `Erro criar assinatura: ${subResp.status}`,
+            mp_data:   subData,
+            sent_body: subBody,
+          }), { status: subResp.status, headers: { 'Content-Type': 'application/json', ...CORS } });
+        }
+
+        // ── 4. Retornar init_point DO PREAPPROVAL (não do plano) ─────────
+        // Este link abre o checkout com Pix QR Code para autorizar débito automático
         return ok({
-          id:                 planId,
-          status:             'pending',
-          init_point:         checkoutUrl,
+          id:                 subData.id,           // preapproval_id
+          status:             subData.status || 'pending',
+          init_point:         subData.init_point,   // ← link com Pix do preapproval
           external_reference: extRef,
           plan_id:            planId,
-          date_created:       new Date().toISOString(),
+          payer_email:        payerEmail,
+          date_created:       subData.date_created || new Date().toISOString(),
           auto_recurring: {
             frequency:          1,
             frequency_type:     'months',
@@ -1735,6 +1796,7 @@ async function _handleRequest(request, env) {
         });
 
       } catch (e) {
+        console.error('[Preapproval] Erro inesperado:', e.message);
         return err(`Erro proxy MP Preapproval: ${e.message}`, 500);
       }
     }
