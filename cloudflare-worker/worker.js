@@ -1477,6 +1477,28 @@ async function _handleRequest(request, env) {
       }
     }
 
+    // ── /api/mp/preapproval/debug  ────────────────────────────────────────
+    // Endpoint temporário de diagnóstico: echo do body recebido sem chamar MP.
+    // Permite capturar exatamente o que o Flutter envia.
+    if (path === '/api/mp/preapproval/debug' && method === 'POST') {
+      try {
+        const rawText  = await request.text();
+        let parsedBody = null;
+        try { parsedBody = JSON.parse(rawText); } catch (_) {}
+        return ok({
+          debug: true,
+          raw_body:     rawText,
+          parsed_body:  parsedBody,
+          headers: {
+            content_type:    request.headers.get('Content-Type'),
+            idempotency_key: request.headers.get('X-Idempotency-Key'),
+          },
+        });
+      } catch (e) {
+        return err(`Debug error: ${e.message}`, 500);
+      }
+    }
+
     // ── /api/mp/preapproval  ──────────────────────────────────────────────
     // Proxy server-side: cria assinatura recorrente no MP via /preapproval.
     // Flutter envia body sem token; Worker injeta Authorization do D1.
@@ -1505,17 +1527,8 @@ async function _handleRequest(request, env) {
           || preBody.external_reference
           || `pre_${Date.now()}`;
 
-        // Log do body para debug (visível nos Workers Logs do Cloudflare Dashboard)
-        console.log('[Preapproval] Body recebido do Flutter:', JSON.stringify({
-          reason:           preBody.reason,
-          external_reference: preBody.external_reference,
-          payer_email:      preBody.payer_email,
-          back_url:         preBody.back_url,
-          notification_url: preBody.notification_url,
-          start_date:       preBody.auto_recurring?.start_date,
-          transaction_amount: preBody.auto_recurring?.transaction_amount,
-          payment_methods_allowed: preBody.payment_methods_allowed,
-        }));
+        // Log do body COMPLETO para debug (visível nos Workers Logs do Cloudflare Dashboard)
+        console.log('[Preapproval] Body COMPLETO recebido do Flutter:', JSON.stringify(preBody));
 
         // 3. Chamar /preapproval do MP server-side (sem CORS)
         const mpResp = await fetch('https://api.mercadopago.com/preapproval', {
@@ -1536,11 +1549,13 @@ async function _handleRequest(request, env) {
           '| cause:', JSON.stringify(mpData?.cause || []));
 
         if (!mpResp.ok) {
+          // Retornar erro completo com o body que foi enviado ao MP (para debug)
           return new Response(JSON.stringify({
-            success:  false,
-            status:   mpResp.status,
-            error:    mpData?.message || mpData?.cause?.[0]?.description || `Erro MP ${mpResp.status}`,
-            mp_data:  mpData,
+            success:       false,
+            status:        mpResp.status,
+            error:         mpData?.message || mpData?.cause?.[0]?.description || `Erro MP ${mpResp.status}`,
+            mp_data:       mpData,
+            sent_body:     preBody,   // ← body exato enviado ao MP (para debug)
           }), {
             status: mpResp.status,
             headers: { 'Content-Type': 'application/json', ...CORS },

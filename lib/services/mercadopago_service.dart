@@ -746,11 +746,11 @@ class MercadoPagoService extends ChangeNotifier {
           ? produtoDescricao.trim()
           : 'Assinatura $produtoNome - ShareWallet';
 
-      // Data de início: +1 hora no futuro
-      // O MP rejeita start_date que seja passado ou "agora" — latência de rede
-      // faz DateTime.now() chegar como passado ao servidor do MP.
-      // +1 hora garante margem suficiente sem impactar a experiência do usuário.
-      final agora    = DateTime.now().toUtc().add(const Duration(hours: 1));
+      // Data de início: +2 horas no futuro
+      // O MP rejeita start_date no passado ou muito próximo do "agora".
+      // +1h às vezes não é suficiente (threshold interno do MP + latência de rede).
+      // +2h garante margem segura sem impactar a experiência do usuário.
+      final agora    = DateTime.now().toUtc().add(const Duration(hours: 2));
       final startIso = agora.toIso8601String().replaceFirst(RegExp(r'\.\d+Z$'), '.000Z');
 
       // Body da API /preapproval
@@ -787,10 +787,27 @@ class MercadoPagoService extends ChangeNotifier {
 
       if (kDebugMode) {
         debugPrint('[MP Preapproval] Criando: $nomeClean | $produtoNome | R\$${valor.toStringAsFixed(2)}');
+        // Log do body completo para debug
+        debugPrint('[MP Preapproval] Body enviado: ${jsonEncode(body)}');
       }
 
       // ── Web: proxy via Worker (sem CORS) ────────────────────────────────
       if (kIsWeb) {
+        // DEBUG: capturar body exato via endpoint de diagnóstico
+        if (kDebugMode) {
+          try {
+            final dbgResp = await http.post(
+              Uri.parse('https://api.sharewallet.com.br/api/mp/preapproval/debug'),
+              headers: {
+                'Content-Type':      'application/json',
+                'X-Idempotency-Key': '${externalRef}_dbg',
+              },
+              body: jsonEncode(body),
+            );
+            debugPrint('[MP Preapproval DEBUG] Echo body: ${dbgResp.body}');
+          } catch (_) {}
+        }
+
         final resp = await http.post(
           Uri.parse('https://api.sharewallet.com.br/api/mp/preapproval'),
           headers: {
@@ -812,10 +829,20 @@ class MercadoPagoService extends ChangeNotifier {
           _lastError = wrapper['error']?.toString() ?? 'Erro ao criar assinatura';
         } else {
           final errBody = jsonDecode(resp.body) as Map<String, dynamic>? ?? {};
-          _lastError = errBody['error']?.toString()
+          // Tentar extrair erro do mp_data (causa real do MP)
+          final mpData = errBody['mp_data'] as Map<String, dynamic>?;
+          final mpMsg  = mpData?['message']?.toString()
+              ?? mpData?['cause']?.toString();
+          _lastError = mpMsg
+              ?? errBody['error']?.toString()
               ?? errBody['message']?.toString()
               ?? 'Erro ao criar assinatura (${resp.statusCode})';
-          if (kDebugMode) debugPrint('[MP Preapproval Web] Erro: $_lastError');
+          // Log completo para debug no console do browser
+          if (kDebugMode) {
+            debugPrint('[MP Preapproval Web] Status: ${resp.statusCode}');
+            debugPrint('[MP Preapproval Web] Body completo: ${resp.body}');
+            debugPrint('[MP Preapproval Web] Erro extraído: $_lastError');
+          }
         }
         _isLoading = false;
         notifyListeners();
