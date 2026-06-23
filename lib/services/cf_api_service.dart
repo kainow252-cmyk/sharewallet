@@ -126,11 +126,19 @@ class CfApiService {
   static const String _resetSecret = 'sharewallet_reset_2024';
 
   static Future<Map<String, dynamic>?> adminReset(String target) async {
-    return _deleteWithBody(
+    final raw = await _deleteWithBody(
       '/api/admin/reset',
       {'target': target},
       headers: {'X-Admin-Secret': _resetSecret},
     );
+    if (raw == null) return null;
+    // Worker retorna {success:true, result:{success:true, target:..., results:{...}}}
+    // Desembala o 'result' interno para facilitar o uso no Flutter
+    if (raw['success'] == true && raw['result'] is Map) {
+      return Map<String, dynamic>.from(raw['result'] as Map);
+    }
+    // Erro: propaga o body cru para exibir 'error'
+    return raw;
   }
 
   // -- PRODUCTS --------------------------------------------------------------
