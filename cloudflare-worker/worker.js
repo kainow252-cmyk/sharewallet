@@ -98,7 +98,7 @@ async function deleteFirebaseAuthUser(uid) {
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-Idempotency-Key, X-Device-Session-Id',
   'Access-Control-Max-Age':       '86400',
   'Vary':                         'Origin',
   // Evita que o Cloudflare edge reutilize streams H2 "stale" quando
