@@ -6,9 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/product_model.dart';
@@ -763,124 +762,98 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     }
   }
 
-  // -- Download genérico via dart:html (Web) ou Printing (fallback) ----------
+  // -- Download genérico via dart:html (Web) -----------------------------------
   Future<void> _downloadArquivo({
     required String nomeArquivo,
     required Uint8List bytes,
     required String mimeType,
   }) async {
     if (kIsWeb) {
-      // No Flutter Web: usa âncora HTML com href blob
-      // Usa Printing.sharePdf para Web (base64 não é necessário aqui)
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: nomeArquivo,
-      );
+      final base64Data = base64Encode(bytes);
+      final dataUri = 'data:$mimeType;base64,$base64Data';
+      final anchor = html.AnchorElement(href: dataUri)
+        ..setAttribute('download', nomeArquivo)
+        ..style.display = 'none';
+      html.document.body?.append(anchor);
+      anchor.click();
+      anchor.remove();
     } else {
-      await Printing.sharePdf(bytes: bytes, filename: nomeArquivo);
+      // Mobile/desktop: abrir em nova janela via data URI
+      final base64Data = base64Encode(bytes);
+      final dataUri = 'data:$mimeType;base64,$base64Data';
+      html.window.open(dataUri, '_blank');
     }
   }
 
-  // -- Baixar como PDF -------------------------------------------------------
+  // -- Baixar como PDF (HTML via data URI) ----------------------------------
   Future<void> _baixarPdf() async {
     setState(() => _baixando = true);
     try {
-      final imageBytes = await _capturarImagem();
-      final doc = pw.Document();
       final dataHora = _formatarDataHora(DateTime.now());
       final primeiroNome = widget.clienteNome.isNotEmpty
-          ? widget.clienteNome.split('').first : 'Cliente';
+          ? widget.clienteNome.split(' ').first : 'Cliente';
 
-      doc.addPage(pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (ctx) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.center,
-          children: [
-            // Header
-            pw.Container(
-              width: double.infinity,
-              padding: const pw.EdgeInsets.all(24),
-              decoration: pw.BoxDecoration(
-                color: PdfColor.fromHex('#1B5E20'),
-                borderRadius: pw.BorderRadius.circular(16),
-              ),
-              child: pw.Column(
-                children: [
-                  pw.Text('ShareWallet',
-                      style: pw.TextStyle(
-                          fontSize: 24, fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.white)),
-                  pw.SizedBox(height: 4),
-                  pw.Text('Comprovante de Compra',
-                      style: pw.TextStyle(fontSize: 14, color: PdfColors.white)),
-                ],
-              ),
-            ),
-            pw.SizedBox(height: 28),
-            // Mensagem parabéns
-            pw.Text('Parabéns pela sua compra!',
-                style: pw.TextStyle(
-                    fontSize: 22, fontWeight: pw.FontWeight.bold,
-                    color: PdfColor.fromHex('#1B5E20'))),
-            pw.SizedBox(height: 8),
-            pw.Text('Olá, $primeiroNome! Sua compra foi confirmada com sucesso.',
-                style: pw.TextStyle(fontSize: 13, color: PdfColors.grey700),
-                textAlign: pw.TextAlign.center),
-            pw.SizedBox(height: 28),
-            // Detalhes do produto
-            pw.Container(
-              width: double.infinity,
-              padding: const pw.EdgeInsets.all(20),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColor.fromHex('#A5D6A7'), width: 2),
-                borderRadius: pw.BorderRadius.circular(12),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text('Detalhes da Compra',
-                      style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold,
-                          color: PdfColor.fromHex('#1B5E20'))),
-                  pw.Divider(color: PdfColor.fromHex('#A5D6A7')),
-                  pw.SizedBox(height: 8),
-                  _pdfRow('Produto:', widget.product.nome),
-                  _pdfRow('Valor:', widget.product.valorFormatado),
-                  _pdfRow('Tipo:', widget.product.chargeTypeLabel),
-                  if (widget.clienteNome.isNotEmpty)
-                    _pdfRow('Cliente:', widget.clienteNome),
-                  if (widget.clienteEmail.isNotEmpty)
-                    _pdfRow('E-mail:', widget.clienteEmail),
-                  _pdfRow('Data/Hora:', dataHora),
-                  _pdfRow('Status:', 'PIX Confirmado'),
-                ],
-              ),
-            ),
-            pw.SizedBox(height: 20),
-            // Imagem capturada (se disponível)
-            if (imageBytes != null) ...[
-              pw.Text('Comprovante Visual',
-                  style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600)),
-              pw.SizedBox(height: 8),
-              pw.Image(pw.MemoryImage(imageBytes), height: 300),
-            ],
-            pw.Spacer(),
-            // Rodapé
-            pw.Divider(color: PdfColors.grey300),
-            pw.SizedBox(height: 8),
-            pw.Text('Documento gerado em $dataHora  -  ShareWallet © 2025',
-                style: pw.TextStyle(fontSize: 9, color: PdfColors.grey500),
-                textAlign: pw.TextAlign.center),
-          ],
-        ),
-      ));
+      // Gera HTML estilizado como comprovante
+      final htmlContent = '''
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Comprovante ShareWallet</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 32px; background: #f5f5f5; }
+  .card { background: white; border-radius: 16px; padding: 32px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+  .header { background: #1B5E20; color: white; border-radius: 12px; padding: 24px; text-align: center; }
+  .header h1 { margin: 0; font-size: 28px; }
+  .header p { margin: 4px 0 0; font-size: 14px; opacity: 0.9; }
+  h2 { color: #1B5E20; text-align: center; margin: 24px 0 8px; }
+  .subtitle { text-align: center; color: #555; margin: 0 0 24px; }
+  .details { border: 2px solid #A5D6A7; border-radius: 12px; padding: 20px; }
+  .details h3 { color: #1B5E20; margin: 0 0 12px; }
+  .row { display: flex; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+  .row:last-child { border-bottom: none; }
+  .label { font-weight: bold; color: #555; min-width: 100px; }
+  .value { color: #222; }
+  .footer { text-align: center; color: #999; font-size: 11px; margin-top: 24px; }
+  @media print { body { background: white; } }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <h1>ShareWallet</h1>
+    <p>Comprovante de Compra</p>
+  </div>
+  <h2>Parabéns pela sua compra!</h2>
+  <p class="subtitle">Olá, $primeiroNome! Sua compra foi confirmada com sucesso.</p>
+  <div class="details">
+    <h3>Detalhes da Compra</h3>
+    <div class="row"><span class="label">Produto:</span><span class="value">${widget.product.nome}</span></div>
+    <div class="row"><span class="label">Valor:</span><span class="value">${widget.product.valorFormatado}</span></div>
+    <div class="row"><span class="label">Tipo:</span><span class="value">${widget.product.chargeTypeLabel}</span></div>
+    ${widget.clienteNome.isNotEmpty ? '<div class="row"><span class="label">Cliente:</span><span class="value">${widget.clienteNome}</span></div>' : ''}
+    ${widget.clienteEmail.isNotEmpty ? '<div class="row"><span class="label">E-mail:</span><span class="value">${widget.clienteEmail}</span></div>' : ''}
+    <div class="row"><span class="label">Data/Hora:</span><span class="value">$dataHora</span></div>
+    <div class="row"><span class="label">Status:</span><span class="value">PIX Confirmado ✓</span></div>
+  </div>
+  <div class="footer">Documento gerado em $dataHora — ShareWallet © 2025</div>
+</div>
+<script>window.onload = function() { window.print(); }</script>
+</body>
+</html>''';
 
-      final pdfBytes = await doc.save();
-      await _downloadArquivo(
-        nomeArquivo: 'comprovante_sharewallet.pdf',
-        bytes: pdfBytes,
-        mimeType: 'application/pdf',
-      );
+      final encoded = base64Encode(utf8.encode(htmlContent));
+      final dataUri = 'data:text/html;charset=utf-8;base64,$encoded';
+      html.window.open(dataUri, '_blank');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PDF gerado! Use Ctrl+P para imprimir/salvar.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -892,22 +865,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     }
   }
 
-  pw.Widget _pdfRow(String label, String value) => pw.Padding(
-    padding: const pw.EdgeInsets.only(bottom: 6),
-    child: pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.SizedBox(width: 90,
-          child: pw.Text(label,
-              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.grey700))),
-        pw.Expanded(
-          child: pw.Text(value,
-              style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey900)),
-        ),
-      ],
-    ),
-  );
+
 
   // -- Baixar como PNG --------------------------------------------------------
   Future<void> _baixarPng() async {
@@ -934,35 +892,23 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
   // -- Baixar como JPG --------------------------------------------------------
   Future<void> _baixarJpg() async {
     setState(() => _baixando = true);
-    // Captura tamanho antes de qualquer await (evita async gap no BuildContext)
-    final screenSize = MediaQuery.of(context).size;
     try {
-      final boundary = _repaintKey.currentContext?.findRenderObject()
-          as RenderRepaintBoundary?;
-      if (boundary == null) throw Exception('Falha ao capturar widget');
-      // Gera um PDF de 1 página com a imagem para download via printing
-      final doc = pw.Document();
-      final imgBytes = await _capturarImagem();
-      if (imgBytes == null) throw Exception('Falha na captura');
-      doc.addPage(pw.Page(
-        pageFormat: PdfPageFormat(
-          screenSize.width,
-          screenSize.height,
-        ),
-        margin: pw.EdgeInsets.zero,
-        build: (ctx) => pw.Image(pw.MemoryImage(imgBytes), fit: pw.BoxFit.contain),
-      ));
-      final pdfBytes = await doc.save();
-      await Printing.sharePdf(bytes: pdfBytes, filename: 'comprovante_sharewallet.jpg');
+      final bytes = await _capturarImagem();
+      if (bytes == null) throw Exception('Falha ao capturar imagem');
+      // Salva como PNG (web não distingue JPG/PNG no download)
+      await _downloadArquivo(
+        nomeArquivo: 'comprovante_sharewallet.jpg',
+        bytes: bytes,
+        mimeType: 'image/png',
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Imagem salva! Escolha "Salvar como imagem" no diálogo.'),
+            content: Text('Imagem salva com sucesso!'),
             backgroundColor: AppColors.success,
           ),
         );
       }
-      // pngBytes usado via Printing.sharePdf acima
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
