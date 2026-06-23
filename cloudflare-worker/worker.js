@@ -311,17 +311,18 @@ async function _handleRequest(request, env) {
     ]);
 
     // ── Auto-migration: mp_plans — garante tabela existe e limpa planos antigos ─
-    // Planos antigos (sem payment_methods_allowed Pix) foram criados antes de 2026-06-24.
+    // Planos antigos (sem payment_methods_allowed Pix) foram criados antes de 2026-06-23.
     // Ao deletá-los, a próxima chamada ao /api/mp/preapproval criará um novo plano
     // com payment_methods_allowed: bank_transfer + pix → checkout mostrará SOMENTE Pix.
     await DB.prepare(`CREATE TABLE IF NOT EXISTS mp_plans (
-      produto_id TEXT PRIMARY KEY,
-      plan_id    TEXT NOT NULL,
-      valor      REAL NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      produto_id  TEXT PRIMARY KEY,
+      plan_id     TEXT NOT NULL,
+      init_point  TEXT DEFAULT '',
+      valor       REAL NOT NULL,
+      created_at  TEXT DEFAULT CURRENT_TIMESTAMP
     )`).run().catch(() => {});
-    // Remove planos antigos (sem Pix exclusivo) — forçar recriação com payment_methods_allowed
-    await DB.prepare(`DELETE FROM mp_plans WHERE created_at < '2026-06-24'`).run().catch(() => {});
+    // Remove planos criados ANTES de hoje (sem Pix exclusivo) — não apaga planos de hoje
+    await DB.prepare(`DELETE FROM mp_plans WHERE created_at < '2026-06-23'`).run().catch(() => {});
 
     // ── /api/products ──────────────────────────────────────────────────────
     if (path === '/api/products' && method === 'GET') {
@@ -1542,10 +1543,11 @@ async function _handleRequest(request, env) {
 
         // 2. Verificar se já existe plan para este produto no D1
         await DB.prepare(`CREATE TABLE IF NOT EXISTS mp_plans (
-          produto_id TEXT PRIMARY KEY,
-          plan_id    TEXT NOT NULL,
-          valor      REAL NOT NULL,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP
+          produto_id  TEXT PRIMARY KEY,
+          plan_id     TEXT NOT NULL,
+          init_point  TEXT DEFAULT '',
+          valor       REAL NOT NULL,
+          created_at  TEXT DEFAULT CURRENT_TIMESTAMP
         )`).run().catch(() => {});
 
         const existingPlan = await DB.prepare(
@@ -1599,10 +1601,10 @@ async function _handleRequest(request, env) {
           }), { status: mpResp.status, headers: { 'Content-Type': 'application/json', ...CORS } });
         }
 
-        // 4. Salvar plan no D1 (sem init_point — vem do preapproval individual)
+        // 4. Salvar plan no D1 (init_point do plano incluso)
         await DB.prepare(
-          `INSERT OR REPLACE INTO mp_plans (produto_id, plan_id, valor) VALUES (?, ?, ?)`
-        ).bind(produtoId, mpData.id, valor).run().catch(() => {});
+          `INSERT OR REPLACE INTO mp_plans (produto_id, plan_id, init_point, valor) VALUES (?, ?, ?, ?)`
+        ).bind(produtoId, mpData.id, mpData.init_point || '', valor).run().catch(() => {});
 
         return ok({ plan_id: mpData.id, reused: false });
 
@@ -1678,17 +1680,14 @@ async function _handleRequest(request, env) {
 
         // ── 2. Garantir tabela mp_plans ──────────────────────────────────
         // Armazena plan_id + init_point por produto_id+valor
+        // IMPORTANTE: init_point sem NOT NULL para compatibilidade com INSERTs legados
         await DB.prepare(`CREATE TABLE IF NOT EXISTS mp_plans (
           produto_id  TEXT PRIMARY KEY,
           plan_id     TEXT NOT NULL,
-          init_point  TEXT NOT NULL DEFAULT '',
+          init_point  TEXT DEFAULT '',
           valor       REAL NOT NULL,
           created_at  TEXT DEFAULT CURRENT_TIMESTAMP
         )`).run().catch(() => {});
-
-        // Adiciona coluna init_point se não existir (migration segura)
-        await DB.prepare(`ALTER TABLE mp_plans ADD COLUMN init_point TEXT NOT NULL DEFAULT ''`)
-          .run().catch(() => {}); // ignora erro se coluna já existe
 
         // ── 3. Verificar cache D1 ────────────────────────────────────────
         let planId    = null;

@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:ui_web' as ui_web;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -1634,60 +1632,14 @@ class _PreapprovalCard extends StatefulWidget {
 
 class _PreapprovalCardState extends State<_PreapprovalCard> {
   bool _copiou        = false;
-  bool _iframeAberto  = false;
-  bool _iframeBloqueado = false;  // true quando MP bloqueia o iframe com X-Frame-Options
-  String? _iframeViewId;
+  bool _checkoutAberto = false; // true após clicar em "Pagar agora" (abriu nova aba)
 
-  // ── Registra o iframe e troca para a view do iframe ───────────────────────
-  void _abrirIframe() {
-    final url = widget.result.checkoutUrl ?? '';
-    if (url.isEmpty) return;
-
-    final viewId = 'mp-checkout-iframe-${DateTime.now().millisecondsSinceEpoch}';
-
-    // Registra o elemento HTML uma única vez
-    ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-      final iframe = html.IFrameElement()
-        ..src             = url
-        ..style.border    = 'none'
-        ..style.width     = '100%'
-        ..style.height    = '100%'
-        ..allowFullscreen = true
-        ..setAttribute('allow', 'payment; camera; microphone');
-
-      // Listener para detectar se o MP bloqueou o iframe (X-Frame-Options)
-      // Nesse caso, exibimos o botão de abrir em nova aba automaticamente
-      iframe.onError.listen((_) {
-        if (mounted) {
-          setState(() {
-            _iframeAberto  = false;
-            _iframeViewId  = null;
-            _iframeBloqueado = true;
-          });
-        }
-      });
-
-      return iframe;
-    });
-
-    setState(() {
-      _iframeViewId    = viewId;
-      _iframeAberto    = true;
-      _iframeBloqueado = false;
-    });
-  }
-
-  void _fecharIframe() {
-    setState(() {
-      _iframeAberto  = false;
-      _iframeViewId  = null;
-    });
-  }
-
-  void _abrirNoNavegador() {
+  // Abre o checkout do MP em nova aba (o MP bloqueia iframe via CSP frame-ancestors)
+  void _abrirCheckout() {
     final url = widget.result.checkoutUrl ?? '';
     if (url.isEmpty) return;
     html.window.open(url, '_blank');
+    setState(() => _checkoutAberto = true);
   }
 
   void _copiarLink() {
@@ -1783,96 +1735,31 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
             ),
           ),
 
-          // ── Iframe inline do checkout MP ────────────────────────────────
-          if (_iframeAberto && _iframeViewId != null) ...[  
-            Container(
-              margin: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.only(
-                  bottomLeft:  Radius.circular(18),
-                  bottomRight: Radius.circular(18),
-                ),
-              ),
-              clipBehavior: Clip.hardEdge,
-              child: Column(
-                children: [
-                  // Barra superior do iframe com botão fechar + abrir em nova aba
-                  Container(
-                    color: const Color(0xFF009EE3),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.lock_rounded, color: Colors.white, size: 14),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text('Checkout seguro Mercado Pago',
-                            style: TextStyle(color: Colors.white, fontSize: 12,
-                                fontWeight: FontWeight.w600)),
-                        ),
-                        // Botão abrir em nova aba (fallback caso iframe bloqueie navegação interna)
-                        GestureDetector(
-                          onTap: _abrirNoNavegador,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Icon(Icons.open_in_new_rounded,
-                                color: Colors.white, size: 14),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: _fecharIframe,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.close_rounded,
-                                color: Colors.white, size: 16),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // O iframe em si
-                  SizedBox(
-                    height: 580,
-                    child: HtmlElementView(viewType: _iframeViewId!),
-                  ),
-                ],
-              ),
-            ),
-          ] else ...[  
-
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
-                // ── Aviso quando iframe foi bloqueado pelo MP ───────────
-                if (_iframeBloqueado) ...[
+                // ── Banner "checkout aberto" ────────────────────────────
+                if (_checkoutAberto) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF3E0),
+                      color: const Color(0xFFE8F5E9),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFF9800), width: 1.5),
+                      border: Border.all(color: const Color(0xFF4CAF50), width: 1.5),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.warning_amber_rounded,
-                            color: Color(0xFFFF9800), size: 20),
+                        const Icon(Icons.open_in_new_rounded,
+                            color: Color(0xFF2E7D32), size: 18),
                         const SizedBox(width: 10),
                         const Expanded(
                           child: Text(
-                            'O checkout do MP não pode ser exibido aqui. Use o botão abaixo para abrir em nova aba.',
+                            'Checkout aberto em nova aba. Conclua o pagamento e retorne aqui.',
                             style: TextStyle(fontSize: 12,
-                                color: Color(0xFFE65100), height: 1.4),
+                                color: Color(0xFF2E7D32), height: 1.4),
                           ),
                         ),
                       ],
@@ -1884,8 +1771,8 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
                 // ── Passos visuais ─────────────────────────────────────
                 _buildStep(
                   numero: '1',
-                  titulo: 'Pague com Pix Automático',
-                  descricao: 'Clique em "Pagar agora" para abrir o checkout Pix do Mercado Pago.',
+                  titulo: 'Clique em "Pagar agora com Pix"',
+                  descricao: 'O checkout seguro do Mercado Pago abrirá em nova aba.',
                   cor: const Color(0xFF009EE3),
                 ),
                 const SizedBox(height: 12),
@@ -1913,29 +1800,29 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
                 const SizedBox(height: 20),
 
                 // ── Botão principal: Pagar agora ─────────────────────────
-                // Se iframe foi bloqueado: "Abrir no navegador" como primário
-                // Caso contrário: tenta iframe inline primeiro
                 SizedBox(
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton.icon(
-                    onPressed: _iframeBloqueado ? _abrirNoNavegador : _abrirIframe,
+                    onPressed: checkoutUrl.isNotEmpty ? _abrirCheckout : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF009EE3),
+                      backgroundColor: _checkoutAberto
+                          ? const Color(0xFF4CAF50)
+                          : const Color(0xFF009EE3),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                       elevation: 3,
                     ),
                     icon: Icon(
-                      _iframeBloqueado
+                      _checkoutAberto
                           ? Icons.open_in_new_rounded
                           : Icons.payment_rounded,
                       size: 20,
                     ),
                     label: Text(
-                      _iframeBloqueado
-                          ? 'Abrir checkout no navegador'
+                      _checkoutAberto
+                          ? 'Reabrir checkout'
                           : 'Pagar agora com Pix',
                       style: const TextStyle(
                           fontWeight: FontWeight.w800, fontSize: 16)),
@@ -1943,7 +1830,7 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
                 ),
                 const SizedBox(height: 10),
 
-                // ── Botão secundário: Copiar link (sempre disponível) ────
+                // ── Botão secundário: Copiar link ────────────────────────
                 if (checkoutUrl.isNotEmpty)
                   SizedBox(
                     width: double.infinity,
@@ -1991,7 +1878,6 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
               ],
             ),
           ),
-          ],  // fim do else (quando iframe não está aberto)
         ],
       ),
     );
