@@ -1614,22 +1614,20 @@ async function _handleRequest(request, env) {
     }
 
     // ── /api/mp/preapproval  ──────────────────────────────────────────────
-    // Fluxo CORRETO 2 passos (doc oficial MP):
+    // Fluxo DEFINITIVO — doc oficial MP:
+    // "Assinaturas SEM plano associado com pagamento PENDENTE"
+    // https://developers/pt/docs/subscriptions/integration-configuration/
+    //          subscription-no-associated-plan/pending-payments
     //
-    //  PASSO 1 — POST /preapproval_plan
-    //    Cria (ou reutiliza via D1) um plano com:
-    //      payment_methods_allowed.payment_types: [bank_transfer]
-    //      payment_methods_allowed.payment_methods: [pix]
-    //    → Guarda plan_id no D1 (reutiliza se mesmo produto_id + valor)
+    // POST direto para /preapproval com status:"pending" e SEM card_token_id.
+    // O MP retorna init_point onde o cliente escolhe: Pix, conta MP ou cartão.
     //
-    //  PASSO 2 — POST /preapproval
-    //    Cria assinatura individual para o cliente:
-    //      { preapproval_plan_id, payer_email, status: "pending" }
-    //    → Retorna init_point DESTE preapproval (tem Pix + QR Code)
+    // IMPORTANTE: o fluxo "COM plano + card_token_id" é EXCLUSIVO para cartão.
+    // Para Pix sem cartão, SEMPRE usar o fluxo sem plano + pending.
     //
     // Flutter envia: { produto_id, produto_nome, valor, payer_email,
     //                  external_reference, notification_url, back_url, metadata }
-    // Retorna: { success, id (preapproval_id), status, init_point, plan_id, external_reference }
+    // Retorna: { success, id, status:"pending", init_point, external_reference }
     if (path === '/api/mp/preapproval' && method === 'POST') {
       try {
         // ── 0. Access token ──────────────────────────────────────────────
@@ -1646,14 +1644,13 @@ async function _handleRequest(request, env) {
         if (!accessToken && env?.MP_ACCESS_TOKEN) accessToken = env.MP_ACCESS_TOKEN;
         if (!accessToken) return err('Token MP não configurado', 500);
 
-        // ── 1. Ler body do Flutter ───────────────────────────────────────
+        // ── 1. Ler e validar body do Flutter ────────────────────────────
         const preBody = await request.json().catch(() => null);
         if (!preBody) return err('Body inválido', 400);
 
         console.log('[Preapproval] Body Flutter:', JSON.stringify(preBody));
 
-        const produtoId   = preBody.produto_id   || preBody.metadata?.produto_id || 'default';
-        const produtoNome = preBody.produto_nome  || preBody.reason               || 'Assinatura ShareWallet';
+        const produtoNome = preBody.produto_nome  || preBody.reason  || 'Assinatura ShareWallet';
         const payerEmail  = preBody.payer_email   || '';
         const safeAmount  = Math.round(parseFloat(
           preBody.valor ?? preBody.auto_recurring?.transaction_amount ?? 0
@@ -1662,131 +1659,68 @@ async function _handleRequest(request, env) {
         const notifUrl    = preBody.notification_url   || '';
         const extRef      = preBody.external_reference || `REC_${Date.now()}`;
 
-        if (safeAmount <= 0)  return err('Valor inválido', 400);
-        if (!payerEmail)      return err('payer_email obrigatório', 400);
+        if (safeAmount <= 0) return err('Valor inválido', 400);
+        if (!payerEmail)     return err('payer_email obrigatório', 400);
 
-        // ── 2. PASSO 1: Criar/reutilizar preapproval_plan ────────────────
-        await DB.prepare(`CREATE TABLE IF NOT EXISTS mp_plans (
-          produto_id TEXT PRIMARY KEY,
-          plan_id    TEXT NOT NULL,
-          valor      REAL NOT NULL,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )`).run().catch(() => {});
+        // ── 2. Montar body do preapproval (SEM plano, SEM card_token) ───
+        // Doc oficial: "Assinaturas sem plano com pagamento pendente"
+        // Campos obrigatórios: reason, payer_email, auto_recurring, back_url, status
+        const startDate = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // +2h
 
-        const existingPlan = await DB.prepare(
-          `SELECT plan_id, valor FROM mp_plans WHERE produto_id = ?`
-        ).bind(produtoId).first().catch(() => null);
-
-        let planId;
-
-        if (existingPlan && Math.abs(existingPlan.valor - safeAmount) < 0.01) {
-          // Reutilizar plano existente (mesmo produto + mesmo valor)
-          planId = existingPlan.plan_id;
-          console.log('[Preapproval] Passo 1: reutilizando plano existente:', planId);
-        } else {
-          // Criar novo plano conforme doc oficial MP:
-          // payment_methods_allowed.payment_types  → bank_transfer (habilita Pix)
-          // payment_methods_allowed.payment_methods → pix (especifica método pix)
-          const planBody = {
-            reason: `${produtoNome} - ShareWallet`,
-            back_url: backUrl,
-            auto_recurring: {
-              frequency:          1,
-              frequency_type:     'months',
-              transaction_amount: safeAmount,
-              currency_id:        'BRL',
-            },
-            payment_methods_allowed: {
-              payment_types: [
-                { id: 'bank_transfer' },  // ← habilita Pix Automático BACEN
-              ],
-              payment_methods: [
-                { id: 'pix' },            // ← especifica método pix
-              ],
-            },
-            ...(notifUrl ? { notification_url: notifUrl } : {}),
-          };
-
-          console.log('[Preapproval] Passo 1: criando plano. Body:', JSON.stringify(planBody));
-
-          const planResp = await fetch('https://api.mercadopago.com/preapproval_plan', {
-            method:  'POST',
-            headers: {
-              'Authorization':     `Bearer ${accessToken}`,
-              'Content-Type':      'application/json',
-              'X-Idempotency-Key': `plan_${produtoId}_${safeAmount}_${Date.now()}`,
-            },
-            body: JSON.stringify(planBody),
-          });
-
-          const planData = await planResp.json().catch(() => ({}));
-          console.log('[Preapproval] Passo 1 resp:', planResp.status, '| plan_id:', planData?.id || '-');
-
-          if (!planResp.ok) {
-            return new Response(JSON.stringify({
-              success: false,
-              error:   planData?.message || `Erro criar plano: ${planResp.status}`,
-              mp_data: planData,
-              sent_body: planBody,
-            }), { status: planResp.status, headers: { 'Content-Type': 'application/json', ...CORS } });
-          }
-
-          planId = planData.id;
-
-          // Salvar plan_id no D1 para reutilização
-          await DB.prepare(
-            `INSERT OR REPLACE INTO mp_plans (produto_id, plan_id, valor) VALUES (?, ?, ?)`
-          ).bind(produtoId, planId, safeAmount).run().catch(() => {});
-        }
-
-        // ── 3. PASSO 2: Criar preapproval individual para o cliente ──────
-        // Conforme doc MP: envia preapproval_plan_id + payer_email + status pending
-        // O init_point DESTE preapproval mostra Pix + QR Code para o cliente
-        const subBody = {
-          preapproval_plan_id: planId,
-          payer_email:         payerEmail,
-          status:              'pending',
-          back_url:            backUrl,
-          external_reference:  extRef,
+        const mpBody = {
+          reason:             produtoNome,
+          external_reference: extRef,
+          payer_email:        payerEmail,
+          auto_recurring: {
+            frequency:          1,
+            frequency_type:     'months',
+            transaction_amount: safeAmount,
+            currency_id:        'BRL',
+            start_date:         startDate,
+          },
+          back_url: backUrl,
+          status:   'pending',   // ← sem card_token = pending → client escolhe método
           ...(notifUrl ? { notification_url: notifUrl } : {}),
         };
 
-        console.log('[Preapproval] Passo 2: criando preapproval. Body:', JSON.stringify(subBody));
+        console.log('[Preapproval] Enviando para MP. Body:', JSON.stringify(mpBody));
 
-        const subResp = await fetch('https://api.mercadopago.com/preapproval', {
+        // ── 3. Chamar API do MP ─────────────────────────────────────────
+        const mpResp = await fetch('https://api.mercadopago.com/preapproval', {
           method:  'POST',
           headers: {
             'Authorization':     `Bearer ${accessToken}`,
             'Content-Type':      'application/json',
-            'X-Idempotency-Key': `sub_${extRef}_${Date.now()}`,
+            'X-Idempotency-Key': `pre_${extRef}`,
           },
-          body: JSON.stringify(subBody),
+          body: JSON.stringify(mpBody),
         });
 
-        const subData = await subResp.json().catch(() => ({}));
-        console.log('[Preapproval] Passo 2 resp:', subResp.status,
-                    '| preapproval_id:', subData?.id || '-',
-                    '| init_point:', subData?.init_point?.substring(0, 60) || '-');
+        const mpData = await mpResp.json().catch(() => ({}));
+        console.log('[Preapproval] MP resp:', mpResp.status,
+          '| id:', mpData?.id || '-',
+          '| init_point:', mpData?.init_point?.substring(0, 80) || '-');
 
-        if (!subResp.ok) {
+        if (!mpResp.ok) {
           return new Response(JSON.stringify({
             success:   false,
-            error:     subData?.message || `Erro criar assinatura: ${subResp.status}`,
-            mp_data:   subData,
-            sent_body: subBody,
-          }), { status: subResp.status, headers: { 'Content-Type': 'application/json', ...CORS } });
+            error:     mpData?.message || `Erro MP ${mpResp.status}`,
+            mp_data:   mpData,
+            sent_body: mpBody,
+          }), { status: mpResp.status, headers: { 'Content-Type': 'application/json', ...CORS } });
         }
 
-        // ── 4. Retornar init_point DO PREAPPROVAL (não do plano) ─────────
-        // Este link abre o checkout com Pix QR Code para autorizar débito automático
+        // ── 4. Retornar init_point ao Flutter ───────────────────────────
+        // O init_point abre checkout onde o cliente escolhe:
+        //   • Pix Automático (banco do cliente: Nubank, BB, Itaú…)
+        //   • Conta Mercado Pago
+        //   • Cartão de crédito/débito
         return ok({
-          id:                 subData.id,           // preapproval_id
-          status:             subData.status || 'pending',
-          init_point:         subData.init_point,   // ← link com Pix do preapproval
+          id:                 mpData.id,
+          status:             mpData.status || 'pending',
+          init_point:         mpData.init_point,
           external_reference: extRef,
-          plan_id:            planId,
-          payer_email:        payerEmail,
-          date_created:       subData.date_created || new Date().toISOString(),
+          date_created:       mpData.date_created || new Date().toISOString(),
           auto_recurring: {
             frequency:          1,
             frequency_type:     'months',
@@ -1801,7 +1735,8 @@ async function _handleRequest(request, env) {
       }
     }
 
-    // ── /api/webhook/mp/preapproval ────────────────────────────────────────
+
+        // ── /api/webhook/mp/preapproval ────────────────────────────────────────
     // Recebe notificações de assinaturas recorrentes (preapproval) do MercadoPago.
     // Disparado quando: assinatura autorizada, pagamento mensal cobrado, cancelamento.
     // Docs: https://www.mercadopago.com.br/developers/pt/docs/subscriptions/additional-content/notifications
