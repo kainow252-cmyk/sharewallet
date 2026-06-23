@@ -1849,14 +1849,29 @@ async function _handleRequest(request, env) {
         const valor    = pa.auto_recurring?.transaction_amount || 0;
         const metadata = pa.metadata || {};
 
+        // Extração de affiliateCode e produtoId:
+        // • Novo fluxo (via plano): metadata pode estar vazio, extRef = REC_{aff}_{prod}_{ts}
+        //   → split('_')[1] = affiliateCode, split('_')[2] = produtoId
+        // • Fluxo antigo: metadata.affiliate_code e metadata.produto_id preenchidos
         const affiliateCode = metadata.affiliate_code || extRef.split('_')[1] || '';
         const produtoId     = metadata.produto_id     || extRef.split('_')[2] || '';
-        const comissao      = metadata.comissao       || (valor * 0.20);
-        const subId         = `sub_rec_${preapprovalId}`;
-        const produtoNome   = pa.reason || produtoId || '';
-        const clienteEmail  = metadata.cliente_email || pa.payer_email || '';
-        const clienteNome   = metadata.cliente_nome  || '';
-        const clienteCpf    = metadata.cliente_cpf   || '';
+
+        // Fallback: buscar produto_id via preapproval_plan_id no D1
+        // (caso extRef esteja vazio — MP pode não preservar em alguns fluxos)
+        let produtoIdFinal = produtoId;
+        if (!produtoIdFinal && pa.preapproval_plan_id) {
+          const planRow = await DB.prepare(
+            `SELECT produto_id FROM mp_plans WHERE plan_id = ?`
+          ).bind(pa.preapproval_plan_id).first().catch(() => null);
+          if (planRow?.produto_id) produtoIdFinal = planRow.produto_id;
+        }
+
+        const comissao    = metadata.comissao || (valor * 0.20);
+        const subId       = `sub_rec_${preapprovalId}`;
+        const produtoNome = pa.reason || produtoIdFinal || '';
+        const clienteEmail = metadata.cliente_email || pa.payer_email || '';
+        const clienteNome  = metadata.cliente_nome  || '';
+        const clienteCpf   = metadata.cliente_cpf   || '';
 
         // Quando autorizado (1ª cobrança paga) ou pagamento efetuado → ativar
         if (status === 'authorized') {
@@ -1880,7 +1895,7 @@ async function _handleRequest(request, env) {
                  cliente_email=COALESCE(NULLIF(excluded.cliente_email,''), cliente_email),
                  cliente_nome =COALESCE(NULLIF(excluded.cliente_nome, ''), cliente_nome)`
             ).bind(
-              subId, produtoId, produtoNome, valor, comissao,
+              subId, produtoIdFinal, produtoNome, valor, comissao,
               affiliateCode, 'pixRecorrente', 'ativa', 5,
               new Date().toISOString(), proximaData.toISOString(),
               clienteEmail, clienteNome, clienteCpf
@@ -1902,7 +1917,7 @@ async function _handleRequest(request, env) {
                     (id, user_id, product_id, product_nome, valor, comissao,
                      affiliate_code, status, created_at, payment_id, charge_type)
                    VALUES (?,?,?,?,?,?,?,'aprovado',datetime('now'),?,?)`
-                ).bind(saleId, affId, produtoId, produtoNome, valor, comissao,
+                ).bind(saleId, affId, produtoIdFinal, produtoNome, valor, comissao,
                   affiliateCode, preapprovalId, 'pixRecorrente').run();
                 // Creditar em todos os registros do afiliado
                 for (const a of affs) {
