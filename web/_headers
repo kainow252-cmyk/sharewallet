@@ -4,23 +4,39 @@
 
 /index.html
   Content-Type: text/html; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Surrogate-Control: no-store
 
 /*.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Surrogate-Control: no-store
 
 /flutter_bootstrap.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Surrogate-Control: no-store
 
 /flutter_service_worker.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Surrogate-Control: no-store
 
 /flutter.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Surrogate-Control: no-store
+
+/main.dart.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Surrogate-Control: no-store
 
 /*.wasm
   Content-Type: application/wasm
@@ -28,7 +44,7 @@
 
 /manifest.json
   Content-Type: application/json; charset=utf-8
-  Cache-Control: no-store, no-cache
+  Cache-Control: no-store, no-cache, max-age=0
 
 /assets/FontManifest.json
   Cache-Control: no-store, no-cache, must-revalidate
