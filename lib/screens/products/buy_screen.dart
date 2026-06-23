@@ -230,19 +230,9 @@ class _BuyScreenState extends State<BuyScreen> {
 
   // -- Gera pagamento via Mercado Pago --------------------------------------
   // Fluxo único:      criarPix()                -> QR Code + copia-e-cola + polling
-  // Fluxo recorrente: criarPreferenciaAssinatura() -> URL checkout MP (nova aba)
+  // Fluxo Pix Recorrente: criarPix(recorrente:true) → QR Code direto → webhook ativa subscription
   Future<void> _gerarPix() async {
     if (!_formKey.currentState!.validate()) return;
-
-    if (_product!.isPixRecorrente && !_autorizou) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Marque a caixa de autorização para continuar'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
-      return;
-    }
 
     setState(() { _isSubmitting = true; _pixResult = null; });
 
@@ -510,15 +500,7 @@ class _BuyScreenState extends State<BuyScreen> {
             ]),
             const SizedBox(height: 24),
 
-            // -- Autorização PIX Recorrente ------------------------------------
-            if (product.isPixRecorrente) ...[
-              _AuthBox(
-                product: product,
-                autorizou: _autorizou,
-                onChanged: (v) => setState(() => _autorizou = v ?? false),
-              ),
-              const SizedBox(height: 20),
-            ],
+            const SizedBox(height: 24),
 
             // -- Como funciona -------------------------------------------------
             _HowItWorks(product: product),
@@ -527,12 +509,8 @@ class _BuyScreenState extends State<BuyScreen> {
             // -- Botão gerar PIX / Checkout --------------------------------
             if (_pixResult == null || !_pixResult!.success)
               PrimaryButton(
-                label: product.isPixRecorrente
-                    ? 'Autorizar e Ir para o Checkout'
-                    : 'Gerar QR Code PIX  -  ${product.valorFormatado}',
-                icon: product.isPixRecorrente
-                    ? Icons.open_in_browser_rounded
-                    : Icons.qr_code_rounded,
+                label: 'Gerar QR Code PIX  -  ${product.valorFormatado}',
+                icon: Icons.qr_code_rounded,
                 isLoading: _isSubmitting,
                 onPressed: _isSubmitting ? null : _gerarPix,
               ),
@@ -1575,9 +1553,9 @@ class _HowItWorks extends StatelessWidget {
   Widget build(BuildContext context) {
     final steps = product.isPixRecorrente ? [
       '1. Preencha seus dados cadastrais acima',
-      '2. Autorize o débito automático mensal',
-      '3. Você será redirecionado para o checkout seguro do Mercado Pago',
-      '4. Escolha PIX ou cartão e conclua o pagamento da 1a mensalidade',
+      '2. Clique em "Gerar QR Code PIX" e escaneie ou copie o código',
+      '3. Pague a 1ª mensalidade via PIX no seu banco',
+      '4. Confirmação imediata — assinatura ativa automaticamente',
       '5. As próximas cobranças são automáticas todo dia ${product.diaCobranca ?? 5}',
       '6. Cancele quando quiser, sem multa',
     ] : [
