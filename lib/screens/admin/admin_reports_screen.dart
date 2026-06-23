@@ -33,6 +33,10 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
   DateTime? _de;
   DateTime? _ate;
 
+  // Filtro de tipo de cobrança na aba Assinaturas
+  // null = todos, 'mensal' = pixRecorrente, 'unico' = pixAvulso
+  String? _tipoFiltro;
+
   final _fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
   final _dateFmt = DateFormat('dd/MM/yyyy');
 
@@ -538,11 +542,16 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                             setState(() => _exportingSaques = v),
                       ),
 
-                      // -- Assinaturas ---------------------------------------
+                      // -- Assinaturas ----------------------------------------
                       _ReportTab<SubscriptionModel>(
                         items: svc.subscriptions,
                         dateOf: (s) => s.dataInicio,
-                        filter: _inRange,
+                        // Aplica filtro de data E filtro de tipo de cobrança
+                        filter: (d) => _inRange(d),
+                        typeFilter: _tipoFiltro,
+                        typeFilterGetter: (s) => s.chargeType == ChargeType.pixRecorrente
+                            ? 'mensal' : 'unico',
+                        typeFilterWidget: _buildTipoFilterChips(),
                         csvBuilder: _csvAssinaturas,
                         jsonBuilder: (rows) => jsonEncode(rows
                             .map((s) => {
@@ -619,6 +628,51 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
                             setState(() => _exportingAssinaturas = v),
                       ),
       ],
+    );
+  }
+
+  // -- Chips de filtro de tipo de cobrança ------------------------------------
+  Widget _buildTipoFilterChips() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_alt_outlined,
+              size: 14, color: AppColors.textHint),
+          const SizedBox(width: 6),
+          const Text('Tipo:',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary)),
+          const SizedBox(width: 8),
+          _TipoChip(
+            label: 'Todos',
+            icon: Icons.all_inclusive_rounded,
+            selected: _tipoFiltro == null,
+            color: AppColors.primary,
+            onTap: () => setState(() => _tipoFiltro = null),
+          ),
+          const SizedBox(width: 6),
+          _TipoChip(
+            label: 'Mensal',
+            icon: Icons.autorenew_rounded,
+            selected: _tipoFiltro == 'mensal',
+            color: AppColors.success,
+            onTap: () => setState(
+                () => _tipoFiltro = _tipoFiltro == 'mensal' ? null : 'mensal'),
+          ),
+          const SizedBox(width: 6),
+          _TipoChip(
+            label: 'Único',
+            icon: Icons.pix_rounded,
+            selected: _tipoFiltro == 'unico',
+            color: AppColors.info,
+            onTap: () => setState(
+                () => _tipoFiltro = _tipoFiltro == 'unico' ? null : 'unico'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -741,6 +795,10 @@ class _ReportTab<T> extends StatelessWidget {
   final List<T> items;
   final DateTime Function(T) dateOf;
   final bool Function(DateTime) filter;
+  // Filtro de tipo adicional (opcional) — ex: 'mensal' ou 'unico'
+  final String? typeFilter;
+  final String Function(T)? typeFilterGetter;
+  final Widget? typeFilterWidget;
   final String Function(List<T>) csvBuilder;
   final String Function(List<T>) jsonBuilder;
   final String filenameBase;
@@ -756,6 +814,9 @@ class _ReportTab<T> extends StatelessWidget {
     required this.items,
     required this.dateOf,
     required this.filter,
+    this.typeFilter,
+    this.typeFilterGetter,
+    this.typeFilterWidget,
     required this.csvBuilder,
     required this.jsonBuilder,
     required this.filenameBase,
@@ -768,7 +829,13 @@ class _ReportTab<T> extends StatelessWidget {
     required this.onExportingChange,
   });
 
-  List<T> get _filtered => items.where((i) => filter(dateOf(i))).toList();
+  List<T> get _filtered => items.where((i) {
+    if (!filter(dateOf(i))) return false;
+    if (typeFilter != null && typeFilterGetter != null) {
+      if (typeFilterGetter!(i) != typeFilter) return false;
+    }
+    return true;
+  }).toList();
 
   String get _timestamp =>
       DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
@@ -832,7 +899,13 @@ class _ReportTab<T> extends StatelessWidget {
           ),
         ),
 
-        // -- Barra de ações de exportação ----------------------------------
+        // -- Filtro de tipo (opcional, aparece só na aba Assinaturas) -------
+        if (typeFilterWidget != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: typeFilterWidget!,
+          ),
+
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Container(
@@ -1332,6 +1405,55 @@ class _Mini extends StatelessWidget {
                 fontWeight: FontWeight.w600,
                 color: color ?? AppColors.textSecondary)),
       ],
+    );
+  }
+}
+
+// -- Chip de filtro de tipo de cobrança ----------------------------------------
+class _TipoChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+  const _TipoChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.14) : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: selected ? color : AppColors.cardBorder,
+              width: selected ? 1.5 : 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: selected ? color : AppColors.textHint),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight:
+                      selected ? FontWeight.w700 : FontWeight.normal,
+                  color: selected ? color : AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

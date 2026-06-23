@@ -18,6 +18,8 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _search = '';
+  // null = todos os tipos, 'mensal' = pixRecorrente, 'unico' = pixAvulso
+  String? _tipoFiltro;
 
   @override
   void initState() {
@@ -39,7 +41,10 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
           (s.affiliateNome?.toLowerCase().contains(_search.toLowerCase()) ?? false) ||
           s.productNome.toLowerCase().contains(_search.toLowerCase()) ||
           s.affiliateCode.toLowerCase().contains(_search.toLowerCase());
-      return matchStatus && matchSearch;
+      final matchTipo = _tipoFiltro == null ||
+          (_tipoFiltro == 'mensal' && s.chargeType == ChargeType.pixRecorrente) ||
+          (_tipoFiltro == 'unico'  && s.chargeType == ChargeType.pixAvulso);
+      return matchStatus && matchSearch && matchTipo;
     }).toList();
   }
 
@@ -78,7 +83,7 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
           ),
           // Busca
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: TextField(
               onChanged: (v) => setState(() => _search = v),
               decoration: InputDecoration(
@@ -93,6 +98,67 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                     : null,
                 isDense: true,
               ),
+            ),
+          ),
+
+          // -- Filtro de tipo de cobrança -----------------------------------
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.filter_alt_outlined,
+                    size: 14, color: AppColors.textHint),
+                const SizedBox(width: 6),
+                const Text('Tipo:',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary)),
+                const SizedBox(width: 8),
+                _SubTipoChip(
+                  label: 'Todos',
+                  icon: Icons.all_inclusive_rounded,
+                  selected: _tipoFiltro == null,
+                  color: AppColors.primary,
+                  onTap: () => setState(() => _tipoFiltro = null),
+                ),
+                const SizedBox(width: 6),
+                _SubTipoChip(
+                  label: 'Mensal',
+                  icon: Icons.autorenew_rounded,
+                  selected: _tipoFiltro == 'mensal',
+                  color: const Color(0xFF0D7A5A),
+                  onTap: () => setState(() =>
+                      _tipoFiltro = _tipoFiltro == 'mensal' ? null : 'mensal'),
+                ),
+                const SizedBox(width: 6),
+                _SubTipoChip(
+                  label: 'Único',
+                  icon: Icons.pix_rounded,
+                  selected: _tipoFiltro == 'unico',
+                  color: AppColors.info,
+                  onTap: () => setState(() =>
+                      _tipoFiltro = _tipoFiltro == 'unico' ? null : 'unico'),
+                ),
+                const Spacer(),
+                // Contador ativo
+                if (_tipoFiltro != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'filtro ativo',
+                      style: const TextStyle(
+                          color: AppColors.warning,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  ),
+              ],
             ),
           ),
           const Divider(height: 1),
@@ -469,6 +535,58 @@ class _InfoPill extends StatelessWidget {
                   fontSize: 11,
                   fontWeight: FontWeight.w600)),
         ],
+      ),
+    );
+  }
+}
+
+// -- Chip de filtro de tipo de cobrança (Assinaturas) -------------------------
+class _SubTipoChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+  const _SubTipoChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected
+              ? color.withValues(alpha: 0.14)
+              : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: selected ? color : AppColors.cardBorder,
+              width: selected ? 1.5 : 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12,
+                color: selected ? color : AppColors.textHint),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight:
+                      selected ? FontWeight.w700 : FontWeight.normal,
+                  color: selected ? color : AppColors.textSecondary),
+            ),
+          ],
+        ),
       ),
     );
   }

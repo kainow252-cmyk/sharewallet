@@ -359,6 +359,7 @@ class _EditAffiliateSheetState extends State<_EditAffiliateSheet> {
   late TextEditingController _cpfCtrl;
   late TextEditingController _telCtrl;
   late TextEditingController _pixCtrl;
+  late TextEditingController _saqueMinCtrl;
   late String _status;
   bool _saving = false;
 
@@ -371,6 +372,9 @@ class _EditAffiliateSheetState extends State<_EditAffiliateSheet> {
     _cpfCtrl = TextEditingController(text: a.cpf);
     _telCtrl = TextEditingController(text: a.telefone);
     _pixCtrl = TextEditingController(text: a.pixKey ?? '');
+    // Exibe 0 se não definido, para ficar em branco no campo
+    _saqueMinCtrl = TextEditingController(
+        text: a.saqueMinimo > 0 ? a.saqueMinimo.toStringAsFixed(2) : '');
     _status = a.status;
   }
 
@@ -381,12 +385,17 @@ class _EditAffiliateSheetState extends State<_EditAffiliateSheet> {
     _cpfCtrl.dispose();
     _telCtrl.dispose();
     _pixCtrl.dispose();
+    _saqueMinCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+
+    final saqueMin = double.tryParse(
+            _saqueMinCtrl.text.trim().replaceAll(',', '.')) ??
+        0.0;
 
     await widget.onSave({
       'nome': _nomeCtrl.text.trim(),
@@ -395,6 +404,7 @@ class _EditAffiliateSheetState extends State<_EditAffiliateSheet> {
       'telefone': _telCtrl.text.trim(),
       'pix_key': _pixCtrl.text.trim(),
       'status': _status,
+      'saque_minimo': saqueMin,
     });
 
     if (mounted) Navigator.pop(context);
@@ -524,6 +534,67 @@ class _EditAffiliateSheetState extends State<_EditAffiliateSheet> {
                         controller: _pixCtrl,
                         icon: Icons.pix_rounded,
                         hint: 'CPF, e-mail, telefone ou chave aleatória',
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Saque Mínimo
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Valor Mínimo para Saque (R\$)',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary)),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: _saqueMinCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: const InputDecoration(
+                              hintText: 'Ex: 20.00 (0 = padrão do sistema)',
+                              prefixIcon: Icon(Icons.account_balance_wallet_rounded,
+                                  size: 18, color: AppColors.textHint),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                  vertical: 14, horizontal: 12),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) return null;
+                              final val = double.tryParse(
+                                  v.trim().replaceAll(',', '.'));
+                              if (val == null || val < 0) {
+                                return 'Valor inválido (use número positivo)';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.info.withValues(alpha: 0.07),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.info_outline_rounded,
+                                    size: 12, color: AppColors.info),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Deixe 0 para usar o valor mínimo global do sistema. '
+                                    'Um valor positivo define um mínimo específico para este afiliado.',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.info),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 20),
 
@@ -847,6 +918,40 @@ class _AffiliateCard extends StatelessWidget {
                   ),
                 ],
               ),
+
+              // -- Badge saque mínimo (só mostra se configurado) ------------
+              if (affiliate.saqueMinimo > 0) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: AppColors.warning.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.account_balance_wallet_rounded,
+                              size: 11, color: AppColors.warning),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Saque mín: ${fmt.format(affiliate.saqueMinimo)}',
+                            style: const TextStyle(
+                                color: AppColors.warning,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -1337,6 +1442,13 @@ class _AffiliateDetailSheetState extends State<_AffiliateDetailSheet>
                       if (a.pixKey != null && a.pixKey!.isNotEmpty)
                         _DetailRow(
                             label: 'Chave PIX', value: a.pixKey!),
+                      _DetailRow(
+                          label: 'Saque Mínimo',
+                          value: a.saqueMinimo > 0
+                              ? NumberFormat.currency(
+                                      locale: 'pt_BR', symbol: 'R\$')
+                                  .format(a.saqueMinimo)
+                              : 'Padrão do sistema'),
                       _DetailRow(
                           label: 'Cadastrado em',
                           value: DateFormat('dd/MM/yyyy')

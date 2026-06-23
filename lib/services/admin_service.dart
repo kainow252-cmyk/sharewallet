@@ -22,6 +22,9 @@ class AdminAffiliate {
   final String status; // ativo, suspenso, pendente
   final DateTime createdAt;
   final String? pixKey;
+  /// Valor mínimo que este afiliado precisa ter para solicitar saque (R$).
+  /// 0.0 = sem limite mínimo (padrão global do sistema).
+  final double saqueMinimo;
 
   const AdminAffiliate({
     required this.id,
@@ -39,6 +42,7 @@ class AdminAffiliate {
     required this.status,
     required this.createdAt,
     this.pixKey,
+    this.saqueMinimo = 0.0,
   });
 
   factory AdminAffiliate.fromJson(Map<String, dynamic> j) => AdminAffiliate(
@@ -57,6 +61,7 @@ class AdminAffiliate {
         status: _s(j['status'], fb: 'ativo'),
         createdAt: _dt(j['createdAt']),
         pixKey: j['pixKey'] as String?,
+        saqueMinimo: _d(j['saqueMinimo']),
       );
 
   static String _s(dynamic v, {String fb = ''}) => v?.toString() ?? fb;
@@ -343,6 +348,7 @@ class AdminService extends ChangeNotifier {
     'totalIndicados': r['total_indicados'],
     'totalAssinaturas': r['total_assinaturas'],
     'createdAt': r['created_at'],
+    'saqueMinimo': r['saque_minimo'],
   };
 
   Future<bool> updateAffiliateStatus(String id, String status) async {

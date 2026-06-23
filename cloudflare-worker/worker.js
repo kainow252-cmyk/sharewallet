@@ -294,6 +294,14 @@ async function _handleRequest(request, env) {
     const method = request.method;
     const DB = env.DB;
 
+    // ── Auto-migration: garante coluna saque_minimo na tabela affiliates ─────
+    // SQLite ignora silenciosamente se a coluna já existir graças ao try/catch.
+    try {
+      await DB.prepare(
+        `ALTER TABLE affiliates ADD COLUMN saque_minimo REAL NOT NULL DEFAULT 0`
+      ).run();
+    } catch (_) { /* coluna já existe — ignorar */ }
+
     // ── /api/products ──────────────────────────────────────────────────────
     if (path === '/api/products' && method === 'GET') {
       const { results } = await DB.prepare(
@@ -421,6 +429,7 @@ async function _handleRequest(request, env) {
           telefone=excluded.telefone, pix_key=excluded.pix_key,
           affiliate_code=CASE WHEN excluded.affiliate_code != '' THEN excluded.affiliate_code ELSE affiliates.affiliate_code END,
           sponsor_code=COALESCE(excluded.sponsor_code, affiliates.sponsor_code),
+          saque_minimo=CASE WHEN excluded.saque_minimo IS NOT NULL THEN excluded.saque_minimo ELSE COALESCE(affiliates.saque_minimo,0) END,
           status=excluded.status`
       ).bind(
         id, b.nome??'', b.email??'', b.cpf??'', b.telefone??'',
@@ -474,7 +483,8 @@ async function _handleRequest(request, env) {
           sponsor_code:'sponsor_code', sponsorCode:'sponsor_code',
           saldo_disponivel:'saldo_disponivel', saldo_pendente:'saldo_pendente',
           total_comissoes:'total_comissoes', total_sacado:'total_sacado',
-          total_indicados:'total_indicados', total_assinaturas:'total_assinaturas'
+          total_indicados:'total_indicados', total_assinaturas:'total_assinaturas',
+          saque_minimo:'saque_minimo', saqueMinimo:'saque_minimo'
         };
         for (const [k, col] of Object.entries(map)) {
           if (b[k] !== undefined) { fields.push(`${col}=?`); vals.push(b[k]); }
@@ -707,6 +717,21 @@ async function _handleRequest(request, env) {
 
     if (path === '/api/withdrawals' && method === 'POST') {
       const b = await request.json();
+      const userId = b.userId ?? b.user_id ?? '';
+
+      // -- Validação de saque mínimo por afiliado ---------------------------
+      const affRow = await DB.prepare(
+        `SELECT saque_minimo FROM affiliates WHERE id=? LIMIT 1`
+      ).bind(userId).first();
+      const saqueMinimo = affRow?.saque_minimo ?? 0;
+      if (saqueMinimo > 0 && (b.valor ?? 0) < saqueMinimo) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Valor mínimo para saque é R$ ${saqueMinimo.toFixed(2).replace('.',',')}`,
+          saque_minimo: saqueMinimo
+        }), { status: 422, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      }
+
       const id = b.id || 'wd_' + Date.now();
       await DB.prepare(
         `INSERT INTO withdrawals (id,user_id,affiliate_nome,affiliate_code,valor,pix_key,status)
