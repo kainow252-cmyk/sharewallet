@@ -244,7 +244,7 @@ async function sendConfirmationEmail({ toEmail, toName, productName, productDesc
     personalizations: [{
       to: [{ email: toEmail, name: toName }],
     }],
-    from: { email: 'noreply@send.sharewallet.com.br', name: 'ShareWallet' },
+    from: { email: 'noreply@sharewallet.com.br', name: 'ShareWallet' },
     reply_to: { email: 'suporte@sharewallet.com.br', name: 'Suporte ShareWallet' },
     subject: `✅ Pagamento confirmado — ${productName}`,
     content: [{ type: 'text/html', value: html }],
@@ -254,26 +254,29 @@ async function sendConfirmationEmail({ toEmail, toName, productName, productDesc
   // RESEND_API_KEY deve estar em: Cloudflare Dashboard > Workers > sharewallet-api > Settings > Variables
   try {
     const resendKey = env?.RESEND_API_KEY ?? null;
-    if (resendKey) {
-      const resendPayload = {
-        from:    'ShareWallet <noreply@send.sharewallet.com.br>',
-        to:      [toEmail],
-        subject: `✅ Pagamento confirmado — ${productName}`,
-        html:    payload.content[0].value,
-      };
-      const resendResp = await fetch('https://api.resend.com/emails', {
-        method:  'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${resendKey}`,
-        },
-        body: JSON.stringify(resendPayload),
-      });
-      return resendResp.ok;
-    }
-  } catch (_) { /* Resend indisponível */ }
+    if (!resendKey) return { sent: false, error: 'RESEND_API_KEY não configurada' };
+    const resendPayload = {
+      from:    'ShareWallet <noreply@sharewallet.com.br>',
+      to:      [toEmail],
+      subject: `✅ Pagamento confirmado — ${productName}`,
+      html:    payload.content[0].value,
+    };
+    const resendResp = await fetch('https://api.resend.com/emails', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${resendKey}`,
+      },
+      body: JSON.stringify(resendPayload),
+    });
+    if (resendResp.ok) return { sent: true };
+    const errBody = await resendResp.text().catch(() => resendResp.status);
+    return { sent: false, error: `Resend HTTP ${resendResp.status}: ${errBody}` };
+  } catch (e) {
+    return { sent: false, error: `Resend exception: ${e.message}` };
+  }
 
-  return false;
+  return { sent: false, error: 'nenhum provedor disponível' };
 }
 
 async function _handleRequest(request, env) {
@@ -1340,7 +1343,7 @@ async function _handleRequest(request, env) {
           paymentId:        b.paymentId || b.payment_id || '',
           dataPagamento:    b.dataPagamento || b.created_at || null,
         }, env);
-        return ok({ sent: ok2 });
+        return ok(ok2); // { sent: true/false, error?: string }
       } catch (e) {
         return ok({ sent: false, error: String(e) });
       }
