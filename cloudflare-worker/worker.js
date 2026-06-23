@@ -302,6 +302,14 @@ async function _handleRequest(request, env) {
       DB.prepare(`ALTER TABLE sales ADD COLUMN charge_type TEXT DEFAULT 'pixAvulso'`).run(),
     ]);
 
+    // ── Auto-migration: dados do cliente na tabela subscriptions ─────────────
+    // cliente_email, cliente_nome, cliente_cpf — usados para notificações futuras
+    await Promise.allSettled([
+      DB.prepare(`ALTER TABLE subscriptions ADD COLUMN cliente_email TEXT DEFAULT ''`).run(),
+      DB.prepare(`ALTER TABLE subscriptions ADD COLUMN cliente_nome  TEXT DEFAULT ''`).run(),
+      DB.prepare(`ALTER TABLE subscriptions ADD COLUMN cliente_cpf   TEXT DEFAULT ''`).run(),
+    ]);
+
     // ── /api/products ──────────────────────────────────────────────────────
     if (path === '/api/products' && method === 'GET') {
       const { results } = await DB.prepare(
@@ -1469,6 +1477,74 @@ async function _handleRequest(request, env) {
       }
     }
 
+    // ── /api/mp/preapproval  ──────────────────────────────────────────────
+    // Proxy server-side: cria assinatura recorrente no MP via /preapproval.
+    // Flutter envia body sem token; Worker injeta Authorization do D1.
+    // Retorna: { success, id, status, init_point, external_reference }
+    if (path === '/api/mp/preapproval' && method === 'POST') {
+      try {
+        // 1. Buscar access_token do MP no D1
+        let accessToken = null;
+        const mpCfgRow = await DB.prepare(
+          `SELECT value FROM config WHERE key='mp_config' LIMIT 1`
+        ).first().catch(() => null);
+        if (mpCfgRow?.value) {
+          try {
+            const cfg = JSON.parse(mpCfgRow.value);
+            accessToken = cfg?.production?.access_token || cfg?.access_token || null;
+          } catch (_) {}
+        }
+        if (!accessToken && env?.MP_ACCESS_TOKEN) accessToken = env.MP_ACCESS_TOKEN;
+        if (!accessToken) return err('Token MP não configurado', 500);
+
+        // 2. Ler body enviado pelo Flutter
+        const preBody = await request.json().catch(() => null);
+        if (!preBody) return err('Body inválido', 400);
+
+        const idempotencyKey = request.headers.get('X-Idempotency-Key')
+          || preBody.external_reference
+          || `pre_${Date.now()}`;
+
+        // 3. Chamar /preapproval do MP server-side (sem CORS)
+        const mpResp = await fetch('https://api.mercadopago.com/preapproval', {
+          method: 'POST',
+          headers: {
+            'Authorization':     `Bearer ${accessToken}`,
+            'Content-Type':      'application/json',
+            'X-Idempotency-Key': idempotencyKey,
+          },
+          body: JSON.stringify(preBody),
+        });
+
+        const mpData = await mpResp.json().catch(() => ({}));
+
+        if (!mpResp.ok) {
+          return new Response(JSON.stringify({
+            success:  false,
+            status:   mpResp.status,
+            error:    mpData?.message || mpData?.cause?.[0]?.description || `Erro MP ${mpResp.status}`,
+            mp_data:  mpData,
+          }), {
+            status: mpResp.status,
+            headers: { 'Content-Type': 'application/json', ...CORS },
+          });
+        }
+
+        // 4. Retornar dados essenciais ao Flutter
+        return ok({
+          id:                 mpData.id,
+          status:             mpData.status,             // 'pending' | 'authorized'
+          init_point:         mpData.init_point,         // link checkout MP
+          external_reference: mpData.external_reference,
+          next_payment_date:  mpData.next_payment_date,
+          date_created:       mpData.date_created,
+          auto_recurring:     mpData.auto_recurring,
+        });
+      } catch (e) {
+        return err(`Erro proxy MP Preapproval: ${e.message}`, 500);
+      }
+    }
+
     // ── /api/webhook/mp/preapproval ────────────────────────────────────────
     // Recebe notificações de assinaturas recorrentes (preapproval) do MercadoPago.
     // Disparado quando: assinatura autorizada, pagamento mensal cobrado, cancelamento.
@@ -1518,6 +1594,9 @@ async function _handleRequest(request, env) {
         const comissao      = metadata.comissao       || (valor * 0.20);
         const subId         = `sub_rec_${preapprovalId}`;
         const produtoNome   = pa.reason || produtoId || '';
+        const clienteEmail  = metadata.cliente_email || pa.payer_email || '';
+        const clienteNome   = metadata.cliente_nome  || '';
+        const clienteCpf    = metadata.cliente_cpf   || '';
 
         // Quando autorizado (1ª cobrança paga) ou pagamento efetuado → ativar
         if (status === 'authorized') {
@@ -1533,13 +1612,18 @@ async function _handleRequest(request, env) {
             await DB.prepare(
               `INSERT INTO subscriptions
                 (id, product_id, product_nome, valor, comissao, affiliate_code,
-                 charge_type, status, dia_cobranca, data_inicio, proxima_cobranca)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)
-               ON CONFLICT(id) DO UPDATE SET status='ativa'`
+                 charge_type, status, dia_cobranca, data_inicio, proxima_cobranca,
+                 cliente_email, cliente_nome, cliente_cpf)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(id) DO UPDATE SET
+                 status='ativa',
+                 cliente_email=COALESCE(NULLIF(excluded.cliente_email,''), cliente_email),
+                 cliente_nome =COALESCE(NULLIF(excluded.cliente_nome, ''), cliente_nome)`
             ).bind(
               subId, produtoId, produtoNome, valor, comissao,
               affiliateCode, 'pixRecorrente', 'ativa', 5,
-              new Date().toISOString(), proximaData.toISOString()
+              new Date().toISOString(), proximaData.toISOString(),
+              clienteEmail, clienteNome, clienteCpf
             ).run();
           }
 

@@ -721,8 +721,9 @@ class MercadoPagoService extends ChangeNotifier {
     _lastError = null;
     notifyListeners();
 
+    // No mobile precisa de credenciais; no web usa proxy do Worker
     final creds = _config.active;
-    if (creds.isEmpty) {
+    if (!kIsWeb && creds.isEmpty) {
       _isLoading = false;
       _lastError = 'Credenciais de produção não configuradas.';
       notifyListeners();
@@ -737,46 +738,86 @@ class MercadoPagoService extends ChangeNotifier {
       final emailClean = clienteEmail.trim().contains('@')
           ? clienteEmail.trim()
           : 'cliente@sharewallet.com.br';
+      final nomeClean  = clienteNome.trim().isNotEmpty
+          ? clienteNome.trim()
+          : 'Cliente';
+      final cpfClean   = (clienteCpf ?? '').replaceAll(RegExp(r'[^0-9]'), '');
       final descClean  = produtoDescricao.trim().isNotEmpty
           ? produtoDescricao.trim()
           : 'Assinatura $produtoNome - ShareWallet';
 
-      // Data de início: agora. Próxima cobrança: +30 dias
-      final agora       = DateTime.now().toUtc();
-      final startIso    = agora.toIso8601String().replaceFirst(RegExp(r'\.\d+Z$'), '.000Z');
+      // Data de início: agora
+      final agora    = DateTime.now().toUtc();
+      final startIso = agora.toIso8601String().replaceFirst(RegExp(r'\.\d+Z$'), '.000Z');
 
-      // Body da API /preapproval — cria subscription com pagamento via Pix
+      // Body da API /preapproval
       final body = {
-        'reason':           descClean,
+        'reason':             descClean,
         'external_reference': externalRef,
-        'payer_email':      emailClean,
-        'back_url':         '${_config.backUrlSuccess}?ref=$externalRef',
+        'payer_email':        emailClean,
+        'back_url':           '${_config.backUrlSuccess}?ref=$externalRef',
         'auto_recurring': {
-          'frequency':       1,
-          'frequency_type':  'months',     // cobrança mensal
+          'frequency':          1,
+          'frequency_type':     'months',
           'transaction_amount': valor,
-          'currency_id':     'BRL',
-          'start_date':      startIso,
+          'currency_id':        'BRL',
+          'start_date':         startIso,
         },
         'payment_methods_allowed': {
           'payment_types': [
-            {'id': 'bank_transfer'},        // Pix é bank_transfer no MP
+            {'id': 'bank_transfer'},   // Pix = bank_transfer no MP
           ],
         },
-        'notification_url': '${_config.notificationUrl.replaceFirst('/mp', '/mp/preapproval')}?ref=$externalRef',
+        'notification_url':
+            '${_config.notificationUrl.replaceFirst('/mp', '/mp/preapproval')}?ref=$externalRef',
         'metadata': {
-          'affiliate_id':   affiliateId,
-          'affiliate_code': affiliateCode,
-          'produto_id':     produtoId,
-          'comissao':       valor * _config.comissaoPercent,
+          'affiliate_id':       affiliateId,
+          'affiliate_code':     affiliateCode,
+          'produto_id':         produtoId,
+          'comissao':           valor * _config.comissaoPercent,
+          'cliente_email':      emailClean,
+          'cliente_nome':       nomeClean,
+          'cliente_cpf':        cpfClean,
           'sharewallet_versao': '2.0',
         },
       };
 
       if (kDebugMode) {
-        debugPrint('[MP Preapproval] Criando assinatura recorrente: $produtoNome | R\$${valor.toStringAsFixed(2)}');
+        debugPrint('[MP Preapproval] Criando: $nomeClean | $produtoNome | R\$${valor.toStringAsFixed(2)}');
       }
 
+      // ── Web: proxy via Worker (sem CORS) ────────────────────────────────
+      if (kIsWeb) {
+        final resp = await http.post(
+          Uri.parse('https://api.sharewallet.com.br/api/mp/preapproval'),
+          headers: {
+            'Content-Type':      'application/json',
+            'X-Idempotency-Key': externalRef,
+          },
+          body: jsonEncode(body),
+        );
+
+        if (resp.statusCode == 200 || resp.statusCode == 201) {
+          final wrapper = jsonDecode(resp.body) as Map<String, dynamic>;
+          if (wrapper['success'] == true) {
+            return _processarRespostaPreapproval(
+                wrapper, externalRef, affiliateId, affiliateCode,
+                produtoId, produtoNome, valor);
+          }
+          _lastError = wrapper['error']?.toString() ?? 'Erro ao criar assinatura';
+        } else {
+          final errBody = jsonDecode(resp.body) as Map<String, dynamic>? ?? {};
+          _lastError = errBody['error']?.toString()
+              ?? errBody['message']?.toString()
+              ?? 'Erro ao criar assinatura (${resp.statusCode})';
+          if (kDebugMode) debugPrint('[MP Preapproval Web] Erro: $_lastError');
+        }
+        _isLoading = false;
+        notifyListeners();
+        return MpCheckoutResult.error(_lastError!);
+      }
+
+      // ── Mobile: chamada direta ao MP ────────────────────────────────────
       final response = await http.post(
         Uri.parse('$_baseUrl/preapproval'),
         headers: {
@@ -818,40 +859,19 @@ class MercadoPagoService extends ChangeNotifier {
         return _processarRespostaPreapproval(j, externalRef, affiliateId,
             affiliateCode, produtoId, produtoNome, valor);
       } else {
-        final errBody = jsonDecode(response.body);
-        _lastError = errBody['message'] ?? 'Erro ao criar assinatura (${response.statusCode})';
+        final errBody = jsonDecode(response.body) as Map<String, dynamic>? ?? {};
+        _lastError = errBody['message']?.toString()
+            ?? 'Erro ao criar assinatura (${response.statusCode})';
         if (kDebugMode) debugPrint('[MP Preapproval] Erro: $_lastError — body: ${response.body}');
         _isLoading = false;
         notifyListeners();
-        // Fallback: criar preferência normal de checkout
-        return criarPreferenciaAssinatura(
-          produtoId:        produtoId,
-          produtoNome:      produtoNome,
-          produtoDescricao: produtoDescricao,
-          valor:            valor,
-          affiliateId:      affiliateId,
-          affiliateCode:    affiliateCode,
-          clienteNome:      clienteNome,
-          clienteEmail:     clienteEmail,
-          clienteCpf:       clienteCpf,
-        );
+        return MpCheckoutResult.error(_lastError!);
       }
     } catch (e) {
-      debugPrint('[MP Preapproval] Exceção: $e');
+      if (kDebugMode) debugPrint('[MP Preapproval] Exceção: $e');
       _isLoading = false;
       notifyListeners();
-      // Fallback para preferência de checkout
-      return criarPreferenciaAssinatura(
-        produtoId:        produtoId,
-        produtoNome:      produtoNome,
-        produtoDescricao: produtoDescricao,
-        valor:            valor,
-        affiliateId:      affiliateId,
-        affiliateCode:    affiliateCode,
-        clienteNome:      clienteNome,
-        clienteEmail:     clienteEmail,
-        clienteCpf:       clienteCpf,
-      );
+      return MpCheckoutResult.error('Erro inesperado: $e');
     }
   }
 
