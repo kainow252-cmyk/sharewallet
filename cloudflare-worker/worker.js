@@ -1396,6 +1396,79 @@ async function _handleRequest(request, env) {
       }
     }
 
+    // ── /api/mp/pix  ──────────────────────────────────────────────────────
+    // Proxy server-side para POST https://api.mercadopago.com/v1/payments
+    // Necessário porque o browser bloqueia chamadas diretas ao MP (CORS).
+    // O Flutter envia o body pronto; o Worker injeta o Authorization header
+    // com o access_token armazenado no D1 (nunca exposto ao cliente).
+    if (path === '/api/mp/pix' && method === 'POST') {
+      try {
+        // 1. Buscar access_token do MP no D1
+        let accessToken = null;
+        const mpCfgRow = await DB.prepare(
+          `SELECT value FROM config WHERE key='mp_config' LIMIT 1`
+        ).first().catch(() => null);
+        if (mpCfgRow?.value) {
+          try {
+            const cfg = JSON.parse(mpCfgRow.value);
+            accessToken = cfg?.production?.access_token || cfg?.access_token || null;
+          } catch (_) {}
+        }
+        // Fallback: variável de ambiente
+        if (!accessToken && env?.MP_ACCESS_TOKEN) accessToken = env.MP_ACCESS_TOKEN;
+        if (!accessToken) return err('Token MP não configurado', 500);
+
+        // 2. Ler body enviado pelo Flutter
+        const pixBody = await request.json().catch(() => null);
+        if (!pixBody) return err('Body inválido', 400);
+
+        // 3. Extrair idempotency key do header (opcional) ou do external_reference
+        const idempotencyKey = request.headers.get('X-Idempotency-Key')
+          || pixBody.external_reference
+          || `pix_${Date.now()}`;
+
+        // 4. Chamar API do MP server-side (sem CORS)
+        const mpResp = await fetch('https://api.mercadopago.com/v1/payments', {
+          method: 'POST',
+          headers: {
+            'Authorization':     `Bearer ${accessToken}`,
+            'Content-Type':      'application/json',
+            'X-Idempotency-Key': idempotencyKey,
+          },
+          body: JSON.stringify(pixBody),
+        });
+
+        const mpData = await mpResp.json().catch(() => ({}));
+
+        if (!mpResp.ok) {
+          // Propaga erro do MP com status original
+          return new Response(JSON.stringify({
+            success: false,
+            status:  mpResp.status,
+            error:   mpData?.message || mpData?.cause?.[0]?.description || `Erro MP ${mpResp.status}`,
+            mp_data: mpData,
+          }), {
+            status: mpResp.status,
+            headers: { 'Content-Type': 'application/json', ...CORS },
+          });
+        }
+
+        // 5. Retornar resposta do MP ao Flutter
+        return ok({
+          id:                   mpData.id,
+          status:               mpData.status,
+          status_detail:        mpData.status_detail,
+          external_reference:   mpData.external_reference,
+          transaction_amount:   mpData.transaction_amount,
+          point_of_interaction: mpData.point_of_interaction,
+          date_created:         mpData.date_created,
+          date_of_expiration:   mpData.date_of_expiration,
+        });
+      } catch (e) {
+        return err(`Erro proxy MP Pix: ${e.message}`, 500);
+      }
+    }
+
     // ── /api/webhook/mp/preapproval ────────────────────────────────────────
     // Recebe notificações de assinaturas recorrentes (preapproval) do MercadoPago.
     // Disparado quando: assinatura autorizada, pagamento mensal cobrado, cancelamento.
