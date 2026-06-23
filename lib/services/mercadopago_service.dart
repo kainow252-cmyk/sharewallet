@@ -1024,8 +1024,8 @@ class MercadoPagoService extends ChangeNotifier {
             'is_first_purchase_online': false,
             'authentication_type':   'Gmail',
           },
-          // -- platform info - identifica a integração -------------------
-          'platform': 'flutter_web',
+          // Nota: 'platform' foi removido — MP rejeita esse campo com erro 400
+          //       (cause code 8: "The name of the parameters is wrong")
         },
       };
 
