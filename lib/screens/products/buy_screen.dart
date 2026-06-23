@@ -259,6 +259,7 @@ class _BuyScreenState extends State<BuyScreen> {
         clienteNome:   _nomeCtrl.text.trim(),
         clienteCpf:    _cpfCtrl.text.trim(),
         clienteEmail:  _emailCtrl.text.trim(),
+        recorrente:    false,
       );
       if (!mounted) return;
       setState(() { _isSubmitting = false; _pixResult = result; });
@@ -286,24 +287,20 @@ class _BuyScreenState extends State<BuyScreen> {
       return;
     }
 
-    // -- PIX Recorrente: cria preapproval MP → Pix automático nas próximas cobranças
-    // criarPreapproval() usa a API /preapproval do MP que suporta Pix recorrente.
-    // Ao pagar a 1ª vez, o MP autoriza débito automático nas datas seguintes.
-    // Fallback automático para criarPreferenciaAssinatura() se preapproval falhar.
-    final result = await mp.criarPreapproval(
-      produtoId:        _product!.id,
-      produtoNome:      _product!.nome,
-      produtoDescricao: _product!.descricao.isNotEmpty
-          ? _product!.descricao
-          : 'Assinatura ${_product!.nome}  -  ShareWallet',
-      valor:            _product!.valor,
-      affiliateId:      widget.affiliateCode,
-      affiliateCode:    widget.affiliateCode,
-      clienteNome:      _nomeCtrl.text.trim(),
-      clienteEmail:     _emailCtrl.text.trim(),
-      clienteCpf:       _cpfCtrl.text.trim().isNotEmpty
-          ? _cpfCtrl.text.trim()
-          : null,
+    // -- PIX Recorrente: QR Code Pix direto (mesmo fluxo do Pix Único)
+    // Usa criarPix() com recorrente=true → external_reference prefixo REC_
+    // Ao pagar a 1ª vez, o webhook ativa a assinatura no D1 com charge_type='pixRecorrente'
+    // Cobranças futuras são agendadas automaticamente pelo backend.
+    final result = await mp.criarPix(
+      produtoId:     _product!.id,
+      produtoNome:   _product!.nome,
+      valor:         _product!.valor,
+      affiliateId:   widget.affiliateCode,
+      affiliateCode: widget.affiliateCode,
+      clienteNome:   _nomeCtrl.text.trim(),
+      clienteCpf:    _cpfCtrl.text.trim(),
+      clienteEmail:  _emailCtrl.text.trim(),
+      recorrente:    true,
     );
 
     if (!mounted) return;
@@ -312,21 +309,9 @@ class _BuyScreenState extends State<BuyScreen> {
     if (result.success) {
       // Salvar dados do cliente em background
       _salvarDadosCliente().catchError((_) {});
-
-      // Abre o checkout MP (nova aba no web / browser no mobile)
-      if (result.checkoutUrl != null && result.checkoutUrl!.isNotEmpty) {
-        final opened = await mp.abrirCheckout(result.checkoutUrl!);
-        if (!opened && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Não foi possível abrir o browser. Copie o link abaixo.'),
-              backgroundColor: AppColors.warning,
-              duration: Duration(seconds: 4),
-            ),
-          );
-        }
-      }
-      // Scroll para o card com o link de checkout
+      // Inicia polling de confirmação (mesmo que Pix Único)
+      _iniciarPolling(result.preferenceId ?? '');
+      // Scroll para o QR Code
       Future.delayed(const Duration(milliseconds: 300), () {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -339,7 +324,7 @@ class _BuyScreenState extends State<BuyScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result.errorMessage ?? 'Erro ao gerar checkout. Tente novamente.'),
+          content: Text(result.errorMessage ?? 'Erro ao gerar PIX. Tente novamente.'),
           backgroundColor: AppColors.error,
           duration: const Duration(seconds: 5),
         ),
@@ -607,18 +592,106 @@ class _BuyScreenState extends State<BuyScreen> {
               ),
             ],
 
-            // -- PIX Recorrente: Card de Checkout MP -----------------------
+            // -- PIX Recorrente: QR Code Pix + badge de assinatura ---------
             if (_pixResult != null && _pixResult!.success && product.isPixRecorrente) ...[
-              _CheckoutRecorrenteCard(
-                result: _pixResult!,
-                product: product,
-                onReabrir: () async {
-                  final mp = context.read<MercadoPagoService>();
-                  if (_pixResult?.checkoutUrl != null) {
-                    await mp.abrirCheckout(_pixResult!.checkoutUrl!);
-                  }
-                },
-                onNovaTentativa: () => setState(() { _pixResult = null; }),
+              // Badge: informa cobrança automática mensal
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF1565C0).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.autorenew_rounded, color: Color(0xFF1565C0), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Assinatura Recorrente',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1565C0),
+                            ),
+                          ),
+                          Text(
+                            'Pague agora e as próximas cobranças serão automáticas mensalmente.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Status de aguardando pagamento (igual ao Pix Único)
+              if (!_paymentApproved) ...[  
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.warning),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Aguardando pagamento do PIX...',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (_paymentApproved) ...[  
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_rounded, color: AppColors.success, size: 20),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Pagamento confirmado! Assinatura ativa.',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              // QR Code Pix (igual ao Pix Único)
+              _PixQrCard(result: _pixResult!, product: product),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => setState(() { _pixResult = null; }),
+                icon: const Icon(Icons.edit_rounded),
+                label: const Text('Corrigir dados'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ],
 

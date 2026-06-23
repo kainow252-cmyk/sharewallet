@@ -919,6 +919,10 @@ class MercadoPagoService extends ChangeNotifier {
 
   // -- Criar Pix direto ------------------------------------------------------
 
+  // criarPix: gera QR Code Pix direto via /v1/payments.
+  // recorrente=true → marca metadata como pixRecorrente;
+  //   ao ser aprovado pelo webhook, ativa a subscription como recorrente
+  //   e o afiliado passa a cobrar automaticamente todo mês via Pix Automático.
   Future<MpCheckoutResult> criarPix({
     required String produtoId,
     required String produtoNome,
@@ -928,6 +932,7 @@ class MercadoPagoService extends ChangeNotifier {
     required String clienteNome,
     required String clienteCpf,
     required String clienteEmail,
+    bool recorrente = false,       // true = Pix Recorrente (cobrança automática mensal)
   }) async {
     if (!_isConfigLoaded) await loadConfig();
 
@@ -944,8 +949,10 @@ class MercadoPagoService extends ChangeNotifier {
     }
 
     try {
+      // Prefixo diferencia tipo: PIX_ = avulso, REC_ = recorrente
+      final prefix = recorrente ? 'REC' : 'PIX';
       final externalRef =
-          'PIX_${affiliateCode}_${produtoId}_${DateTime.now().millisecondsSinceEpoch}';
+          '${prefix}_${affiliateCode}_${produtoId}_${DateTime.now().millisecondsSinceEpoch}';
 
       // -- Sanitização dos dados do pagador ---------------------------------
       // MercadoPago rejeita com rejected_high_risk se email/CPF forem null ou vazios
@@ -982,6 +989,9 @@ class MercadoPagoService extends ChangeNotifier {
           'affiliate_code': affiliateCode,
           'produto_id':     produtoId,
           'comissao':       valor * _config.comissaoPercent,
+          // recorrente=true → webhook ativa assinatura com cobrança automática mensal
+          'recorrente':     recorrente,
+          'charge_type':    recorrente ? 'pixRecorrente' : 'pixAvulso',
         },
         'notification_url': _config.notificationUrl,
         'additional_info': {
@@ -1053,6 +1063,7 @@ class MercadoPagoService extends ChangeNotifier {
               valor:         valor,
               affiliateId:   affiliateId,
               affiliateCode: affiliateCode,
+              recorrente:    recorrente,
             );
 
             _isLoading    = false;
@@ -1093,6 +1104,7 @@ class MercadoPagoService extends ChangeNotifier {
           valor:         valor,
           affiliateId:   affiliateId,
           affiliateCode: affiliateCode,
+          recorrente:    recorrente,
         );
 
         _isLoading = false;
@@ -1239,6 +1251,7 @@ class MercadoPagoService extends ChangeNotifier {
     required double valor,
     required String affiliateId,
     required String affiliateCode,
+    bool recorrente = false,
   }) async {
     try {
       final comissao     = valor * _config.comissaoPercent;
@@ -1251,16 +1264,15 @@ class MercadoPagoService extends ChangeNotifier {
         'comissao':        comissao,
         'affiliate_code':  affiliateCode,
         'affiliate_nome':  null,
-        'charge_type':     'pixRecorrente',
+        'charge_type':     recorrente ? 'pixRecorrente' : 'pixAvulso',
         'status':          'pendente',
         'pix_key':         null,
         'dia_cobranca':    5,
         'data_inicio':     DateTime.now().toIso8601String(),
         'proxima_cobranca': proximaData.toIso8601String(),
       });
-      if (kDebugMode) debugPrint('[MP] Subscription criada no D1: sub_pix_$paymentId');
+      if (kDebugMode) debugPrint('[MP] Subscription criada no D1: sub_pix_$paymentId (${recorrente ? "recorrente" : "avulso"})');
     } catch (e) {
-      // Não bloqueia - PIX já foi gerado com sucesso
       debugPrint('[MP] Aviso: erro ao criar subscription no D1: $e');
     }
   }
