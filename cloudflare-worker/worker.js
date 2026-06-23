@@ -144,9 +144,10 @@ export default {
   },
 };
 
-// ── Envio de e-mail via MailChannels (Cloudflare Workers native) ──────────────
-// Docs: https://blog.cloudflare.com/sending-email-from-production-workers/
-async function sendConfirmationEmail({ toEmail, toName, productName, productDescricao, valor, comissao, affiliateCode, paymentId, dataPagamento }) {
+// ── Envio de e-mail via Resend ──────────────────────────────────────────────
+// Domínio verificado: send.sharewallet.com.br
+// RESEND_API_KEY deve estar em: Cloudflare Dashboard > Workers > sharewallet-api > Settings > Variables
+async function sendConfirmationEmail({ toEmail, toName, productName, productDescricao, valor, comissao, affiliateCode, paymentId, dataPagamento }, env) {
   const valorFmt     = `R$ ${Number(valor).toFixed(2).replace('.', ',')}`;
   const comissaoFmt  = `R$ ${Number(comissao).toFixed(2).replace('.', ',')}`;
   const dataFmt      = dataPagamento
@@ -243,32 +244,19 @@ async function sendConfirmationEmail({ toEmail, toName, productName, productDesc
     personalizations: [{
       to: [{ email: toEmail, name: toName }],
     }],
-    from: { email: 'noreply@sharewallet.com.br', name: 'ShareWallet' },
+    from: { email: 'noreply@send.sharewallet.com.br', name: 'ShareWallet' },
     reply_to: { email: 'suporte@sharewallet.com.br', name: 'Suporte ShareWallet' },
     subject: `✅ Pagamento confirmado — ${productName}`,
     content: [{ type: 'text/html', value: html }],
   };
 
-  // Estratégia dupla: tenta MailChannels primeiro, depois Resend como fallback
-  // MailChannels: nativo do Cloudflare Workers, gratuito, requer DNS _mailchannels TXT
+  // Usa Resend como provedor principal (domínio send.sharewallet.com.br verificado)
+  // RESEND_API_KEY deve estar em: Cloudflare Dashboard > Workers > sharewallet-api > Settings > Variables
   try {
-    const mcResp = await fetch('https://api.mailchannels.net/tx/v1/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (mcResp.status === 202 || mcResp.status === 200) return true;
-    // MailChannels falhou — tentar Resend como fallback
-  } catch (_) { /* MailChannels indisponível */ }
-
-  // Resend.com fallback (requer RESEND_API_KEY no env do Worker)
-  // Configure em: Cloudflare Dashboard > Workers > sharewallet-api > Settings > Variables
-  // Obtém key gratuitamente em: https://resend.com (3000 emails/mês grátis)
-  try {
-    const resendKey = (typeof env !== 'undefined' && env?.RESEND_API_KEY) ? env.RESEND_API_KEY : null;
+    const resendKey = env?.RESEND_API_KEY ?? null;
     if (resendKey) {
       const resendPayload = {
-        from:    'ShareWallet <noreply@sharewallet.com.br>',
+        from:    'ShareWallet <noreply@send.sharewallet.com.br>',
         to:      [toEmail],
         subject: `✅ Pagamento confirmado — ${productName}`,
         html:    payload.content[0].value,
@@ -1325,7 +1313,7 @@ async function _handleRequest(request, env) {
             affiliateCode,
             paymentId,
             dataPagamento:    new Date().toISOString(),
-          }).catch(() => {});
+          }, env).catch(() => {});
         }
       }
 
@@ -1351,7 +1339,7 @@ async function _handleRequest(request, env) {
           affiliateCode:    b.affiliateCode || b.affiliate_code || '',
           paymentId:        b.paymentId || b.payment_id || '',
           dataPagamento:    b.dataPagamento || b.created_at || null,
-        });
+        }, env);
         return ok({ sent: ok2 });
       } catch (e) {
         return ok({ sent: false, error: String(e) });
@@ -1597,7 +1585,7 @@ async function _handleRequest(request, env) {
                 affiliateCode,
                 paymentId,
                 dataPagamento:    payment.date_approved || new Date().toISOString(),
-              }).catch(() => {}); // fire-and-forget
+              }, env).catch(() => {}); // fire-and-forget
             }
           }
 
