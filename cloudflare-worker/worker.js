@@ -1678,8 +1678,9 @@ async function _handleRequest(request, env) {
             currency_id:        'BRL',
             start_date:         startDate,
           },
-          back_url: backUrl,
-          status:   'pending',   // ← sem card_token = pending → client escolhe método
+          back_url:           backUrl,
+          status:             'pending',      // ← sem card_token = pending → cliente paga 1ª vez
+          payment_method_id:  'pix',          // ← FORÇA checkout Pix: QR Code 1ª cobrança + autoriza débitos mensais
           ...(notifUrl ? { notification_url: notifUrl } : {}),
         };
 
@@ -1711,10 +1712,10 @@ async function _handleRequest(request, env) {
         }
 
         // ── 4. Retornar init_point ao Flutter ───────────────────────────
-        // O init_point abre checkout onde o cliente escolhe:
-        //   • Pix Automático (banco do cliente: Nubank, BB, Itaú…)
-        //   • Conta Mercado Pago
-        //   • Cartão de crédito/débito
+        // payment_method_id:"pix" garante que o checkout abre SOMENTE Pix:
+        //   • QR Code para pagar a 1ª cobrança
+        //   • Ao escanear, cliente autoriza todas as cobranças mensais seguintes
+        // Sem Conta MP, sem Cartão — apenas QR Code Pix recorrente.
         return ok({
           id:                 mpData.id,
           status:             mpData.status || 'pending',
