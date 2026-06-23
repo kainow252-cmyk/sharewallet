@@ -197,7 +197,9 @@ class _BuyScreenState extends State<BuyScreen> {
     if (paymentId.isEmpty) return;
     _pollingTimer?.cancel();
     int tentativas = 0;
-    const maxTentativas = 36;
+    // 60 tentativas × 5s = 5 minutos de polling
+    // Pix pode demorar até 3-4 min para confirmar dependendo do banco
+    const maxTentativas = 60;
 
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       if (!mounted || tentativas >= maxTentativas) { timer.cancel(); return; }
@@ -205,19 +207,20 @@ class _BuyScreenState extends State<BuyScreen> {
       try {
         final r = await http.get(
           Uri.parse('$_workerBase/api/payment-status/$paymentId'),
-        ).timeout(const Duration(seconds: 8));
+        ).timeout(const Duration(seconds: 10));
         if (!mounted) { timer.cancel(); return; }
         if (r.statusCode == 200) {
-          final data = jsonDecode(r.body)['result'] as Map<String, dynamic>?;
+          final body = jsonDecode(r.body);
+          final data = (body['result'] ?? body) as Map<String, dynamic>?;
           final status = data?['status'] as String? ?? '';
-          if (status == 'approved' && !_paymentApproved) {
+          // Aceitar 'approved' (MP) ou 'ativa' (D1) como pagamento confirmado
+          final pago = status == 'approved' || status == 'ativa';
+          if (pago && !_paymentApproved) {
             timer.cancel();
             setState(() => _paymentApproved = true);
-            // CRÍTICO: Navegar para tela de sucesso PRIMEIRO (não pode falhar)
             if (mounted) {
               setState(() => _showSuccessScreen = true);
             }
-            // Salvar dados em background - falha silenciosa é aceitável
             _salvarDadosCliente().catchError((_) {});
           }
         }
@@ -283,8 +286,11 @@ class _BuyScreenState extends State<BuyScreen> {
       return;
     }
 
-    // -- PIX Recorrente: cria preferência de assinatura -> abre checkout MP -
-    final result = await mp.criarPreferenciaAssinatura(
+    // -- PIX Recorrente: cria preapproval MP → Pix automático nas próximas cobranças
+    // criarPreapproval() usa a API /preapproval do MP que suporta Pix recorrente.
+    // Ao pagar a 1ª vez, o MP autoriza débito automático nas datas seguintes.
+    // Fallback automático para criarPreferenciaAssinatura() se preapproval falhar.
+    final result = await mp.criarPreapproval(
       produtoId:        _product!.id,
       produtoNome:      _product!.nome,
       produtoDescricao: _product!.descricao.isNotEmpty

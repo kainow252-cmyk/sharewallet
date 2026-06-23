@@ -690,6 +690,233 @@ class MercadoPagoService extends ChangeNotifier {
     }
   }
 
+  // -- Criar Preapproval (Assinatura Pix Recorrente Automático) ---------------
+  // Usa a API /preapproval do MP para criar um plano de cobrança automática via Pix.
+  // Ao pagar a 1ª vez, o MP passa a cobrar automaticamente nas datas seguintes.
+  // Docs: https://www.mercadopago.com.br/developers/pt/docs/subscriptions/integration-configuration/subscriptions-associated-plan
+
+  Future<MpCheckoutResult> criarPreapproval({
+    required String produtoId,
+    required String produtoNome,
+    required String produtoDescricao,
+    required double valor,
+    required String affiliateId,
+    required String affiliateCode,
+    required String clienteNome,
+    required String clienteEmail,
+    String? clienteCpf,
+  }) async {
+    if (!_isConfigLoaded) await loadConfig();
+
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+
+    final creds = _config.active;
+    if (creds.isEmpty) {
+      _isLoading = false;
+      _lastError = 'Credenciais de produção não configuradas.';
+      notifyListeners();
+      return MpCheckoutResult.error(_lastError!);
+    }
+
+    try {
+      final externalRef =
+          'REC_${affiliateCode}_${produtoId}_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Sanitização
+      final emailClean = clienteEmail.trim().contains('@')
+          ? clienteEmail.trim()
+          : 'cliente@sharewallet.com.br';
+      final descClean  = produtoDescricao.trim().isNotEmpty
+          ? produtoDescricao.trim()
+          : 'Assinatura $produtoNome - ShareWallet';
+
+      // Data de início: agora. Próxima cobrança: +30 dias
+      final agora       = DateTime.now().toUtc();
+      final startIso    = agora.toIso8601String().replaceFirst(RegExp(r'\.\d+Z$'), '.000Z');
+
+      // Body da API /preapproval — cria subscription com pagamento via Pix
+      final body = {
+        'reason':           descClean,
+        'external_reference': externalRef,
+        'payer_email':      emailClean,
+        'back_url':         '${_config.backUrlSuccess}?ref=$externalRef',
+        'auto_recurring': {
+          'frequency':       1,
+          'frequency_type':  'months',     // cobrança mensal
+          'transaction_amount': valor,
+          'currency_id':     'BRL',
+          'start_date':      startIso,
+        },
+        'payment_methods_allowed': {
+          'payment_types': [
+            {'id': 'bank_transfer'},        // Pix é bank_transfer no MP
+          ],
+        },
+        'notification_url': '${_config.notificationUrl.replaceFirst('/mp', '/mp/preapproval')}?ref=$externalRef',
+        'metadata': {
+          'affiliate_id':   affiliateId,
+          'affiliate_code': affiliateCode,
+          'produto_id':     produtoId,
+          'comissao':       valor * _config.comissaoPercent,
+          'sharewallet_versao': '2.0',
+        },
+      };
+
+      if (kDebugMode) {
+        debugPrint('[MP Preapproval] Criando assinatura recorrente: $produtoNome | R\$${valor.toStringAsFixed(2)}');
+      }
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/preapproval'),
+        headers: {
+          'Authorization':     'Bearer ${creds.accessToken}',
+          'Content-Type':      'application/json',
+          'X-Idempotency-Key': externalRef,
+        },
+        body: jsonEncode(body),
+      );
+
+      // Token expirado → renovar e retry
+      if (response.statusCode == 401) {
+        final renovado = await _renovarToken();
+        if (renovado) {
+          final newCreds = _config.active;
+          final retry = await http.post(
+            Uri.parse('$_baseUrl/preapproval'),
+            headers: {
+              'Authorization':     'Bearer ${newCreds.accessToken}',
+              'Content-Type':      'application/json',
+              'X-Idempotency-Key': '${externalRef}_r',
+            },
+            body: jsonEncode(body),
+          );
+          if (retry.statusCode == 201 || retry.statusCode == 200) {
+            final j = jsonDecode(retry.body) as Map<String, dynamic>;
+            return _processarRespostaPreapproval(j, externalRef, affiliateId,
+                affiliateCode, produtoId, produtoNome, valor);
+          }
+        }
+        _lastError = 'Token expirado. Reconfigure as credenciais no Admin.';
+        _isLoading = false;
+        notifyListeners();
+        return MpCheckoutResult.error(_lastError!);
+      }
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final j = jsonDecode(response.body) as Map<String, dynamic>;
+        return _processarRespostaPreapproval(j, externalRef, affiliateId,
+            affiliateCode, produtoId, produtoNome, valor);
+      } else {
+        final errBody = jsonDecode(response.body);
+        _lastError = errBody['message'] ?? 'Erro ao criar assinatura (${response.statusCode})';
+        if (kDebugMode) debugPrint('[MP Preapproval] Erro: $_lastError — body: ${response.body}');
+        _isLoading = false;
+        notifyListeners();
+        // Fallback: criar preferência normal de checkout
+        return criarPreferenciaAssinatura(
+          produtoId:        produtoId,
+          produtoNome:      produtoNome,
+          produtoDescricao: produtoDescricao,
+          valor:            valor,
+          affiliateId:      affiliateId,
+          affiliateCode:    affiliateCode,
+          clienteNome:      clienteNome,
+          clienteEmail:     clienteEmail,
+          clienteCpf:       clienteCpf,
+        );
+      }
+    } catch (e) {
+      debugPrint('[MP Preapproval] Exceção: $e');
+      _isLoading = false;
+      notifyListeners();
+      // Fallback para preferência de checkout
+      return criarPreferenciaAssinatura(
+        produtoId:        produtoId,
+        produtoNome:      produtoNome,
+        produtoDescricao: produtoDescricao,
+        valor:            valor,
+        affiliateId:      affiliateId,
+        affiliateCode:    affiliateCode,
+        clienteNome:      clienteNome,
+        clienteEmail:     clienteEmail,
+        clienteCpf:       clienteCpf,
+      );
+    }
+  }
+
+  MpCheckoutResult _processarRespostaPreapproval(
+    Map<String, dynamic> j,
+    String externalRef,
+    String affiliateId,
+    String affiliateCode,
+    String produtoId,
+    String produtoNome,
+    double valor,
+  ) {
+    final preapprovalId = j['id']?.toString() ?? '';
+    final initPoint     = j['init_point']     as String? ?? '';
+    final status        = j['status']         as String? ?? 'pending';
+
+    if (kDebugMode) {
+      debugPrint('[MP Preapproval] ID: $preapprovalId | status: $status | url: $initPoint');
+    }
+
+    // Criar subscription pendente no D1
+    _criarSubscriptionPreapprovalD1(
+      preapprovalId: preapprovalId,
+      externalRef:   externalRef,
+      produtoId:     produtoId,
+      produtoNome:   produtoNome,
+      valor:         valor,
+      affiliateId:   affiliateId,
+      affiliateCode: affiliateCode,
+    ).catchError((_) {});
+
+    _isLoading = false;
+    notifyListeners();
+
+    return MpCheckoutResult(
+      success:      true,
+      preferenceId: preapprovalId,
+      checkoutUrl:  initPoint,
+    );
+  }
+
+  Future<void> _criarSubscriptionPreapprovalD1({
+    required String preapprovalId,
+    required String externalRef,
+    required String produtoId,
+    required String produtoNome,
+    required double valor,
+    required String affiliateId,
+    required String affiliateCode,
+  }) async {
+    try {
+      final comissao    = valor * _config.comissaoPercent;
+      final proximaData = DateTime.now().add(const Duration(days: 30));
+      await CfApiService.createSubscription({
+        'id':              'sub_rec_$preapprovalId',
+        'product_id':      produtoId,
+        'product_nome':    produtoNome,
+        'valor':           valor,
+        'comissao':        comissao,
+        'affiliate_code':  affiliateCode,
+        'affiliate_nome':  null,
+        'charge_type':     'pixRecorrente',
+        'status':          'pendente',
+        'pix_key':         null,
+        'dia_cobranca':    5,
+        'data_inicio':     DateTime.now().toIso8601String(),
+        'proxima_cobranca': proximaData.toIso8601String(),
+      });
+      if (kDebugMode) debugPrint('[MP Preapproval] Sub D1 criada: sub_rec_$preapprovalId');
+    } catch (e) {
+      debugPrint('[MP Preapproval] Aviso: erro ao criar sub D1: $e');
+    }
+  }
+
   // -- Criar Pix direto ------------------------------------------------------
 
   Future<MpCheckoutResult> criarPix({

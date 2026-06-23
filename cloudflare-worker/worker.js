@@ -912,7 +912,9 @@ async function _handleRequest(request, env) {
     const payStatusMatch = path.match(/^\/api\/payment-status\/([^/]+)$/);
     if (payStatusMatch && method === 'GET') {
       const paymentId = payStatusMatch[1];
-      const subId = `sub_pix_${paymentId}`;
+      // Buscar tanto sub_pix_ (pix único/avulso) quanto sub_rec_ (preapproval recorrente)
+      const subIdPix = `sub_pix_${paymentId}`;
+      const subIdRec = `sub_rec_${paymentId}`;
 
       const statusMap = {
         'ativa':     'approved',
@@ -922,10 +924,11 @@ async function _handleRequest(request, env) {
       };
 
       // ── 1ª tentativa: D1 (rápido, sem chamada externa) ──────────────────
+      // Verifica os dois IDs possíveis de subscription
       const sub = await DB.prepare(
         `SELECT id, status, valor, comissao, affiliate_code, product_nome, created_at
-         FROM subscriptions WHERE id=?`
-      ).bind(subId).first().catch(() => null);
+         FROM subscriptions WHERE id=? OR id=? LIMIT 1`
+      ).bind(subIdPix, subIdRec).first().catch(() => null);
 
       // Sub encontrada E já aprovada → retorna imediatamente
       if (sub && sub.status === 'ativa') {
@@ -1393,6 +1396,130 @@ async function _handleRequest(request, env) {
       }
     }
 
+    // ── /api/webhook/mp/preapproval ────────────────────────────────────────
+    // Recebe notificações de assinaturas recorrentes (preapproval) do MercadoPago.
+    // Disparado quando: assinatura autorizada, pagamento mensal cobrado, cancelamento.
+    // Docs: https://www.mercadopago.com.br/developers/pt/docs/subscriptions/additional-content/notifications
+    if (path === '/api/webhook/mp/preapproval' && (method === 'POST' || method === 'GET')) {
+      try {
+        if (method === 'GET') return ok({ received: true });
+
+        const body = await request.json().catch(() => ({}));
+        const url  = new URL(request.url);
+
+        // MP envia: { type: "subscription_preapproval", data: { id: "preapproval_id" } }
+        let preapprovalId = body?.data?.id || body?.id ||
+            url.searchParams.get('data.id') || url.searchParams.get('id');
+        const topic = body?.type || body?.topic || url.searchParams.get('topic') || '';
+
+        if (!preapprovalId) return ok({ received: true, skipped: true });
+        preapprovalId = String(preapprovalId);
+
+        // Buscar token MP
+        const mpCfg = await DB.prepare(`SELECT value FROM config WHERE key='mp_config' LIMIT 1`).first().catch(() => null);
+        let accessToken = null;
+        if (mpCfg?.value) {
+          try {
+            const cfg = JSON.parse(mpCfg.value);
+            accessToken = cfg?.production?.access_token || cfg?.access_token || null;
+          } catch (_) {}
+        }
+        if (!accessToken && env?.MP_ACCESS_TOKEN) accessToken = env.MP_ACCESS_TOKEN;
+        if (!accessToken) return ok({ received: true, error: 'no_token' });
+
+        // Consultar API MP para obter status do preapproval
+        const mpResp = await fetch(
+          `https://api.mercadopago.com/preapproval/${preapprovalId}`,
+          { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+        if (!mpResp.ok) return ok({ received: true, error: `MP ${mpResp.status}` });
+
+        const pa       = await mpResp.json();
+        const status   = pa.status;   // authorized | paused | cancelled | pending
+        const extRef   = pa.external_reference || '';
+        const valor    = pa.auto_recurring?.transaction_amount || 0;
+        const metadata = pa.metadata || {};
+
+        const affiliateCode = metadata.affiliate_code || extRef.split('_')[1] || '';
+        const produtoId     = metadata.produto_id     || extRef.split('_')[2] || '';
+        const comissao      = metadata.comissao       || (valor * 0.20);
+        const subId         = `sub_rec_${preapprovalId}`;
+        const produtoNome   = pa.reason || produtoId || '';
+
+        // Quando autorizado (1ª cobrança paga) ou pagamento efetuado → ativar
+        if (status === 'authorized') {
+          const existSub = await DB.prepare(`SELECT id, status FROM subscriptions WHERE id=?`).bind(subId).first().catch(() => null);
+
+          if (existSub) {
+            if (existSub.status !== 'ativa') {
+              await DB.prepare(`UPDATE subscriptions SET status='ativa' WHERE id=?`).bind(subId).run();
+            }
+          } else {
+            const proximaData = new Date();
+            proximaData.setDate(proximaData.getDate() + 30);
+            await DB.prepare(
+              `INSERT INTO subscriptions
+                (id, product_id, product_nome, valor, comissao, affiliate_code,
+                 charge_type, status, dia_cobranca, data_inicio, proxima_cobranca)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(id) DO UPDATE SET status='ativa'`
+            ).bind(
+              subId, produtoId, produtoNome, valor, comissao,
+              affiliateCode, 'pixRecorrente', 'ativa', 5,
+              new Date().toISOString(), proximaData.toISOString()
+            ).run();
+          }
+
+          // Creditar comissão
+          if (affiliateCode && comissao > 0) {
+            const { results: affs } = await DB.prepare(
+              `SELECT id FROM affiliates WHERE affiliate_code=?`
+            ).bind(affiliateCode).all().catch(() => ({ results: [] }));
+            const affId = affs[0]?.id || null;
+            if (affId) {
+              const saleId = `sale_rec_${preapprovalId}`;
+              const existSale = await DB.prepare(`SELECT id FROM sales WHERE id=?`).bind(saleId).first().catch(() => null);
+              if (!existSale) {
+                await DB.prepare(
+                  `INSERT INTO sales
+                    (id, user_id, product_id, product_nome, valor, comissao,
+                     affiliate_code, status, created_at, payment_id, charge_type)
+                   VALUES (?,?,?,?,?,?,?,'aprovado',datetime('now'),?,?)`
+                ).bind(saleId, affId, produtoId, produtoNome, valor, comissao,
+                  affiliateCode, preapprovalId, 'pixRecorrente').run();
+                // Creditar em todos os registros do afiliado
+                for (const a of affs) {
+                  await DB.prepare(
+                    `INSERT INTO wallets (user_id, saldo_disponivel, saldo_pendente, total_recebido)
+                     VALUES (?,?,0,?)
+                     ON CONFLICT(user_id) DO UPDATE SET
+                       saldo_disponivel=saldo_disponivel+?,
+                       total_recebido=total_recebido+?,
+                       updated_at=datetime('now')`
+                  ).bind(a.id, comissao, comissao, comissao, comissao).run();
+                }
+                await DB.prepare(
+                  `UPDATE affiliates SET
+                     total_comissoes=total_comissoes+?,
+                     saldo_disponivel=saldo_disponivel+?,
+                     total_assinaturas=total_assinaturas+1
+                   WHERE affiliate_code=?`
+                ).bind(comissao, comissao, affiliateCode).run();
+              }
+            }
+          }
+        } else if (status === 'cancelled' || status === 'paused') {
+          await DB.prepare(
+            `UPDATE subscriptions SET status=? WHERE id=?`
+          ).bind(status === 'cancelled' ? 'cancelada' : 'pausada', subId).run().catch(() => {});
+        }
+
+        return ok({ received: true, preapprovalId, status, affiliateCode, subId });
+      } catch (e) {
+        return ok({ received: true, error: String(e) });
+      }
+    }
+
     // ── /api/webhook/mp ────────────────────────────────────────────────────
     // Recebe notificações do MercadoPago (pagamento aprovado/pendente/etc.)
     // Docs: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
@@ -1456,7 +1583,12 @@ async function _handleRequest(request, env) {
 
         const payment = await mpResp.json();
         const status  = payment.status;           // approved | pending | rejected | cancelled
-        const extRef  = payment.external_reference || ''; // PIX_affiliateCode_produtoId_ts
+        const extRef  = payment.external_reference || '';
+        // Prefixo do external_reference define o tipo:
+        //   PIX_   → Pix Único (avulso)
+        //   SW_    → checkout preference (recorrente legado)
+        //   REC_   → preapproval recorrente
+        const chargeType = extRef.startsWith('PIX_') ? 'pixAvulso' : 'pixRecorrente';
         const valor   = payment.transaction_amount || 0;
         const metadata = payment.metadata || {};
 
@@ -1529,7 +1661,7 @@ async function _handleRequest(request, env) {
                 ).bind(
                   saleId, affId, produtoId, produtoNome,
                   valor, comissao, affiliateCode,
-                  payerNome, payerEmail, String(paymentId), 'pixRecorrente'
+                  payerNome, payerEmail, String(paymentId), chargeType
                 ).run();
 
                 // ── Creditar na carteira de TODOS os IDs associados ─────────
