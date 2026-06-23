@@ -1528,9 +1528,48 @@ async function _handleRequest(request, env) {
           || `pre_${Date.now()}`;
 
         // Log do body COMPLETO para debug (visível nos Workers Logs do Cloudflare Dashboard)
-        console.log('[Preapproval] Body COMPLETO recebido do Flutter:', JSON.stringify(preBody));
+        console.log('[Preapproval] Body recebido do Flutter:', JSON.stringify(preBody));
 
-        // 3. Chamar /preapproval do MP server-side (sem CORS)
+        // 3. Sanitizar e reconstruir o body no Worker
+        // ─────────────────────────────────────────────────────────────────────
+        // CRÍTICO: o Worker reconstrói o body do zero, não confia no Flutter para
+        // campos que causam rejeição do MP (start_date, transaction_amount, etc.)
+        // Isso garante que qualquer versão antiga do Flutter ainda funcione.
+        // ─────────────────────────────────────────────────────────────────────
+
+        // start_date: SEMPRE recalculado pelo Worker com +2h a partir de agora
+        // (não usar o valor do Flutter — pode chegar como passado por latência/cache)
+        const startDate = new Date(Date.now() + 2 * 60 * 60 * 1000); // +2 horas UTC
+        const startIso  = startDate.toISOString().replace(/\.\d{3}Z$/, '.000Z');
+
+        // transaction_amount: garantir que seja número com no máximo 2 casas decimais
+        const rawAmount = preBody.auto_recurring?.transaction_amount ?? 0;
+        const safeAmount = Math.round(parseFloat(rawAmount) * 100) / 100;
+
+        // Construir body limpo para o MP
+        const mpBody = {
+          reason:             (preBody.reason || 'Assinatura ShareWallet').substring(0, 200),
+          external_reference: preBody.external_reference || `REC_${Date.now()}`,
+          payer_email:        preBody.payer_email || '',
+          back_url:           preBody.back_url   || 'https://sharewallet.com.br',
+          auto_recurring: {
+            frequency:          1,
+            frequency_type:     'months',
+            transaction_amount: safeAmount,
+            currency_id:        'BRL',
+            start_date:         startIso,           // ← sempre recalculado pelo Worker
+          },
+          notification_url: preBody.notification_url || '',
+          // metadata: passado direto (não crítico para aceitação do MP)
+          ...(preBody.metadata ? { metadata: preBody.metadata } : {}),
+        };
+
+        // NÃO incluir payment_methods_allowed — campo desnecessário que pode causar
+        // rejeição em algumas configurações de conta MP
+
+        console.log('[Preapproval] Body sanitizado para MP:', JSON.stringify(mpBody));
+
+        // 4. Chamar /preapproval do MP server-side (sem CORS)
         const mpResp = await fetch('https://api.mercadopago.com/preapproval', {
           method: 'POST',
           headers: {
@@ -1538,15 +1577,15 @@ async function _handleRequest(request, env) {
             'Content-Type':      'application/json',
             'X-Idempotency-Key': idempotencyKey,
           },
-          body: JSON.stringify(preBody),
+          body: JSON.stringify(mpBody),
         });
 
         const mpData = await mpResp.json().catch(() => ({}));
 
         // Log da resposta do MP para debug
         console.log('[Preapproval] MP status:', mpResp.status,
-          '| message:', mpData?.message || 'ok',
-          '| cause:', JSON.stringify(mpData?.cause || []));
+          '| id:', mpData?.id || '-',
+          '| message:', mpData?.message || 'ok');
 
         if (!mpResp.ok) {
           // Retornar erro completo com o body que foi enviado ao MP (para debug)
@@ -1555,14 +1594,14 @@ async function _handleRequest(request, env) {
             status:        mpResp.status,
             error:         mpData?.message || mpData?.cause?.[0]?.description || `Erro MP ${mpResp.status}`,
             mp_data:       mpData,
-            sent_body:     preBody,   // ← body exato enviado ao MP (para debug)
+            sent_body:     mpBody,   // ← body sanitizado enviado ao MP
           }), {
             status: mpResp.status,
             headers: { 'Content-Type': 'application/json', ...CORS },
           });
         }
 
-        // 4. Retornar dados essenciais ao Flutter
+        // 5. Retornar dados essenciais ao Flutter
         return ok({
           id:                 mpData.id,
           status:             mpData.status,             // 'pending' | 'authorized'
