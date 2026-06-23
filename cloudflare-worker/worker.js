@@ -1505,6 +1505,18 @@ async function _handleRequest(request, env) {
           || preBody.external_reference
           || `pre_${Date.now()}`;
 
+        // Log do body para debug (visível nos Workers Logs do Cloudflare Dashboard)
+        console.log('[Preapproval] Body recebido do Flutter:', JSON.stringify({
+          reason:           preBody.reason,
+          external_reference: preBody.external_reference,
+          payer_email:      preBody.payer_email,
+          back_url:         preBody.back_url,
+          notification_url: preBody.notification_url,
+          start_date:       preBody.auto_recurring?.start_date,
+          transaction_amount: preBody.auto_recurring?.transaction_amount,
+          payment_methods_allowed: preBody.payment_methods_allowed,
+        }));
+
         // 3. Chamar /preapproval do MP server-side (sem CORS)
         const mpResp = await fetch('https://api.mercadopago.com/preapproval', {
           method: 'POST',
@@ -1517,6 +1529,11 @@ async function _handleRequest(request, env) {
         });
 
         const mpData = await mpResp.json().catch(() => ({}));
+
+        // Log da resposta do MP para debug
+        console.log('[Preapproval] MP status:', mpResp.status,
+          '| message:', mpData?.message || 'ok',
+          '| cause:', JSON.stringify(mpData?.cause || []));
 
         if (!mpResp.ok) {
           return new Response(JSON.stringify({

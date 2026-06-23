@@ -746,8 +746,11 @@ class MercadoPagoService extends ChangeNotifier {
           ? produtoDescricao.trim()
           : 'Assinatura $produtoNome - ShareWallet';
 
-      // Data de início: agora
-      final agora    = DateTime.now().toUtc();
+      // Data de início: +1 hora no futuro
+      // O MP rejeita start_date que seja passado ou "agora" — latência de rede
+      // faz DateTime.now() chegar como passado ao servidor do MP.
+      // +1 hora garante margem suficiente sem impactar a experiência do usuário.
+      final agora    = DateTime.now().toUtc().add(const Duration(hours: 1));
       final startIso = agora.toIso8601String().replaceFirst(RegExp(r'\.\d+Z$'), '.000Z');
 
       // Body da API /preapproval
