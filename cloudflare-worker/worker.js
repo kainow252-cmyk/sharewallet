@@ -1649,5 +1649,65 @@ async function _handleRequest(request, env) {
       }
     }
 
+    // ── /api/admin/reset — zerar tabelas (vendas / assinaturas / saques) ─────
+    // PERIGO: apaga dados permanentemente. Requer header X-Admin-Secret.
+    // Body JSON: { "target": "sales" | "subscriptions" | "withdrawals" | "all" }
+    if (path === '/api/admin/reset' && method === 'DELETE') {
+      // Autenticação mínima via secret no header
+      const secret = request.headers.get('X-Admin-Secret') || '';
+      if (!secret || secret !== (env.ADMIN_RESET_SECRET || 'sharewallet_reset_2024')) {
+        return err('Não autorizado', 401);
+      }
+
+      let body = {};
+      try { body = await request.json(); } catch (_) {}
+      const target = body.target || 'none';
+
+      const allowed = ['sales', 'subscriptions', 'withdrawals', 'all'];
+      if (!allowed.includes(target)) {
+        return err(`target inválido: ${target}. Use: ${allowed.join(', ')}`, 400);
+      }
+
+      const results = {};
+
+      // Zerar vendas
+      if (target === 'sales' || target === 'all') {
+        const r = await DB.prepare(`DELETE FROM sales`).run();
+        results.sales = { deleted: r.meta?.changes ?? 0 };
+      }
+
+      // Zerar assinaturas + recalcular totais nos afiliados
+      if (target === 'subscriptions' || target === 'all') {
+        const r = await DB.prepare(`DELETE FROM subscriptions`).run();
+        results.subscriptions = { deleted: r.meta?.changes ?? 0 };
+        // Zerando total_assinaturas nos afiliados
+        await DB.prepare(`UPDATE affiliates SET total_assinaturas = 0`).run();
+      }
+
+      // Zerar saques + recalcular saldos nos afiliados e wallets
+      if (target === 'withdrawals' || target === 'all') {
+        const r = await DB.prepare(`DELETE FROM withdrawals`).run();
+        results.withdrawals = { deleted: r.meta?.changes ?? 0 };
+        // Zerando total_sacado nos afiliados
+        await DB.prepare(`UPDATE affiliates SET total_sacado = 0`).run();
+      }
+
+      // Se zerou tudo: também zera wallets, comissões e saldos dos afiliados
+      if (target === 'all') {
+        await DB.prepare(`DELETE FROM wallets`).run();
+        await DB.prepare(`UPDATE affiliates SET
+          saldo_disponivel    = 0,
+          total_comissoes     = 0,
+          total_sacado        = 0,
+          total_indicados     = 0,
+          total_assinaturas   = 0
+        `).run();
+        results.wallets   = 'zerado';
+        results.affiliates_totals = 'zerado';
+      }
+
+      return ok({ success: true, target, results, ts: new Date().toISOString() });
+    }
+
     return err('Rota não encontrada: ' + path, 404);
 }

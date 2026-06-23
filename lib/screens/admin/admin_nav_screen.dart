@@ -10,6 +10,7 @@ import 'admin_withdrawals_screen.dart';
 import 'admin_mp_settings_screen.dart';
 import 'admin_sales_screen.dart';
 import 'admin_reports_screen.dart';
+import 'admin_reset_screen.dart';
 
 class AdminNavScreen extends StatefulWidget {
   const AdminNavScreen({super.key});
@@ -30,6 +31,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     _NavItem(icon: Icons.receipt_long_rounded, label: 'Vendas'),
     _NavItem(icon: Icons.payment_rounded, label: 'Pagamentos'),
     _NavItem(icon: Icons.assessment_rounded, label: 'Relatórios'),
+    _NavItem(icon: Icons.delete_sweep_rounded, label: 'Reset'),
   ];
 
   // Não pode ser const pois AdminDashboardScreen recebe callback
@@ -42,6 +44,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     const AdminSalesScreen(),
     const AdminMpSettingsScreen(),
     const AdminReportsScreen(),
+    const AdminResetScreen(),
   ];
 
   void _onDestinationSelected(int idx) {
@@ -107,6 +110,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
                   case 3: s.loadSubscriptions(); break;
                   case 4: s.loadWithdrawals(); break;
                   case 5: s.loadSales(); break;
+                  case 8: break; // Reset — sem refresh automático
                   default: s.loadAll(); break;
                 }
               },
@@ -173,6 +177,8 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
                       label: item.label,
                       isSelected: isSelected,
                       badge: showBadge ? pending : null,
+                      // Item Reset (último) aparece em vermelho como alerta
+                      isLogout: i == _items.length - 1,
                       onTap: () => _onDestinationSelected(i),
                     );
                   }),
@@ -233,6 +239,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
                 case 4: svc.loadWithdrawals(); break;
                 case 5: svc.loadSales(); break;
                 case 7: svc.loadAll(); break; // Relatórios usa dados já carregados
+                case 8: break; // Reset — sem refresh automático
                 default: svc.loadAll(); break;
               }
             },
@@ -274,9 +281,14 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
                           children: [
                             Icon(
                               item.icon,
+                              // Item Reset (último) fica vermelho
                               color: isSelected
-                                  ? AppColors.gold
-                                  : Colors.white30,
+                                  ? (i == _items.length - 1
+                                      ? AppColors.error
+                                      : AppColors.gold)
+                                  : (i == _items.length - 1
+                                      ? AppColors.error.withValues(alpha: 0.45)
+                                      : Colors.white30),
                               size: 22,
                             ),
                             if (showBadge)
@@ -305,8 +317,12 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
                           item.label,
                           style: TextStyle(
                             color: isSelected
-                                ? AppColors.gold
-                                : Colors.white30,
+                                ? (i == _items.length - 1
+                                    ? AppColors.error
+                                    : AppColors.gold)
+                                : (i == _items.length - 1
+                                    ? AppColors.error.withValues(alpha: 0.45)
+                                    : Colors.white30),
                             fontSize: 9,
                             fontWeight: isSelected
                                 ? FontWeight.w600
@@ -360,7 +376,9 @@ class _SidebarItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.gold.withValues(alpha: 0.15)
+              ? (isLogout
+                  ? AppColors.error.withValues(alpha: 0.15)
+                  : AppColors.gold.withValues(alpha: 0.15))
               : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),

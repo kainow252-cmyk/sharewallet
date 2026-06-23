@@ -546,6 +546,30 @@ class AdminService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // -- Reset de dados (admin) ------------------------------------------------
+  /// Apaga dados do sistema via DELETE /api/admin/reset.
+  /// [target] pode ser: 'sales' | 'subscriptions' | 'withdrawals' | 'all'
+  /// Retorna mapa com resultados ou null em caso de erro de rede.
+  Future<Map<String, dynamic>?> resetData(String target) async {
+    final res = await CfApiService.adminReset(target);
+    if (res != null && res['success'] == true) {
+      // Limpa listas locais imediatamente para UI atualizar
+      if (target == 'sales' || target == 'all') {
+        _sales = [];
+      }
+      if (target == 'subscriptions' || target == 'all') {
+        _subscriptions = [];
+      }
+      if (target == 'withdrawals' || target == 'all') {
+        _withdrawals = [];
+      }
+      notifyListeners();
+      // Recarrega dados do servidor para sincronizar totais
+      await loadAll();
+    }
+    return res;
+  }
+
   static Map<String, dynamic> _normalizeWd(Map<String, dynamic> r) => {
     'id': r['id'], 'affiliateId': r['user_id'],
     'affiliateNome': r['affiliate_nome'], 'affiliateCode': r['affiliate_code'],

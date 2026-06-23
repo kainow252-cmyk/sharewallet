@@ -96,6 +96,43 @@ class CfApiService {
     }
   }
 
+  /// DELETE com body JSON + header customizado (ex: reset admin)
+  static Future<Map<String, dynamic>?> _deleteWithBody(
+    String path,
+    Map<String, dynamic> data, {
+    Map<String, String>? headers,
+  }) async {
+    final uri = Uri.parse('$_base$path');
+    try {
+      final res = await http.delete(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          ...?headers,
+        },
+        body: jsonEncode(data),
+      ).timeout(_timeout);
+      final body = jsonDecode(res.body);
+      return Map<String, dynamic>.from(body);
+    } catch (e) {
+      debugPrint('[CfApi] DELETE+body $path exception: $e');
+      return null;
+    }
+  }
+
+  // -- ADMIN RESET -----------------------------------------------------------
+
+  /// Apaga dados do sistema. target: 'sales' | 'subscriptions' | 'withdrawals' | 'all'
+  static const String _resetSecret = 'sharewallet_reset_2024';
+
+  static Future<Map<String, dynamic>?> adminReset(String target) async {
+    return _deleteWithBody(
+      '/api/admin/reset',
+      {'target': target},
+      headers: {'X-Admin-Secret': _resetSecret},
+    );
+  }
+
   // -- PRODUCTS --------------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> getProducts({bool all = false}) async {
