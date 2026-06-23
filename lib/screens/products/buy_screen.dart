@@ -1385,10 +1385,10 @@ class _HowItWorks extends StatelessWidget {
   Widget build(BuildContext context) {
     final steps = product.isPixRecorrente ? [
       '1. Preencha seus dados e clique em "Assinar agora"',
-      '2. Você será redirecionado ao checkout seguro do Mercado Pago',
-      '3. Escolha: Pix Automático (Nubank, BB, Itaú...), conta Mercado Pago ou cartão',
-      '4. Autorize uma única vez — o MP cobra automaticamente todo mês',
-      '5. Cancele quando quiser, sem multa',
+      '2. O checkout seguro do Mercado Pago abrirá com Pix Automático',
+      '3. Escolha seu banco (Nubank, BB, Itaú, Bradesco, Caixa...)',
+      '4. Autorize uma única vez no app do seu banco',
+      '5. As cobranças mensais seguintes são automáticas — sem novo QR Code',
     ] : [
       '1. Preencha seus dados cadastrais acima',
       '2. Clique em "Gerar QR Code PIX"',
@@ -1635,6 +1635,7 @@ class _PreapprovalCard extends StatefulWidget {
 class _PreapprovalCardState extends State<_PreapprovalCard> {
   bool _copiou        = false;
   bool _iframeAberto  = false;
+  bool _iframeBloqueado = false;  // true quando MP bloqueia o iframe com X-Frame-Options
   String? _iframeViewId;
 
   // ── Registra o iframe e troca para a view do iframe ───────────────────────
@@ -1653,12 +1654,26 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
         ..style.height    = '100%'
         ..allowFullscreen = true
         ..setAttribute('allow', 'payment; camera; microphone');
+
+      // Listener para detectar se o MP bloqueou o iframe (X-Frame-Options)
+      // Nesse caso, exibimos o botão de abrir em nova aba automaticamente
+      iframe.onError.listen((_) {
+        if (mounted) {
+          setState(() {
+            _iframeAberto  = false;
+            _iframeViewId  = null;
+            _iframeBloqueado = true;
+          });
+        }
+      });
+
       return iframe;
     });
 
     setState(() {
-      _iframeViewId = viewId;
-      _iframeAberto = true;
+      _iframeViewId    = viewId;
+      _iframeAberto    = true;
+      _iframeBloqueado = false;
     });
   }
 
@@ -1667,6 +1682,12 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
       _iframeAberto  = false;
       _iframeViewId  = null;
     });
+  }
+
+  void _abrirNoNavegador() {
+    final url = widget.result.checkoutUrl ?? '';
+    if (url.isEmpty) return;
+    html.window.open(url, '_blank');
   }
 
   void _copiarLink() {
@@ -1775,7 +1796,7 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
               clipBehavior: Clip.hardEdge,
               child: Column(
                 children: [
-                  // Barra superior do iframe com botão fechar
+                  // Barra superior do iframe com botão fechar + abrir em nova aba
                   Container(
                     color: const Color(0xFF009EE3),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1788,6 +1809,20 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
                             style: TextStyle(color: Colors.white, fontSize: 12,
                                 fontWeight: FontWeight.w600)),
                         ),
+                        // Botão abrir em nova aba (fallback caso iframe bloqueie navegação interna)
+                        GestureDetector(
+                          onTap: _abrirNoNavegador,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Icon(Icons.open_in_new_rounded,
+                                color: Colors.white, size: 14),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         GestureDetector(
                           onTap: _fecharIframe,
                           child: Container(
@@ -1805,7 +1840,7 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
                   ),
                   // O iframe em si
                   SizedBox(
-                    height: 520,
+                    height: 580,
                     child: HtmlElementView(viewType: _iframeViewId!),
                   ),
                 ],
@@ -1819,43 +1854,72 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
+                // ── Aviso quando iframe foi bloqueado pelo MP ───────────
+                if (_iframeBloqueado) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3E0),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFF9800), width: 1.5),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded,
+                            color: Color(0xFFFF9800), size: 20),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'O checkout do MP não pode ser exibido aqui. Use o botão abaixo para abrir em nova aba.',
+                            style: TextStyle(fontSize: 12,
+                                color: Color(0xFFE65100), height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 // ── Passos visuais ─────────────────────────────────────
                 _buildStep(
                   numero: '1',
-                  titulo: 'Escolha como pagar',
-                  descricao: 'Clique em "Pagar agora" abaixo para abrir o checkout.',
+                  titulo: 'Pague com Pix Automático',
+                  descricao: 'Clique em "Pagar agora" para abrir o checkout Pix do Mercado Pago.',
                   cor: const Color(0xFF009EE3),
                 ),
                 const SizedBox(height: 12),
                 _buildStep(
                   numero: '2',
-                  titulo: 'Pix Automático — escolha seu banco',
-                  descricao: 'Nubank, BB, Itaú, Bradesco e outros. Sem conta Mercado Pago.',
+                  titulo: 'Escolha seu banco',
+                  descricao: 'Nubank, BB, Itaú, Bradesco, Caixa e outros. Sem conta Mercado Pago.',
                   cor: const Color(0xFF4CAF50),
                 ),
                 const SizedBox(height: 12),
                 _buildStep(
                   numero: '3',
                   titulo: 'Autorize uma única vez no seu banco',
-                  descricao: 'O app do seu banco pede confirmação. Feito isso, as cobranças são automáticas.',
+                  descricao: 'O app do seu banco pede confirmação. As cobranças futuras são automáticas.',
                   cor: const Color(0xFFFF9800),
                 ),
                 const SizedBox(height: 12),
                 _buildStep(
                   numero: '✓',
                   titulo: 'Pronto! Cobranças mensais automáticas',
-                  descricao: 'Todo mês o valor é debitado automaticamente. Sem QR Codes novos.',
+                  descricao: 'Todo mês o valor é debitado via Pix. Sem QR Codes novos.',
                   cor: const Color(0xFF9C27B0),
                 ),
 
                 const SizedBox(height: 20),
 
-                // ── Botão principal: Pagar agora (abre iframe) ──────────
+                // ── Botão principal: Pagar agora ─────────────────────────
+                // Se iframe foi bloqueado: "Abrir no navegador" como primário
+                // Caso contrário: tenta iframe inline primeiro
                 SizedBox(
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton.icon(
-                    onPressed: _abrirIframe,
+                    onPressed: _iframeBloqueado ? _abrirNoNavegador : _abrirIframe,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF009EE3),
                       foregroundColor: Colors.white,
@@ -1863,14 +1927,23 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
                           borderRadius: BorderRadius.circular(14)),
                       elevation: 3,
                     ),
-                    icon: const Icon(Icons.payment_rounded, size: 20),
-                    label: const Text('Pagar agora',
-                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    icon: Icon(
+                      _iframeBloqueado
+                          ? Icons.open_in_new_rounded
+                          : Icons.payment_rounded,
+                      size: 20,
+                    ),
+                    label: Text(
+                      _iframeBloqueado
+                          ? 'Abrir checkout no navegador'
+                          : 'Pagar agora com Pix',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 16)),
                   ),
                 ),
                 const SizedBox(height: 10),
 
-                // ── Botão secundário: Copiar link (fallback) ────────────
+                // ── Botão secundário: Copiar link (sempre disponível) ────
                 if (checkoutUrl.isNotEmpty)
                   SizedBox(
                     width: double.infinity,

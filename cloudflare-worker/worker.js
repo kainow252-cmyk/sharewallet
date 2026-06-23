@@ -310,20 +310,18 @@ async function _handleRequest(request, env) {
       DB.prepare(`ALTER TABLE subscriptions ADD COLUMN cliente_cpf   TEXT DEFAULT ''`).run(),
     ]);
 
-    // ── Auto-migration: recriar mp_plans sem coluna init_point (nova estrutura) ─
-    // A versão anterior tinha init_point; agora o init_point vem do preapproval
-    // individual (passo 2), não do plano. Dropamos e recriamos para garantir.
+    // ── Auto-migration: mp_plans — garante tabela existe e limpa planos antigos ─
+    // Planos antigos (sem payment_methods_allowed Pix) foram criados antes de 2026-06-24.
+    // Ao deletá-los, a próxima chamada ao /api/mp/preapproval criará um novo plano
+    // com payment_methods_allowed: bank_transfer + pix → checkout mostrará SOMENTE Pix.
     await DB.prepare(`CREATE TABLE IF NOT EXISTS mp_plans (
       produto_id TEXT PRIMARY KEY,
       plan_id    TEXT NOT NULL,
       valor      REAL NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`).run().catch(() => {});
-    // Remove planos antigos que tinham init_point (criados sem Pix bank_transfer+pix)
-    // Na próxima assinatura um novo plano correto será criado automaticamente
-    await DB.prepare(`DELETE FROM mp_plans WHERE plan_id IN (
-      SELECT plan_id FROM mp_plans WHERE created_at < '2026-06-24'
-    )`).run().catch(() => {});
+    // Remove planos antigos (sem Pix exclusivo) — forçar recriação com payment_methods_allowed
+    await DB.prepare(`DELETE FROM mp_plans WHERE created_at < '2026-06-24'`).run().catch(() => {});
 
     // ── /api/products ──────────────────────────────────────────────────────
     if (path === '/api/products' && method === 'GET') {
@@ -1614,19 +1612,24 @@ async function _handleRequest(request, env) {
     }
 
     // ── /api/mp/preapproval  ──────────────────────────────────────────────
-    // Fluxo DEFINITIVO — doc oficial MP:
-    // "Assinaturas SEM plano associado com pagamento PENDENTE"
-    // https://developers/pt/docs/subscriptions/integration-configuration/
-    //          subscription-no-associated-plan/pending-payments
+    // Fluxo PIX EXCLUSIVO — 2 passos:
     //
-    // POST direto para /preapproval com status:"pending" e SEM card_token_id.
-    // O MP retorna init_point onde o cliente escolhe: Pix, conta MP ou cartão.
+    // PASSO 1: POST /preapproval_plan com payment_methods_allowed (apenas Pix/bank_transfer)
+    //   → Cria ou reutiliza um plano (cacheado no D1 por produto_id+valor)
+    //   → O plano define que SOMENTE Pix Automático é aceito no checkout
     //
-    // IMPORTANTE: o fluxo "COM plano + card_token_id" é EXCLUSIVO para cartão.
-    // Para Pix sem cartão, SEMPRE usar o fluxo sem plano + pending.
+    // PASSO 2: POST /preapproval com preapproval_plan_id + status:"pending" (SEM card_token_id)
+    //   → Cria assinatura com pagamento pendente, vinculada ao plano
+    //   → Retorna init_point que abre checkout com APENAS Pix Automático
+    //   → Cliente escaneia QR Code na 1ª cobrança e autoriza débitos mensais futuros
+    //
+    // IMPORTANTE:
+    //   • SEM card_token_id = fluxo Pix (status:"pending" → cliente paga no checkout)
+    //   • COM card_token_id = fluxo Cartão (status:"authorized" → débito direto)
+    //   • payment_methods_allowed NO PLANO = força checkout mostrar apenas Pix
     //
     // Flutter envia: { produto_id, produto_nome, valor, payer_email,
-    //                  external_reference, notification_url, back_url, metadata }
+    //                  external_reference, notification_url, back_url }
     // Retorna: { success, id, status:"pending", init_point, external_reference }
     if (path === '/api/mp/preapproval' && method === 'POST') {
       try {
@@ -1650,6 +1653,7 @@ async function _handleRequest(request, env) {
 
         console.log('[Preapproval] Body Flutter:', JSON.stringify(preBody));
 
+        const produtoId   = preBody.produto_id   || 'default';
         const produtoNome = preBody.produto_nome  || preBody.reason  || 'Assinatura ShareWallet';
         const payerEmail  = preBody.payer_email   || '';
         const safeAmount  = Math.round(parseFloat(
@@ -1662,15 +1666,94 @@ async function _handleRequest(request, env) {
         if (safeAmount <= 0) return err('Valor inválido', 400);
         if (!payerEmail)     return err('payer_email obrigatório', 400);
 
-        // ── 2. Montar body do preapproval (SEM plano, SEM card_token) ───
-        // Doc oficial: "Assinaturas sem plano com pagamento pendente"
-        // Campos obrigatórios: reason, payer_email, auto_recurring, back_url, status
+        // ── PASSO 1: Criar ou reutilizar preapproval_plan com Pix exclusivo ─
+        // O plano define payment_methods_allowed → checkout mostra SOMENTE Pix Automático
+        // Cacheia no D1 por produto_id+valor para evitar duplicação de planos
+
+        // Garante tabela mp_plans existe
+        await DB.prepare(`CREATE TABLE IF NOT EXISTS mp_plans (
+          produto_id TEXT PRIMARY KEY,
+          plan_id    TEXT NOT NULL,
+          valor      REAL NOT NULL,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )`).run().catch(() => {});
+
+        let planId = null;
+
+        // Verifica cache D1
+        const existingPlan = await DB.prepare(
+          `SELECT plan_id, valor FROM mp_plans WHERE produto_id = ?`
+        ).bind(produtoId).first().catch(() => null);
+
+        if (existingPlan && Math.abs(existingPlan.valor - safeAmount) < 0.01) {
+          // Reutiliza plano existente (mesmo produto, mesmo valor)
+          planId = existingPlan.plan_id;
+          console.log('[Preapproval] Reutilizando plano existente:', planId);
+        } else {
+          // Cria novo plano com Pix como único método
+          const planBody = {
+            reason: `${produtoNome} — ShareWallet`,
+            back_url: backUrl,
+            auto_recurring: {
+              frequency:          1,
+              frequency_type:     'months',
+              transaction_amount: safeAmount,
+              currency_id:        'BRL',
+            },
+            payment_methods_allowed: {
+              payment_types: [
+                { id: 'bank_transfer' },   // ← Pix Automático BACEN
+              ],
+              payment_methods: [
+                { id: 'pix' },             // ← especifica método pix
+              ],
+            },
+            ...(notifUrl ? { notification_url: notifUrl } : {}),
+          };
+
+          console.log('[Preapproval] Criando plano MP. Body:', JSON.stringify(planBody));
+
+          const planResp = await fetch('https://api.mercadopago.com/preapproval_plan', {
+            method:  'POST',
+            headers: {
+              'Authorization':     `Bearer ${accessToken}`,
+              'Content-Type':      'application/json',
+              'X-Idempotency-Key': `plan_${produtoId}_${safeAmount}_${Date.now()}`,
+            },
+            body: JSON.stringify(planBody),
+          });
+
+          const planData = await planResp.json().catch(() => ({}));
+          console.log('[Preapproval] Plano MP resp:', planResp.status,
+            '| plan_id:', planData?.id || '-');
+
+          if (!planResp.ok) {
+            return new Response(JSON.stringify({
+              success:   false,
+              error:     planData?.message || `Erro ao criar plano MP ${planResp.status}`,
+              mp_data:   planData,
+              step:      'create_plan',
+            }), { status: planResp.status, headers: { 'Content-Type': 'application/json', ...CORS } });
+          }
+
+          planId = planData.id;
+
+          // Salva no cache D1
+          await DB.prepare(
+            `INSERT OR REPLACE INTO mp_plans (produto_id, plan_id, valor) VALUES (?, ?, ?)`
+          ).bind(produtoId, planId, safeAmount).run().catch(() => {});
+        }
+
+        // ── PASSO 2: Criar preapproval vinculado ao plano (SEM card_token) ─
+        // status:"pending" + sem card_token → MP gera init_point com checkout Pix
+        // O checkout abrirá SOMENTE as opções definidas no plano (apenas Pix)
         const startDate = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // +2h
 
         const mpBody = {
-          reason:             produtoNome,
-          external_reference: extRef,
-          payer_email:        payerEmail,
+          preapproval_plan_id: planId,           // ← vincula ao plano (força Pix no checkout)
+          reason:              produtoNome,
+          external_reference:  extRef,
+          payer_email:         payerEmail,
           auto_recurring: {
             frequency:          1,
             frequency_type:     'months',
@@ -1678,13 +1761,12 @@ async function _handleRequest(request, env) {
             currency_id:        'BRL',
             start_date:         startDate,
           },
-          back_url:           backUrl,
-          status:             'pending',      // ← sem card_token = pending → cliente paga 1ª vez
-          payment_method_id:  'pix',          // ← FORÇA checkout Pix: QR Code 1ª cobrança + autoriza débitos mensais
+          back_url:            backUrl,
+          status:              'pending',        // ← sem card_token = pending → cliente paga no init_point
           ...(notifUrl ? { notification_url: notifUrl } : {}),
         };
 
-        console.log('[Preapproval] Enviando para MP. Body:', JSON.stringify(mpBody));
+        console.log('[Preapproval] Criando preapproval com plano. Body:', JSON.stringify(mpBody));
 
         // ── 3. Chamar API do MP ─────────────────────────────────────────
         const mpResp = await fetch('https://api.mercadopago.com/preapproval', {
@@ -1703,24 +1785,32 @@ async function _handleRequest(request, env) {
           '| init_point:', mpData?.init_point?.substring(0, 80) || '-');
 
         if (!mpResp.ok) {
+          // Se o erro é sobre card_token_id (plano com cartão não aceita pending sem token),
+          // apaga o plano do cache para forçar recriação sem payment_types restritivo
+          if (mpData?.message?.toLowerCase().includes('card_token') ||
+              mpData?.message?.toLowerCase().includes('payment_method')) {
+            await DB.prepare(`DELETE FROM mp_plans WHERE produto_id = ?`)
+              .bind(produtoId).run().catch(() => {});
+          }
           return new Response(JSON.stringify({
             success:   false,
             error:     mpData?.message || `Erro MP ${mpResp.status}`,
             mp_data:   mpData,
             sent_body: mpBody,
+            step:      'create_preapproval',
           }), { status: mpResp.status, headers: { 'Content-Type': 'application/json', ...CORS } });
         }
 
         // ── 4. Retornar init_point ao Flutter ───────────────────────────
-        // payment_method_id:"pix" garante que o checkout abre SOMENTE Pix:
-        //   • QR Code para pagar a 1ª cobrança
-        //   • Ao escanear, cliente autoriza todas as cobranças mensais seguintes
-        // Sem Conta MP, sem Cartão — apenas QR Code Pix recorrente.
+        // O init_point abre o checkout do MP restrito ao método do plano (Pix Automático).
+        // Na 1ª cobrança: QR Code Pix para pagar e autorizar débitos mensais futuros.
+        // Cobranças seguintes: automáticas, sem novo QR Code.
         return ok({
           id:                 mpData.id,
           status:             mpData.status || 'pending',
           init_point:         mpData.init_point,
           external_reference: extRef,
+          plan_id:            planId,
           date_created:       mpData.date_created || new Date().toISOString(),
           auto_recurring: {
             frequency:          1,
