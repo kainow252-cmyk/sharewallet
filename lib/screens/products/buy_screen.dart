@@ -1456,47 +1456,41 @@ class _ProductLandingPageState extends State<_ProductLandingPage> {
                     ] else
                       const SizedBox(height: 24),
 
-                    // Ícone + nome + preço
+                    // ── Ícone + nome + preço (tudo em linha) ───────────────
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        // Ícone
                         Container(
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                           child: Icon(product.chargeTypeIcon,
-                              color: Colors.white, size: 32),
+                              color: Colors.white, size: 26),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 14),
+                        // Nome + badge
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(product.nome,
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w900,
-                                      height: 1.2)),
-                              const SizedBox(height: 6),
-                              Row(children: [
-                                Text(product.valorFormatado,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.w900)),
-                                if (isRec)
-                                  const Text('/mês',
-                                      style: TextStyle(
-                                          color: Colors.white60,
-                                          fontSize: 14)),
-                              ]),
-                              const SizedBox(height: 4),
+                              Text(
+                                product.nome,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.2),
+                              ),
+                              const SizedBox(height: 5),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
+                                    horizontal: 7, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withValues(alpha: 0.18),
                                   borderRadius: BorderRadius.circular(6),
@@ -1509,6 +1503,28 @@ class _ProductLandingPageState extends State<_ProductLandingPage> {
                               ),
                             ],
                           ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Preço (direita)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              product.valorFormatado,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -0.5),
+                            ),
+                            if (isRec)
+                              const Text(
+                                '/mês',
+                                style: TextStyle(
+                                    color: Colors.white60, fontSize: 12),
+                              ),
+                          ],
                         ),
                       ],
                     ),
