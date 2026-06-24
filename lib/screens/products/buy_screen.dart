@@ -1349,7 +1349,7 @@ class _DownloadButton extends StatelessWidget {
 }
 
 // -- Landing page p\u00fablica do produto (banner de convers\u00e3o) ----------------------
-class _ProductLandingPage extends StatelessWidget {
+class _ProductLandingPage extends StatefulWidget {
   final ProductModel product;
   final VoidCallback? onAssinar;
   final VoidCallback? onComprar;
@@ -1365,13 +1365,22 @@ class _ProductLandingPage extends StatelessWidget {
   });
 
   @override
+  State<_ProductLandingPage> createState() => _ProductLandingPageState();
+}
+
+class _ProductLandingPageState extends State<_ProductLandingPage> {
+  bool _descExpandida = false;
+  static const _limiteChars = 220;
+
+  @override
   Widget build(BuildContext context) {
+    final product = widget.product;
     final isRec = product.isPixRecorrente;
     final isAv  = product.isPixAvulso;
 
     // Benefícios extraídos da descrição (linhas com bullet • ou -)
     final beneficios = _extrairBeneficios(product.descricao);
-    final descricaoLimpa = _descricaoSemBeneficios(product.descricao);
+    final descricaoCompleta = _descricaoSemBeneficios(product.descricao);
 
     return SingleChildScrollView(
       child: Column(
@@ -1474,15 +1483,47 @@ class _ProductLandingPage extends StatelessWidget {
                       ],
                     ),
 
-                    // Descrição
-                    if (descricaoLimpa.isNotEmpty) ...[
+                    // Descrição com botão "Ler mais / Ler menos"
+                    if (descricaoCompleta.isNotEmpty) ...[
                       const SizedBox(height: 20),
-                      Text(descricaoLimpa,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              height: 1.6,
-                              fontWeight: FontWeight.w400)),
+                      Text(
+                        _descExpandida || descricaoCompleta.length <= _limiteChars
+                            ? descricaoCompleta
+                            : '\${descricaoCompleta.substring(0, _limiteChars)}...',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            height: 1.6,
+                            fontWeight: FontWeight.w400),
+                      ),
+                      if (descricaoCompleta.length > _limiteChars) ...[
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: () => setState(() => _descExpandida = !_descExpandida),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _descExpandida ? 'Ler menos' : 'Ler mais',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: Colors.white),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                _descExpandida
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ],
                 ),
@@ -1574,7 +1615,7 @@ class _ProductLandingPage extends StatelessWidget {
                     sublabel: '${product.valorFormatado}/mês · Cancele quando quiser',
                     icon: Icons.autorenew_rounded,
                     cor: AppColors.primary,
-                    onTap: onAssinarRecorrente ?? onAssinar ?? () {},
+                    onTap: widget.onAssinarRecorrente ?? widget.onAssinar ?? () {},
                   ),
 
                 if (isRec) const SizedBox(height: 12),
@@ -1589,7 +1630,7 @@ class _ProductLandingPage extends StatelessWidget {
                         ? const Color(0xFF2E7D32)
                         : AppColors.primary,
                     outline: isRec,
-                    onTap: onComprarAvulso ?? onComprar ?? () {},
+                    onTap: widget.onComprarAvulso ?? widget.onComprar ?? () {},
                   ),
 
                 const SizedBox(height: 20),
@@ -1638,10 +1679,6 @@ class _ProductLandingPage extends StatelessWidget {
                       !l.trim().startsWith('✔'))
         .join('\n')
         .trim();
-    // Limita a 280 chars para não ficar enorme no banner
-    if (semBeneficios.length > 280) {
-      return '${semBeneficios.substring(0, 280)}...';
-    }
     return semBeneficios;
   }
 }
