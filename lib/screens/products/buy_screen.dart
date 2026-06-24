@@ -420,27 +420,30 @@ class _BuyScreenState extends State<BuyScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // -- Card compacto do produto + botão voltar ----------------------
-            Row(
+            // -- Card compacto do produto + botão voltar discreto ------------
+            Stack(
               children: [
-                GestureDetector(
-                  onTap: () => setState(() {
-                    _showBanner = true;
-                    _pixResult = null;
-                    _preapprovalResult = null;
-                  }),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
+                _ProductCard(product: product),
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: GestureDetector(
+                    onTap: () => setState(() {
+                      _showBanner = true;
+                      _pixResult = null;
+                      _preapprovalResult = null;
+                    }),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.arrow_back_rounded,
+                          color: Colors.white, size: 18),
                     ),
-                    child: const Icon(Icons.arrow_back_rounded,
-                        color: AppColors.primary, size: 20),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(child: _ProductCard(product: product)),
               ],
             ),
             const SizedBox(height: 24),
