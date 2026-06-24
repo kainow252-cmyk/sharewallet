@@ -389,8 +389,10 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   late TextEditingController _diaCobranca;
   late TextEditingController _beneficios;
   late TextEditingController _categoria;
+  late TextEditingController _imagemUrl;
   late ChargeType _chargeType;
   late bool _ativo;
+  bool _bannerPreviewError = false;
 
   @override
   void initState() {
@@ -407,6 +409,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _beneficios =
         TextEditingController(text: p?.beneficiosList.join('\n') ?? '');
     _categoria = TextEditingController(text: p?.categoria ?? 'geral');
+    _imagemUrl = TextEditingController(text: p?.imagemUrl ?? '');
     _chargeType = p?.chargeType ?? ChargeType.pixRecorrente;
     _ativo = p?.ativo ?? true;
   }
@@ -414,7 +417,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   @override
   void dispose() {
     for (final c in [
-      _nome, _descricao, _valor, _comissao, _diaCobranca, _beneficios, _categoria
+      _nome, _descricao, _valor, _comissao, _diaCobranca, _beneficios, _categoria, _imagemUrl
     ]) {
       c.dispose();
     }
@@ -431,6 +434,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     final beneficiosStr =
         _beneficios.text.trim().replaceAll('\n', '|');
 
+    final imgUrl = _imagemUrl.text.trim();
     final produto = ProductModel(
       id: widget.product?.id ?? 'p_${DateTime.now().millisecondsSinceEpoch}',
       nome: _nome.text.trim(),
@@ -444,6 +448,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
           _chargeType == ChargeType.pixRecorrente ? 'mensal' : null,
       beneficios: beneficiosStr.isEmpty ? null : beneficiosStr,
       ativo: _ativo,
+      imagemUrl: imgUrl.isEmpty ? null : imgUrl,
     );
 
     final ok = await svc.saveProduct(produto, isNew: isNew);
@@ -634,6 +639,105 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       icon: Icons.check_circle_outline_rounded,
                       maxLines: 5,
                       hint: 'Benefício 1\nBenefício 2\n...',
+                    ),
+                    const SizedBox(height: 12),
+
+                    // -- Banner do produto ----------------------------------
+                    const Text('Banner do Produto',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: AppColors.textPrimary)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Cole a URL de uma imagem para exibir no topo da página de venda',
+                      style: TextStyle(fontSize: 11, color: AppColors.textHint),
+                    ),
+                    const SizedBox(height: 10),
+                    // Preview da imagem
+                    if (_imagemUrl.text.trim().isNotEmpty) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: _bannerPreviewError
+                            ? Container(
+                                height: 120,
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
+                                ),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.broken_image_rounded,
+                                          color: AppColors.error, size: 32),
+                                      const SizedBox(height: 6),
+                                      Text('URL inválida ou imagem não carregou',
+                                          style: TextStyle(
+                                              fontSize: 11, color: AppColors.error)),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : Image.network(
+                                _imagemUrl.text.trim(),
+                                height: 150,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) {
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    if (mounted) setState(() => _bannerPreviewError = true);
+                                  });
+                                  return const SizedBox.shrink();
+                                },
+                              ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    // Campo URL
+                    TextFormField(
+                      controller: _imagemUrl,
+                      decoration: InputDecoration(
+                        labelText: 'URL da imagem do banner',
+                        hintText: 'https://exemplo.com/banner.jpg',
+                        prefixIcon: const Icon(Icons.image_rounded,
+                            color: AppColors.textHint, size: 20),
+                        suffixIcon: _imagemUrl.text.trim().isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.close_rounded,
+                                    color: AppColors.textHint, size: 18),
+                                onPressed: () => setState(() {
+                                  _imagemUrl.clear();
+                                  _bannerPreviewError = false;
+                                }),
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: AppColors.surfaceVariant,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                              color: AppColors.cardBorder, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                              color: AppColors.primary, width: 1.5),
+                        ),
+                        labelStyle: const TextStyle(
+                            color: AppColors.textHint, fontSize: 13),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 14),
+                      ),
+                      style: const TextStyle(
+                          color: AppColors.textPrimary, fontSize: 13),
+                      keyboardType: TextInputType.url,
+                      onChanged: (v) => setState(() => _bannerPreviewError = false),
                     ),
                     const SizedBox(height: 12),
 

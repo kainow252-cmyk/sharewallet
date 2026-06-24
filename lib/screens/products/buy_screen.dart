@@ -1422,7 +1422,39 @@ class _ProductLandingPageState extends State<_ProductLandingPage> {
                         ]),
                       ),
                     ]),
-                    const SizedBox(height: 24),
+                    // Banner de imagem do produto (se tiver)
+                    if (product.imagemUrl != null &&
+                        product.imagemUrl!.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network(
+                          product.imagemUrl!,
+                          width: double.infinity,
+                          height: 180,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          loadingBuilder: (ctx, child, progress) {
+                            if (progress == null) return child;
+                            return Container(
+                              height: 180,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white54,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ] else
+                      const SizedBox(height: 24),
 
                     // Ícone + nome + preço
                     Row(
