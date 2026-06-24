@@ -1431,13 +1431,13 @@ class _ProductLandingPageState extends State<_ProductLandingPage> {
                         child: Image.network(
                           product.imagemUrl!,
                           width: double.infinity,
-                          height: 180,
-                          fit: BoxFit.cover,
+                          // sem height fixo → ajusta proporcionalmente
+                          fit: BoxFit.fitWidth,
                           errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                           loadingBuilder: (ctx, child, progress) {
                             if (progress == null) return child;
                             return Container(
-                              height: 180,
+                              height: 160,
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(16),

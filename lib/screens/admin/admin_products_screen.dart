@@ -682,9 +682,9 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                               )
                             : Image.network(
                                 _imagemUrl.text.trim(),
-                                height: 150,
+                                // sem height fixo → proporcional à imagem
                                 width: double.infinity,
-                                fit: BoxFit.cover,
+                                fit: BoxFit.fitWidth,
                                 errorBuilder: (_, __, ___) {
                                   WidgetsBinding.instance.addPostFrameCallback((_) {
                                     if (mounted) setState(() => _bannerPreviewError = true);
