@@ -6,10 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../utils/web_utils.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
 import '../../services/mercadopago_service.dart';
@@ -784,26 +783,18 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     }
   }
 
-  // -- Download genérico via dart:html (Web) -----------------------------------
+  // -- Download genérico (Web usa dart:html, mobile usa url_launcher) ----------
   Future<void> _downloadArquivo({
     required String nomeArquivo,
     required Uint8List bytes,
     required String mimeType,
   }) async {
+    final base64Data = base64Encode(bytes);
+    final dataUri = 'data:$mimeType;base64,$base64Data';
     if (kIsWeb) {
-      final base64Data = base64Encode(bytes);
-      final dataUri = 'data:$mimeType;base64,$base64Data';
-      final anchor = html.AnchorElement(href: dataUri)
-        ..setAttribute('download', nomeArquivo)
-        ..style.display = 'none';
-      html.document.body?.append(anchor);
-      anchor.click();
-      anchor.remove();
+      downloadFileWeb(dataUri, nomeArquivo);
     } else {
-      // Mobile/desktop: abrir em nova janela via data URI
-      final base64Data = base64Encode(bytes);
-      final dataUri = 'data:$mimeType;base64,$base64Data';
-      html.window.open(dataUri, '_blank');
+      openUrlInNewTab(dataUri);
     }
   }
 
@@ -866,7 +857,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
 
       final encoded = base64Encode(utf8.encode(htmlContent));
       final dataUri = 'data:text/html;charset=utf-8;base64,$encoded';
-      html.window.open(dataUri, '_blank');
+      openUrlInNewTab(dataUri);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2153,7 +2144,7 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
   void _abrirCheckout() {
     final url = widget.result.checkoutUrl ?? '';
     if (url.isEmpty) return;
-    html.window.open(url, '_blank');
+    openUrlInNewTab(url);
     setState(() => _checkoutAberto = true);
   }
 

@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
-import 'dart:html' as html;
+
+import 'utils/web_utils.dart';
 
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
@@ -100,8 +100,7 @@ void main() async {
   if (kIsWeb) {
     try {
       // Lê do sessionStorage o valor gravado pelo script no index.html
-      final fragment =
-          html.window.sessionStorage['flutter_initial_route'];
+      final fragment = getSessionStorageValue('flutter_initial_route');
 
       if (fragment != null && fragment.startsWith('/produto/')) {
         final withoutPrefix = fragment.replaceFirst('/produto/', '');
@@ -112,8 +111,7 @@ void main() async {
           initialAffiliateCode = query['ref'] ?? '';
         }
         // Limpa após ler para não reutilizar em reloads futuros
-        html.window.sessionStorage
-            .remove('flutter_initial_route');
+        removeSessionStorageValue('flutter_initial_route');
       }
     } catch (e) {
       debugPrint('[DeepLink] Erro ao ler sessionStorage: $e');

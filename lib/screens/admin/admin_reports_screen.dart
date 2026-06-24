@@ -7,9 +7,7 @@ import '../../models/subscription_model.dart';
 import '../../models/product_model.dart';
 import '../../services/admin_service.dart';
 import '../../theme/app_theme.dart';
-
-// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
-import 'dart:html' as html;
+import '../../utils/web_utils.dart';
 
 /// Tela de Relatórios Admin - exporta CSV / JSON das tabelas D1
 class AdminReportsScreen extends StatefulWidget {
@@ -98,13 +96,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
   void _downloadCsv(String filename, String csv) {
     try {
       final encoded = base64Encode(utf8.encode(csv));
-      final anchor  = html.AnchorElement(
-        href: 'data:text/csv;charset=utf-8;base64,$encoded',
-      )
-        ..setAttribute('download', filename)
-        ..click();
-      html.document.body?.append(anchor);
-      anchor.remove();
+      final dataUri = 'data:text/csv;charset=utf-8;base64,$encoded';
+      downloadFileWeb(dataUri, filename);
     } catch (e) {
       debugPrint('[Reports] Erro download CSV: $e');
     }
@@ -113,13 +106,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
   void _downloadJson(String filename, String jsonData) {
     try {
       final encoded = base64Encode(utf8.encode(jsonData));
-      final anchor  = html.AnchorElement(
-        href: 'data:application/json;charset=utf-8;base64,$encoded',
-      )
-        ..setAttribute('download', filename)
-        ..click();
-      html.document.body?.append(anchor);
-      anchor.remove();
+      final dataUri = 'data:application/json;charset=utf-8;base64,$encoded';
+      downloadFileWeb(dataUri, filename);
     } catch (e) {
       debugPrint('[Reports] Erro download JSON: $e');
     }
@@ -161,7 +149,7 @@ $htmlTable
       // Abrir como data URI - evita problemas com document.write e popups
       final encoded = base64Encode(utf8.encode(htmlContent));
       final dataUri = 'data:text/html;charset=utf-8;base64,$encoded';
-      html.window.open(dataUri, '_blank');
+      openUrlInNewTab(dataUri);
     } catch (e) {
       debugPrint('[Reports] Erro PDF: \$e');
       ScaffoldMessenger.of(context).showSnackBar(

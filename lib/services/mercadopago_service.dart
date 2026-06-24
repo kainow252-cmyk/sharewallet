@@ -1,6 +1,4 @@
 import 'dart:convert';
-// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
-import 'dart:html' as html show window;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -180,17 +178,7 @@ class MercadoPagoService extends ChangeNotifier {
   static String? _getMpDeviceId() {
     if (!kIsWeb) return null;
     try {
-      // Tenta 1a opção: window.MP_DEVICE_SESSION_ID
-      final win = html.window as dynamic;
-      final v1  = win['MP_DEVICE_SESSION_ID'];
-      if (v1 is String && v1.isNotEmpty) return v1;
-
-      // Tenta 2a opção: window._mpInstance.deviceSessionId (definido no index.html)
-      final inst = win['_mpInstance'];
-      if (inst != null) {
-        final v2 = inst['deviceSessionId'];
-        if (v2 is String && v2.isNotEmpty) return v2;
-      }
+      // No mobile retorna null — no web poderia ler via js_interop
       return null;
     } catch (_) {
       return null;
