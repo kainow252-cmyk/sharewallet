@@ -128,7 +128,7 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen>
             paymentId:        widget.charge.saleId,
             productName:      widget.charge.productName,
             productDescricao: widget.productDescricao ?? '',
-            valor:            widget.valorProduto ?? widget.charge.totalValueInReais,
+            valor:            widget.valorProduto ?? widget.charge.totalInReais,
             comissao:         widget.comissaoProduto ?? widget.charge.commissionInReais,
             affiliateCode:    widget.affiliateCode ?? '',
             clienteNome:      widget.clienteNome ?? '',
@@ -283,7 +283,7 @@ class _ProductHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'R\$ ${charge.totalValueInReais.toStringAsFixed(2).replaceAll('.',',')}',
+                  'R\$ ${charge.totalInReais.toStringAsFixed(2).replaceAll('.',',')}',
                   style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,

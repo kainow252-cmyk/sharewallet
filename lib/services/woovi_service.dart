@@ -1,127 +1,199 @@
-import 'api_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-/// Serviço Flutter para integração Woovi via backend NestJS.
+/// Serviço Flutter para integração Woovi.
 ///
-///   IMPORTANTE: O app Flutter NUNCA fala diretamente com a Woovi API.
-///    Todas as chamadas passam pelo backend NestJS que detém o AppID.
+/// IMPORTANTE: O Flutter NUNCA fala diretamente com a Woovi API.
+/// Todas as chamadas passam pelo Cloudflare Worker (api.sharewallet.com.br)
+/// que detém o WOOVI_APP_ID em variável de ambiente segura.
 ///
-/// Fluxo:
-///   Flutter -> POST /api/sales/charge -> NestJS -> Woovi API
-///   Woovi Webhook -> NestJS -> atualiza banco -> Flutter polling/push
+/// Fluxo Pix Avulso:
+///   Flutter → POST /api/charge/woovi → Worker → Woovi API
+///   Woovi Webhook → Worker → D1 atualiza venda → Flutter polling
+///
+/// Fluxo Pix Automático (Assinatura):
+///   Flutter → POST /api/subscription/woovi → Worker → Woovi API
+///   Woovi Webhook PIX_AUTOMATIC_APPROVED → Worker → D1 atualiza subconta
+///   Woovi Webhook PIX_AUTOMATIC_COBR_COMPLETED → Worker → D1 credita comissão
+
 class WooviService {
+  static const String _base = 'https://api.sharewallet.com.br';
 
-  // --- Criar Cobrança PIX ----------------------------------------------------
+  // ── Criar Cobrança Pix Avulso ───────────────────────────────────────────
 
-  /// Cria uma cobrança PIX com split automático para o afiliado.
-  /// Retorna o QR Code para exibir na tela de pagamento.
+  /// Cria uma cobrança Pix única com split automático para a subconta do afiliado.
+  /// Retorna QR Code + brCode para exibir na tela de pagamento.
   static Future<ChargeResult?> createCharge({
+    required String correlationID,
+    required int valueCents,          // valor total em centavos
+    required String userId,           // uid Firebase do afiliado
     required String affiliateCode,
     required String productId,
-    required String customerName,
-    required String customerEmail,
-    required String customerCpf,
+    required String productNome,
+    int commissionCents = 0,          // comissão do afiliado em centavos
+    String? affiliatePixKey,          // chave pix da subconta do afiliado
+    String? customerName,
+    String? customerEmail,
+    String? customerCpf,
     String? customerPhone,
+    String? comment,
   }) async {
-    final response = await ApiService.post('/sales/charge', {
-      'affiliateCode': affiliateCode,
-      'productId': productId,
-      'customerName': customerName,
-      'customerEmail': customerEmail,
-      'customerCpf': customerCpf,
-      if (customerPhone != null) 'customerPhone': customerPhone,
-    });
+    try {
+      final res = await http.post(
+        Uri.parse('$_base/api/charge/woovi'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'correlationID':    correlationID,
+          'value':            valueCents,
+          'userId':           userId,
+          'affiliateCode':    affiliateCode,
+          'productId':        productId,
+          'productNome':      productNome,
+          'comissaoCentavos': commissionCents,
+          if (affiliatePixKey != null) 'affiliatePixKey': affiliatePixKey,
+          if (customerName  != null) 'customerName':  customerName,
+          if (customerEmail != null) 'customerEmail': customerEmail,
+          if (customerCpf   != null) 'customerCpf':   customerCpf,
+          if (customerPhone != null) 'customerPhone': customerPhone,
+          if (comment       != null) 'comment':       comment,
+        }),
+      ).timeout(const Duration(seconds: 30));
 
-    if (response.success && response.data != null) {
-      return ChargeResult.fromJson(response.data);
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (kDebugMode) debugPrint('[WooviService] createCharge ${res.statusCode}: $data');
+
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        return ChargeResult.fromJson(data);
+      }
+      if (kDebugMode) debugPrint('[WooviService] Erro charge: ${data['error']}');
+      return null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[WooviService] createCharge exception: $e');
+      return null;
     }
-    return null;
   }
 
-  // --- Polling de status do pagamento ---------------------------------------
+  // ── Criar Assinatura Pix Automático ────────────────────────────────────
 
-  /// Consulta o status de uma venda (polling enquanto exibe o QR Code).
-  /// Status: PENDING | PAID | EXPIRED
+  /// Cria assinatura recorrente via Woovi Pix Automático (Banco Central).
+  /// Retorna QR Code + paymentLinkUrl para o cliente autorizar a recorrência.
+  /// Jornada 3: PAYMENT_ON_APPROVAL — cliente paga 1ª parcela + autoriza futuras.
+  static Future<SubscriptionResult?> createSubscription({
+    required String correlationID,
+    required int valueCents,          // valor mensal em centavos
+    required String userId,
+    required String affiliateCode,
+    required String productId,
+    required String productNome,
+    int commissionCents = 0,
+    int? dayGenerateCharge,           // dia do mês para cobrar (padrão: hoje)
+    // Dados do cliente (obrigatório para Pix Automático)
+    required String customerName,
+    required String customerCpf,      // CPF sem formatação
+    required String customerEmail,
+    String? customerPhone,
+    // Endereço do cliente (obrigatório pelo BC)
+    required String zipcode,
+    required String street,
+    required String number,
+    required String neighborhood,
+    required String city,
+    required String state,
+    String complement = '',
+    String? comment,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_base/api/subscription/woovi'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'correlationID':    correlationID,
+          'value':            valueCents,
+          'userId':           userId,
+          'affiliateCode':    affiliateCode,
+          'productId':        productId,
+          'productNome':      productNome,
+          'comissaoCentavos': commissionCents,
+          if (dayGenerateCharge != null) 'dayGenerateCharge': dayGenerateCharge,
+          if (comment != null) 'comment': comment,
+          'customer': {
+            'name':  customerName,
+            'taxID': customerCpf.replaceAll(RegExp(r'\D'), ''),
+            'email': customerEmail,
+            if (customerPhone != null)
+              'phone': customerPhone.replaceAll(RegExp(r'\D'), ''),
+            'address': {
+              'zipcode':       zipcode,
+              'street':        street,
+              'number':        number,
+              'neighborhood':  neighborhood,
+              'city':          city,
+              'state':         state,
+              'complement':    complement,
+            },
+          },
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (kDebugMode) debugPrint('[WooviService] createSubscription ${res.statusCode}: $data');
+
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        return SubscriptionResult.fromJson(data);
+      }
+      if (kDebugMode) debugPrint('[WooviService] Erro subscription: ${data['error']}');
+      return null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[WooviService] createSubscription exception: $e');
+      return null;
+    }
+  }
+
+  // ── Polling status da venda ────────────────────────────────────────────
+
+  /// Consulta o status de uma venda enquanto aguarda o pagamento do QR Code.
+  /// Status: 'pendente' | 'aprovado' | 'expirado'
   static Future<String> getSaleStatus(String saleId) async {
-    final response = await ApiService.get('/sales/$saleId/status');
-    if (response.success) {
-      return response.data['status'] as String? ?? 'PENDING';
+    try {
+      final res = await http.get(
+        Uri.parse('$_base/api/sales/$saleId/status'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 15));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        return data['status'] as String? ?? 'pendente';
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[WooviService] getSaleStatus error: $e');
     }
-    return 'PENDING';
+    return 'pendente';
   }
 
-  // --- Solicitar Saque -------------------------------------------------------
-
-  /// Solicita o saque integral do saldo disponível.
-  /// O backend chama Woovi -> PIX enviado para a chave cadastrada.
-  static Future<WithdrawResult> requestWithdraw() async {
-    final response = await ApiService.post('/withdrawals/request', {});
-
-    if (response.success) {
-      return WithdrawResult(
-        success: true,
-        message: response.data['message'] ?? 'Saque em processamento!',
-        value: (response.data['valueInReais'] as num?)?.toDouble() ?? 0,
-        pixKey: response.data['pixKey'] as String?,
-      );
-    }
-
-    return WithdrawResult(
-      success: false,
-      message: response.errorMessage ?? 'Erro ao solicitar saque',
-    );
-  }
-
-  // --- Atualizar Chave PIX ---------------------------------------------------
-
-  /// Atualiza a chave PIX do afiliado para recebimento de comissões.
-  static Future<bool> updatePixKey({
-    required String pixKey,
-    required String pixKeyType,
-  }) async {
-    final response = await ApiService.put('/affiliates/pix-key', {
-      'pixKey': pixKey,
-      'pixKeyType': pixKeyType,
-    });
-    return response.success;
-  }
-
-  // --- Sincronizar Saldo com Woovi ------------------------------------------
-
-  /// Consulta o saldo real na Woovi e sincroniza com o banco local.
-  static Future<double?> syncBalance() async {
-    final response = await ApiService.get('/affiliates/balance/sync');
-    if (response.success && response.data['synced'] == true) {
-      return (response.data['balanceInReais'] as num?)?.toDouble();
-    }
-    return null;
-  }
-
-  // --- Dashboard do Afiliado ------------------------------------------------
-
-  /// Carrega dados do dashboard: saldo, estatísticas, etc.
-  static Future<Map<String, dynamic>?> getDashboard() async {
-    final response = await ApiService.get('/affiliates/dashboard');
-    if (response.success) {
-      return response.data as Map<String, dynamic>;
-    }
-    return null;
-  }
+  // ── Solicitar Saque (delegado ao WalletService) ────────────────────────
+  // O saque é iniciado pelo WalletService.solicitarSaque()
+  // que chama POST /api/withdrawals/:id/pay no Worker,
+  // que por sua vez chama Woovi /api/v1/subaccount/{pixKey}/withdraw.
+  // Veja: wallet_service.dart → _enviarPixWoovi()
 }
 
-// --- Modelos de Resposta ------------------------------------------------------
+// ── Modelos de Resposta ───────────────────────────────────────────────────────
 
 class ChargeResult {
   final String saleId;
-  final String brCode;         // Código PIX copia-e-cola
-  final String qrCodeImage;    // URL da imagem do QR Code
-  final String paymentLinkUrl; // Link de pagamento Woovi
-  final String expiresAt;      // Data de expiração ISO 8601
-  final int totalValue;        // Valor total em centavos
-  final int commissionValue;   // Comissão do afiliado em centavos
+  final String correlationID;
+  final String brCode;          // Copia-e-cola Pix
+  final String qrCodeImage;     // URL da imagem do QR Code
+  final String paymentLinkUrl;  // Link de pagamento Woovi
+  final String expiresAt;       // ISO 8601
+  final int totalValue;         // centavos
+  final int commissionValue;    // centavos (comissão afiliado)
   final String productName;
 
-  ChargeResult({
+  const ChargeResult({
     required this.saleId,
+    required this.correlationID,
     required this.brCode,
     required this.qrCodeImage,
     required this.paymentLinkUrl,
@@ -131,41 +203,57 @@ class ChargeResult {
     required this.productName,
   });
 
-  factory ChargeResult.fromJson(Map<String, dynamic> json) {
-    return ChargeResult(
-      saleId: json['saleId'] as String? ?? '',
-      brCode: json['brCode'] as String? ?? '',
-      qrCodeImage: json['qrCodeImage'] as String? ?? '',
-      paymentLinkUrl: json['paymentLinkUrl'] as String? ?? '',
-      expiresAt: json['expiresAt'] as String? ?? '',
-      totalValue: json['totalValue'] as int? ?? 0,
-      commissionValue: json['commissionValue'] as int? ?? 0,
-      productName: json['productName'] as String? ?? '',
-    );
-  }
+  factory ChargeResult.fromJson(Map<String, dynamic> j) => ChargeResult(
+    saleId:          j['saleId']         as String? ?? '',
+    correlationID:   j['correlationID']  as String? ?? '',
+    brCode:          j['brCode']         as String? ?? '',
+    qrCodeImage:     j['qrCodeImage']    as String? ?? '',
+    paymentLinkUrl:  j['paymentLinkUrl'] as String? ?? '',
+    expiresAt:       j['expiresAt']      as String? ?? '',
+    totalValue:      j['totalValue']     as int?    ?? 0,
+    commissionValue: j['commissionValue']as int?    ?? 0,
+    productName:     j['productName']    as String? ?? '',
+  );
 
-  double get totalValueInReais => totalValue / 100;
+  double get totalInReais      => totalValue / 100;
   double get commissionInReais => commissionValue / 100;
 
   DateTime get expiresAtDate {
-    try {
-      return DateTime.parse(expiresAt).toLocal();
-    } catch (_) {
-      return DateTime.now().add(const Duration(hours: 1));
-    }
+    try { return DateTime.parse(expiresAt).toLocal(); }
+    catch (_) { return DateTime.now().add(const Duration(hours: 1)); }
   }
+
+  bool get hasQrCode => brCode.isNotEmpty || qrCodeImage.isNotEmpty;
 }
 
-class WithdrawResult {
-  final bool success;
-  final String message;
-  final double value;
-  final String? pixKey;
+class SubscriptionResult {
+  final String subscriptionId;         // ID local (D1)
+  final String wooviSubscriptionId;    // recurrencyId da Woovi
+  final String brCode;                 // QR Code EMV para o cliente escanear
+  final String paymentLinkUrl;         // Link de pagamento Woovi
+  final String status;                 // CREATED | APPROVED | REJECTED
+  final String globalID;
 
-  WithdrawResult({
-    required this.success,
-    required this.message,
-    this.value = 0,
-    this.pixKey,
+  const SubscriptionResult({
+    required this.subscriptionId,
+    required this.wooviSubscriptionId,
+    required this.brCode,
+    required this.paymentLinkUrl,
+    required this.status,
+    required this.globalID,
   });
+
+  factory SubscriptionResult.fromJson(Map<String, dynamic> j) => SubscriptionResult(
+    subscriptionId:       j['subscriptionId']      as String? ?? '',
+    wooviSubscriptionId:  j['wooviSubscriptionId'] as String? ?? '',
+    brCode:               j['brCode']              as String? ?? '',
+    paymentLinkUrl:       j['paymentLinkUrl']       as String? ?? '',
+    status:               j['status']              as String? ?? 'CREATED',
+    globalID:             j['globalID']            as String? ?? '',
+  );
+
+  bool get hasQrCode => brCode.isNotEmpty;
+  bool get isApproved => status == 'APPROVED';
 }
+
+// WithdrawResult continua sendo definido em subscription_service.dart

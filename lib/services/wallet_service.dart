@@ -5,7 +5,6 @@ import 'dart:convert';
 import '../models/sale_model.dart';
 import '../models/withdraw_model.dart';
 import 'cf_api_service.dart';
-import 'mercadopago_service.dart';
 import 'subscription_service.dart'; // WithdrawResult
 
 class WalletService extends ChangeNotifier {
@@ -85,9 +84,9 @@ class WalletService extends ChangeNotifier {
       _withdraws = wdsList.map((r) => WithdrawModel.fromD1(r as Map<String, dynamic>)).toList();
 
       if (kDebugMode) {
-        debugPrint('[WalletService] D1  -  uid=$uid'
-            'saldo=R\$$_saldoCarteira'
-            'wallet=${wallet != null}'
+        debugPrint('[WalletService] D1  -  uid=$uid '
+            'saldo=R\$$_saldoCarteira '
+            'wallet=${wallet != null} '
             'sales=${_sales.length} withdrawals=${_withdraws.length}');
       }
     } catch (e) {
@@ -99,7 +98,7 @@ class WalletService extends ChangeNotifier {
   }
 
 
-  // -- Solicitar Saque via D1 + MercadoPago automático -----------------------
+  // -- Solicitar Saque via Woovi (subconta → Pix para chave do afiliado) -----
   Future<WithdrawResult> solicitarSaque({
     required double valor,
     required String pixKey,
@@ -139,44 +138,35 @@ class WalletService extends ChangeNotifier {
 
       final withdrawalId = result['id']?.toString() ?? '';
 
-      // 2. Dispara PIX via MercadoPago automaticamente
-      final mpResult = await _enviarPixMercadoPago(
-        withdrawalId: withdrawalId,
-        valor: valor,
-        pixKey: pixKey,
-        pixKeyType: pixKeyType ?? 'EMAIL',
-        affiliateNome: affiliateNome,
-      );
+      // 2. Dispara Pix Out via Woovi (Worker chama /api/v1/subaccount/{pixKey}/withdraw)
+      final wooviResult = await _enviarPixWoovi(withdrawalId: withdrawalId, valor: valor);
 
-      if (mpResult.success) {
-        // Worker já atualizou D1 para 'aprovado' internamente
-        // Só precisamos atualizar o estado local Flutter
+      if (wooviResult.success) {
         _saldoCarteira -= valor;
         _totalSacado += valor;
         final wd = WithdrawModel.fromD1({
           ...result,
-          'status': 'aprovado',
-          'tx_id': mpResult.txId,
+          'status': wooviResult.status == 'processando' ? 'processando' : 'aprovado',
+          'tx_id': wooviResult.txId,
         });
         _withdraws.insert(0, wd);
         _isLoading = false;
         notifyListeners();
         return WithdrawResult(
           success: true,
-          message: 'PIX enviado com sucesso!',
+          message: 'PIX enviado! Em instantes o valor chegará na sua conta.',
           value: valor,
           pixKey: pixKey,
         );
       } else {
-        // MP falhou: saque ficou 'pendente' no D1 (Worker já registrou)
-        // Reflete no estado local
+        // Woovi falhou: saque fica pendente, admin pode reprocessar
         _saldoCarteira -= valor;
         _saldoPendente += valor;
         final wd = WithdrawModel.fromD1(result);
         _withdraws.insert(0, wd);
         _isLoading = false;
         notifyListeners();
-        if (kDebugMode) debugPrint('[WalletService] MP falhou, saque pendente: ${mpResult.error}');
+        if (kDebugMode) debugPrint('[WalletService] Woovi saque falhou: ${wooviResult.error}');
         return WithdrawResult(
           success: true,
           message: 'Saque solicitado! Será processado em até 1 hora útil.',
@@ -193,103 +183,38 @@ class WalletService extends ChangeNotifier {
     return WithdrawResult(success: false, message: 'Erro ao solicitar saque. Tente novamente.');
   }
 
-  // -- Enviar PIX via MercadoPago (delega ao Worker para evitar CORS) --------
-  Future<_MpPixResult> _enviarPixMercadoPago({
+  // -- Chama o Worker que processa o Pix Out via Woovi ----------------------
+  Future<_WooviPixResult> _enviarPixWoovi({
     required String withdrawalId,
     required double valor,
-    required String pixKey,
-    required String pixKeyType,
-    required String affiliateNome,
-  }) async {
-    try {
-      final mpService = MercadoPagoService();
-      await mpService.loadConfig();
-      final creds = mpService.config.active;
-
-      if (creds.isEmpty) {
-        return _MpPixResult(success: false, error: 'Credenciais MP não configuradas');
-      }
-
-      // Mapeia tipo para formato MP
-      String mpKeyType;
-      switch (pixKeyType.toUpperCase()) {
-        case 'CPF':       mpKeyType = 'cpf';        break;
-        case 'EMAIL':     mpKeyType = 'email';       break;
-        case 'PHONE':     mpKeyType = 'phone';       break;
-        case 'ALEATORIA': mpKeyType = 'random_key';  break;
-        default:          mpKeyType = 'email';       break;
-      }
-
-      return await _enviarPixViaWorker(
-        withdrawalId: withdrawalId,
-        valor: valor,
-        pixKey: pixKey,
-        pixKeyType: mpKeyType,
-        affiliateNome: affiliateNome,
-        accessToken: creds.accessToken,
-      );
-    } catch (e) {
-      if (kDebugMode) debugPrint('[WalletService] Erro MP PIX: $e');
-      return _MpPixResult(success: false, error: e.toString());
-    }
-  }
-
-  // -- Chama o Worker que processa o PIX server-side -------------------------
-  Future<_MpPixResult> _enviarPixViaWorker({
-    required String withdrawalId,
-    required double valor,
-    required String pixKey,
-    required String pixKeyType,
-    required String affiliateNome,
-    required String accessToken,
   }) async {
     try {
       final uri = Uri.parse(
           'https://api.sharewallet.com.br/api/withdrawals/$withdrawalId/pay');
       final res = await http.post(
         uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-MP-Token': accessToken,
-        },
-        body: jsonEncode({
-          'valor': valor,
-          'pixKey': pixKey,
-          'pixKeyType': pixKeyType,
-          'affiliateNome': affiliateNome,
-        }),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({}), // Worker usa apenas o withdrawalId — pixKey vem do D1
       ).timeout(const Duration(seconds: 30));
 
       final body = jsonDecode(res.body) as Map<String, dynamic>;
-      if (kDebugMode) debugPrint('[WalletService] Worker /pay response (${res.statusCode}): $body');
+      if (kDebugMode) debugPrint('[WalletService] Woovi /pay (${res.statusCode}): $body');
 
-      // HTTP 200 + success:true -> PIX enviado com sucesso
-      if (res.statusCode == 200 && body['success'] == true) {
-        final result = body['result'] as Map<String, dynamic>? ?? {};
-        final txId = result['tx_id']?.toString()
-            ?? result['id']?.toString()
-            ?? withdrawalId;
-        return _MpPixResult(success: true, txId: txId);
-      }
-
-      // HTTP 202 + pending:true -> MP falhou mas saque registrado (pendente manual)
-      if (res.statusCode == 202 && body['pending'] == true) {
-        if (kDebugMode) debugPrint('[WalletService] Saque pendente manual: ${body['error']}');
-        return _MpPixResult(
-          success: false,
-          pending: true,
-          error: body['error']?.toString() ?? 'Processamento pendente',
+      if (res.statusCode == 200 && body['status'] != null) {
+        return _WooviPixResult(
+          success: true,
+          status: body['status'] as String? ?? 'aprovado',
+          txId: body['id']?.toString() ?? withdrawalId,
         );
       }
 
-      // Outros erros
-      return _MpPixResult(
+      return _WooviPixResult(
         success: false,
-        error: body['error']?.toString() ?? 'Erro no Worker (${res.statusCode})',
+        error: body['error']?.toString() ?? 'Erro Woovi (${res.statusCode})',
       );
     } catch (e) {
-      if (kDebugMode) debugPrint('[WalletService] Erro Worker /pay: $e');
-      return _MpPixResult(success: false, error: e.toString());
+      if (kDebugMode) debugPrint('[WalletService] Erro Woovi /pay: $e');
+      return _WooviPixResult(success: false, error: e.toString());
     }
   }
 
@@ -339,16 +264,17 @@ class WalletService extends ChangeNotifier {
   }
 }
 
-// -- Resultado interno do PIX MercadoPago -------------------------------------
-class _MpPixResult {
+// -- Resultado interno do Pix Woovi ------------------------------------------
+class _WooviPixResult {
   final bool success;
-  final bool pending; // true = saque registrado mas MP falhou -> admin processa
+  final String status;  // 'aprovado' | 'processando'
   final String? txId;
   final String? error;
-  const _MpPixResult({
+  const _WooviPixResult({
     required this.success,
-    this.pending = false,
+    this.status = 'aprovado',
     this.txId,
     this.error,
   });
 }
+
