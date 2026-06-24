@@ -703,7 +703,7 @@ class _AutoFillBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primeiroNome = nome.split('').first;
+    final primeiroNome = nome.trim().split(' ').first;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -954,7 +954,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
   @override
   Widget build(BuildContext context) {
     final primeiroNome = widget.clienteNome.isNotEmpty
-        ? widget.clienteNome.split('').first : 'Cliente';
+        ? widget.clienteNome.trim().split(' ').first : 'Cliente';
 
     return Scaffold(
       backgroundColor: AppColors.background,
