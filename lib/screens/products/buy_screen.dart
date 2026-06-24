@@ -89,6 +89,10 @@ class _BuyScreenState extends State<BuyScreen> {
   // -- Controle de tela de parabéns -----------------------------------------
   bool _showSuccessScreen = false;
 
+  // -- Controle de banner de produto (landing) --------------------------------
+  // true = mostra landing page com botões; false = mostra formulário de compra
+  bool _showBanner = true;
+
   @override
   void initState() {
     super.initState();
@@ -284,7 +288,7 @@ class _BuyScreenState extends State<BuyScreen> {
     final result = await mp.criarPreapproval(
       produtoId:        _product!.id,
       produtoNome:      _product!.nome,
-      produtoDescricao: _product!.descricao ?? _product!.nome,
+      produtoDescricao: _product!.descricao.isNotEmpty ? _product!.descricao : _product!.nome,
       valor:            _product!.valor,
       affiliateId:      widget.affiliateCode,
       affiliateCode:    widget.affiliateCode,
@@ -388,6 +392,27 @@ class _BuyScreenState extends State<BuyScreen> {
 
   Widget _buildBody() {
     final product = _product!;
+
+    // -- Banner de produto (landing page) ------------------------------------
+    if (_showBanner) {
+      return _ProductLandingPage(
+        product: product,
+        onAssinar: product.isPixRecorrente ? () {
+          setState(() { _showBanner = false; });
+        } : null,
+        onComprar: product.isPixAvulso ? () {
+          setState(() { _showBanner = false; });
+        } : null,
+        // Produto que tem os dois tipos de cobrança
+        onAssinarRecorrente: product.isPixRecorrente ? () {
+          setState(() { _showBanner = false; });
+        } : null,
+        onComprarAvulso: product.isPixAvulso ? () {
+          setState(() { _showBanner = false; });
+        } : null,
+      );
+    }
+
     return SingleChildScrollView(
       controller: _scrollController,
       padding: const EdgeInsets.all(20),
@@ -396,8 +421,29 @@ class _BuyScreenState extends State<BuyScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // -- Card do produto ----------------------------------------------
-            _ProductCard(product: product),
+            // -- Card compacto do produto + botão voltar ----------------------
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _showBanner = true;
+                    _pixResult = null;
+                    _preapprovalResult = null;
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.arrow_back_rounded,
+                        color: AppColors.primary, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: _ProductCard(product: product)),
+              ],
+            ),
             const SizedBox(height: 24),
 
             // -- Banner auto-fill se há dados salvos --------------------------
@@ -1298,6 +1344,420 @@ class _DownloadButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// -- Landing page p\u00fablica do produto (banner de convers\u00e3o) ----------------------
+class _ProductLandingPage extends StatelessWidget {
+  final ProductModel product;
+  final VoidCallback? onAssinar;
+  final VoidCallback? onComprar;
+  final VoidCallback? onAssinarRecorrente;
+  final VoidCallback? onComprarAvulso;
+
+  const _ProductLandingPage({
+    required this.product,
+    this.onAssinar,
+    this.onComprar,
+    this.onAssinarRecorrente,
+    this.onComprarAvulso,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isRec = product.isPixRecorrente;
+    final isAv  = product.isPixAvulso;
+
+    // Benefícios extraídos da descrição (linhas com bullet • ou -)
+    final beneficios = _extrairBeneficios(product.descricao);
+    final descricaoLimpa = _descricaoSemBeneficios(product.descricao);
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // ── Hero banner do produto ──────────────────────────────────────
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: AppColors.darkGreenGradient,
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Logo topo
+                    Row(children: [
+                      const Icon(Icons.account_balance_wallet_rounded,
+                          color: Colors.white70, size: 18),
+                      const SizedBox(width: 6),
+                      const Text('ShareWallet',
+                          style: TextStyle(color: Colors.white70,
+                              fontSize: 13, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.lock_rounded,
+                              color: Colors.white, size: 12),
+                          const SizedBox(width: 4),
+                          const Text('Pix Seguro',
+                              style: TextStyle(color: Colors.white,
+                                  fontSize: 11, fontWeight: FontWeight.w600)),
+                        ]),
+                      ),
+                    ]),
+                    const SizedBox(height: 24),
+
+                    // Ícone + nome + preço
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(product.chargeTypeIcon,
+                              color: Colors.white, size: 32),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(product.nome,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
+                                      height: 1.2)),
+                              const SizedBox(height: 6),
+                              Row(children: [
+                                Text(product.valorFormatado,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w900)),
+                                if (isRec)
+                                  const Text('/mês',
+                                      style: TextStyle(
+                                          color: Colors.white60,
+                                          fontSize: 14)),
+                              ]),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(product.chargeTypeLabel,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Descrição
+                    if (descricaoLimpa.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      Text(descricaoLimpa,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              height: 1.6,
+                              fontWeight: FontWeight.w400)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Benefícios ─────────────────────────────────────────────────
+          if (beneficios.isNotEmpty)
+            Container(
+              color: AppColors.surface,
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.star_rounded,
+                          color: AppColors.primary, size: 16),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('O que está incluído',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: AppColors.textPrimary)),
+                  ]),
+                  const SizedBox(height: 12),
+                  ...beneficios.map((b) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.check_circle_rounded,
+                            color: AppColors.primary, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(b,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textPrimary,
+                                height: 1.4))),
+                      ],
+                    ),
+                  )),
+                ],
+              ),
+            ),
+
+          // ── Selos de confiança ──────────────────────────────────────────
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _SeloConfianca(
+                    icon: Icons.pix_rounded,
+                    label: 'Pix Oficial',
+                    cor: const Color(0xFF009EE3)),
+                const SizedBox(width: 20),
+                _SeloConfianca(
+                    icon: Icons.lock_rounded,
+                    label: '100% Seguro',
+                    cor: AppColors.primary),
+                const SizedBox(width: 20),
+                _SeloConfianca(
+                    icon: Icons.flash_on_rounded,
+                    label: 'Imediato',
+                    cor: const Color(0xFFF57C00)),
+              ],
+            ),
+          ),
+
+          // ── Botões de ação ──────────────────────────────────────────────
+          Container(
+            color: AppColors.background,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                // Botão Assinar (Pix Recorrente)
+                if (isRec)
+                  _BotaoAcao(
+                    label: 'Assinar agora',
+                    sublabel: '${product.valorFormatado}/mês · Cancele quando quiser',
+                    icon: Icons.autorenew_rounded,
+                    cor: AppColors.primary,
+                    onTap: onAssinarRecorrente ?? onAssinar ?? () {},
+                  ),
+
+                if (isRec) const SizedBox(height: 12),
+
+                // Botão Comprar (Pix Único)
+                if (isAv)
+                  _BotaoAcao(
+                    label: 'Comprar agora',
+                    sublabel: '${product.valorFormatado} · Pagamento único via Pix',
+                    icon: Icons.qr_code_rounded,
+                    cor: isRec
+                        ? const Color(0xFF2E7D32)
+                        : AppColors.primary,
+                    outline: isRec,
+                    onTap: onComprarAvulso ?? onComprar ?? () {},
+                  ),
+
+                const SizedBox(height: 20),
+
+                // Rodapé de segurança
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.security_rounded,
+                        size: 14, color: AppColors.textHint),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Pagamento processado via Pix • Dados protegidos',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textHint.withValues(alpha: 0.8)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _extrairBeneficios(String descricao) {
+    final linhas = descricao.split('\n');
+    return linhas
+        .where((l) => l.trim().startsWith('•') ||
+                      l.trim().startsWith('-') ||
+                      l.trim().startsWith('✅') ||
+                      l.trim().startsWith('✔'))
+        .map((l) => l.trim().replaceAll(RegExp(r'^[•\-✅✔]\s*'), '').trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+  }
+
+  String _descricaoSemBeneficios(String descricao) {
+    final linhas = descricao.split('\n');
+    final semBeneficios = linhas
+        .where((l) => !l.trim().startsWith('•') &&
+                      !l.trim().startsWith('-') &&
+                      !l.trim().startsWith('✅') &&
+                      !l.trim().startsWith('✔'))
+        .join('\n')
+        .trim();
+    // Limita a 280 chars para não ficar enorme no banner
+    if (semBeneficios.length > 280) {
+      return '${semBeneficios.substring(0, 280)}...';
+    }
+    return semBeneficios;
+  }
+}
+
+// -- Botão de ação do banner --------------------------------------------------
+class _BotaoAcao extends StatelessWidget {
+  final String label;
+  final String sublabel;
+  final IconData icon;
+  final Color cor;
+  final bool outline;
+  final VoidCallback onTap;
+
+  const _BotaoAcao({
+    required this.label,
+    required this.sublabel,
+    required this.icon,
+    required this.cor,
+    required this.onTap,
+    this.outline = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          decoration: BoxDecoration(
+            color: outline ? Colors.transparent : cor,
+            border: outline
+                ? Border.all(color: cor, width: 2)
+                : null,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: outline ? null : [
+              BoxShadow(
+                color: cor.withValues(alpha: 0.35),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: outline
+                      ? cor.withValues(alpha: 0.1)
+                      : Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon,
+                    color: outline ? cor : Colors.white, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: TextStyle(
+                            color: outline ? cor : Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 2),
+                    Text(sublabel,
+                        style: TextStyle(
+                            color: outline
+                                ? cor.withValues(alpha: 0.7)
+                                : Colors.white.withValues(alpha: 0.8),
+                            fontSize: 12)),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  color: outline ? cor : Colors.white, size: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// -- Selo de confiança --------------------------------------------------------
+class _SeloConfianca extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color cor;
+  const _SeloConfianca(
+      {required this.icon, required this.label, required this.cor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: cor.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: cor, size: 18),
+        ),
+        const SizedBox(height: 4),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10,
+                color: cor,
+                fontWeight: FontWeight.w600)),
+      ],
     );
   }
 }
