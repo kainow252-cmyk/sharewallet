@@ -244,7 +244,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Pagamentos processados via Mercado Pago',
+                      'Pagamentos processados via Woovi',
                       style: TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w600,
@@ -549,7 +549,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   color: AppColors.primary, size: 16),
                               SizedBox(width: 6),
                               Text(
-                                'Pagamentos seguros via Mercado Pago',
+                                'Pagamentos seguros via Woovi PIX',
                                 style: TextStyle(
                                     fontSize: 12,
                                     color: AppColors.textSecondary),

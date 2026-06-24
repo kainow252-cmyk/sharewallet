@@ -7,7 +7,8 @@ import 'admin_products_screen.dart';
 import 'admin_affiliates_screen.dart';
 import 'admin_subscriptions_screen.dart';
 import 'admin_withdrawals_screen.dart';
-import 'admin_mp_settings_screen.dart';
+import '../../services/woovi_admin_service.dart';
+import 'admin_woovi_settings_screen.dart';
 import 'admin_sales_screen.dart';
 import 'admin_reports_screen.dart';
 import 'admin_reset_screen.dart';
@@ -42,7 +43,10 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     const AdminSubscriptionsScreen(),
     const AdminWithdrawalsScreen(),
     const AdminSalesScreen(),
-    const AdminMpSettingsScreen(),
+    ChangeNotifierProvider(
+      create: (_) => WooviAdminService(),
+      child: const AdminWooviSettingsScreen(),
+    ),
     const AdminReportsScreen(),
     const AdminResetScreen(),
   ];
