@@ -1369,8 +1369,6 @@ class _ProductLandingPage extends StatefulWidget {
 }
 
 class _ProductLandingPageState extends State<_ProductLandingPage> {
-  bool _descExpandida = false;
-  static const _limiteChars = 220;
 
   @override
   Widget build(BuildContext context) {
@@ -1483,47 +1481,19 @@ class _ProductLandingPageState extends State<_ProductLandingPage> {
                       ],
                     ),
 
-                    // Descrição com botão "Ler mais / Ler menos"
+                    // Descrição completa (sem truncamento)
                     if (descricaoCompleta.isNotEmpty) ...[
                       const SizedBox(height: 20),
                       Text(
-                        _descExpandida || descricaoCompleta.length <= _limiteChars
-                            ? descricaoCompleta
-                            : '\${descricaoCompleta.substring(0, _limiteChars)}...',
+                        descricaoCompleta,
+                        softWrap: true,
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 14,
                             height: 1.6,
                             fontWeight: FontWeight.w400),
                       ),
-                      if (descricaoCompleta.length > _limiteChars) ...[
-                        const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: () => setState(() => _descExpandida = !_descExpandida),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _descExpandida ? 'Ler menos' : 'Ler mais',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    decoration: TextDecoration.underline,
-                                    decorationColor: Colors.white),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                _descExpandida
-                                    ? Icons.keyboard_arrow_up_rounded
-                                    : Icons.keyboard_arrow_down_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+
                     ],
                   ],
                 ),
