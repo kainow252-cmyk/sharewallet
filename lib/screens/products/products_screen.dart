@@ -122,13 +122,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
                             final isSelected = cat == ps.selectedCategory;
                             final label =
                                 ProductService.categoryLabels[cat] ?? cat;
-                            final icon = _catIcon(cat);
+                            final iconData = _catIconData(cat);
                             return GestureDetector(
                               onTap: () => ps.setCategory(cat),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 6),
+                                    horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: isSelected
                                       ? AppColors.primary
@@ -143,9 +143,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(icon,
-                                        style:
-                                            const TextStyle(fontSize: 13)),
+                                    Icon(
+                                      iconData,
+                                      size: 14,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppColors.primary,
+                                    ),
                                     const SizedBox(width: 5),
                                     Text(
                                       label,
@@ -260,13 +264,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
     for (final cat in orderedKeys) {
       final products = grouped[cat]!;
       final label = ProductService.categoryLabels[cat] ?? cat;
-      final icon = _catIcon(cat);
+      final iconData = _catIconData(cat);
       final color = _catColor(cat);
 
       widgets.add(
         SliverToBoxAdapter(
           child: _CategoryHeader(
-            icon: icon,
+            iconData: iconData,
             label: label,
             color: color,
             count: products.length,
@@ -362,7 +366,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
             // Lista de categorias
             ...ps.categories.map((cat) {
               final label = ProductService.categoryLabels[cat] ?? cat;
-              final icon = _catIcon(cat);
               final color = _catColor(cat);
               final isSelected = cat == ps.selectedCategory;
               final count = cat == 'todos'
@@ -396,11 +399,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
+                          color: color.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Center(
-                          child: Text(icon, style: const TextStyle(fontSize: 20)),
+                          child: Icon(
+                            _catIconData(cat),
+                            color: color,
+                            size: 22,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -455,28 +462,30 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
-  String _catIcon(String cat) {
+  IconData _catIconData(String cat) {
     switch (cat.toLowerCase()) {
-      case 'seguros': return '';
-      case 'capitalizacao': return '';
-      case 'assistencia': return '';
-      case 'beneficios': return '';
-      case 'cursos': return '';
-      case 'entretenimento': return '';
-      case 'garantias': return '';
-      case 'todos': return '';
-      default: return '';
+      case 'seguros':        return Icons.security_rounded;
+      case 'capitalizacao':  return Icons.savings_rounded;
+      case 'assistencia':    return Icons.handshake_rounded;
+      case 'beneficios':     return Icons.card_giftcard_rounded;
+      case 'cursos':         return Icons.school_rounded;
+      case 'entretenimento': return Icons.movie_rounded;
+      case 'garantias':      return Icons.verified_user_rounded;
+      case 'todos':          return Icons.apps_rounded;
+      default:               return Icons.label_rounded;
     }
   }
 
   Color _catColor(String cat) {
     switch (cat.toLowerCase()) {
-      case 'seguros': return const Color(0xFF1565C0);
-      case 'capitalizacao': return const Color(0xFF6A1B9A);
-      case 'assistencia': return const Color(0xFF00695C);
-      case 'beneficios': return const Color(0xFFE65100);
-      case 'cursos': return const Color(0xFF2E7D32);
-      default: return AppColors.primary;
+      case 'seguros':        return const Color(0xFF1565C0);
+      case 'capitalizacao':  return const Color(0xFF6A1B9A);
+      case 'assistencia':    return const Color(0xFF00695C);
+      case 'beneficios':     return const Color(0xFFE65100);
+      case 'cursos':         return const Color(0xFF2E7D32);
+      case 'entretenimento': return const Color(0xFFAD1457);
+      case 'garantias':      return const Color(0xFF00838F);
+      default:               return AppColors.primary;
     }
   }
 }
@@ -494,9 +503,9 @@ class _ChargeFilterBar extends StatelessWidget {
   });
 
   static const _items = [
-    {'key': 'todos',  'label': 'Todos',  'icon': Icons.apps_rounded,         'emoji': ''},
-    {'key': 'mensal', 'label': 'Mensal', 'icon': Icons.autorenew_rounded,     'emoji': ''},
-    {'key': 'unico',  'label': 'Único',  'icon': Icons.qr_code_2_rounded,     'emoji': ''},
+    {'key': 'todos',  'label': 'Todos',  'icon': Icons.apps_rounded},
+    {'key': 'mensal', 'label': 'Mensal', 'icon': Icons.autorenew_rounded},
+    {'key': 'unico',  'label': 'Único',  'icon': Icons.qr_code_2_rounded},
   ];
 
   @override
@@ -508,7 +517,7 @@ class _ChargeFilterBar extends StatelessWidget {
         children: _items.map((item) {
           final key    = item['key'] as String;
           final label  = item['label'] as String;
-          final emoji  = item['emoji'] as String;
+          final icon   = item['icon'] as IconData;
           final count  = counts[key] ?? 0;
           final isSel  = selected == key;
 
@@ -542,8 +551,12 @@ class _ChargeFilterBar extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(emoji, style: const TextStyle(fontSize: 16)),
-                    const SizedBox(height: 2),
+                    Icon(
+                      icon,
+                      size: 18,
+                      color: isSel ? Colors.white : chipColor,
+                    ),
+                    const SizedBox(height: 3),
                     Text(
                       label,
                       style: TextStyle(
@@ -588,13 +601,13 @@ class _ChargeFilterBar extends StatelessWidget {
 // -- Cabeçalho de categoria ----------------------------------------------------
 
 class _CategoryHeader extends StatelessWidget {
-  final String icon;
+  final IconData iconData;
   final String label;
   final Color color;
   final int count;
 
   const _CategoryHeader({
-    required this.icon,
+    required this.iconData,
     required this.label,
     required this.color,
     required this.count,
@@ -608,20 +621,35 @@ class _CategoryHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          // Ícone categoria
+          // Ícone categoria — Icon Material real
           Container(
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(11),
+              gradient: LinearGradient(
+                colors: [
+                  color.withValues(alpha: 0.25),
+                  color.withValues(alpha: 0.12),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
             ),
             child: Center(
-              child: Text(icon, style: const TextStyle(fontSize: 20)),
+              child: Icon(iconData, color: color, size: 22),
             ),
           ),
           const SizedBox(width: 12),
@@ -693,7 +721,6 @@ class _ProductCardState extends State<_ProductCard> {
     final product = widget.product;
     final auth = context.read<AuthService>();
     final affiliateCode = auth.currentUser?.affiliateCode ?? 'ABC123';
-    final categoryIcon = ProductService.categoryIcons[product.categoria] ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -722,19 +749,8 @@ class _ProductCardState extends State<_ProductCard> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Ícone categoria
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Center(
-                    child: Text(categoryIcon,
-                        style: const TextStyle(fontSize: 28)),
-                  ),
-                ),
+                // Ícone categoria — Icon Material colorido por categoria
+                _CategoryIconAvatar(categoria: product.categoria),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -1203,6 +1219,63 @@ class _ProductCardState extends State<_ProductCard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// -- Avatar de ícone da categoria no card de produto ---------------------------
+class _CategoryIconAvatar extends StatelessWidget {
+  final String categoria;
+  const _CategoryIconAvatar({required this.categoria});
+
+  static IconData _icon(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'seguros':        return Icons.security_rounded;
+      case 'capitalizacao':  return Icons.savings_rounded;
+      case 'assistencia':    return Icons.handshake_rounded;
+      case 'beneficios':     return Icons.card_giftcard_rounded;
+      case 'cursos':         return Icons.school_rounded;
+      case 'entretenimento': return Icons.movie_rounded;
+      case 'garantias':      return Icons.verified_user_rounded;
+      default:               return Icons.label_rounded;
+    }
+  }
+
+  static Color _color(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'seguros':        return const Color(0xFF1565C0);
+      case 'capitalizacao':  return const Color(0xFF6A1B9A);
+      case 'assistencia':    return const Color(0xFF00695C);
+      case 'beneficios':     return const Color(0xFFE65100);
+      case 'cursos':         return const Color(0xFF2E7D32);
+      case 'entretenimento': return const Color(0xFFAD1457);
+      case 'garantias':      return const Color(0xFF00838F);
+      default:               return AppColors.primary;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _color(categoria);
+    final icon  = _icon(categoria);
+    return Container(
+      width: 54,
+      height: 54,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            color.withValues(alpha: 0.18),
+            color.withValues(alpha: 0.08),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Center(
+        child: Icon(icon, color: color, size: 26),
       ),
     );
   }
