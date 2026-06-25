@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Landing Page - Pitch de Cadastro da ShareWallet
-/// Layout totalmente centralizado, feature cards em coluna vertical com ícone
-/// acima do texto, pitch centralizado e textos com textAlign.center.
+/// Landing Page — layout 100% adaptável à altura da tela.
+/// Usa LayoutBuilder + Column com Flexible/Expanded para
+/// que TODO o conteúdo caiba sem scroll em qualquer dispositivo.
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
 
@@ -27,24 +27,24 @@ class _LandingScreenState extends State<LandingScreen>
     super.initState();
 
     _heroCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 800));
-    _heroFade = CurvedAnimation(parent: _heroCtrl, curve: Curves.easeOut);
+        vsync: this, duration: const Duration(milliseconds: 700));
+    _heroFade  = CurvedAnimation(parent: _heroCtrl, curve: Curves.easeOut);
     _heroSlide = Tween<Offset>(
-      begin: const Offset(0, -0.15),
+      begin: const Offset(0, -0.12),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _heroCtrl, curve: Curves.easeOut));
 
     _cardsCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 600));
-    _cardsFade = CurvedAnimation(parent: _cardsCtrl, curve: Curves.easeOut);
+        vsync: this, duration: const Duration(milliseconds: 550));
+    _cardsFade  = CurvedAnimation(parent: _cardsCtrl, curve: Curves.easeOut);
     _cardsSlide = Tween<Offset>(
-      begin: const Offset(0, 0.2),
+      begin: const Offset(0, 0.18),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _cardsCtrl, curve: Curves.easeOut));
 
-    _ctaCtrl = AnimationController(
+    _ctaCtrl  = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 500));
-    _ctaScale = Tween<double>(begin: 0.85, end: 1.0).animate(
+    _ctaScale = Tween<double>(begin: 0.88, end: 1.0).animate(
       CurvedAnimation(parent: _ctaCtrl, curve: Curves.elasticOut),
     );
 
@@ -53,9 +53,9 @@ class _LandingScreenState extends State<LandingScreen>
 
   Future<void> _runSequence() async {
     await _heroCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 80));
     _cardsCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 200));
+    await Future.delayed(const Duration(milliseconds: 180));
     _ctaCtrl.forward();
   }
 
@@ -69,8 +69,6 @@ class _LandingScreenState extends State<LandingScreen>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -83,65 +81,79 @@ class _LandingScreenState extends State<LandingScreen>
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: size.height - 80),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final h = constraints.maxHeight;
+              // Escala proporiconal: referência = 700px de altura útil
+              final scale = (h / 700).clamp(0.7, 1.1);
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // -- Hero ---------------------------------------------
+
+                    // ── Logo + título + subtítulo ───────────────────────────
                     SlideTransition(
                       position: _heroSlide,
                       child: FadeTransition(
                         opacity: _heroFade,
-                        child: const _HeroSection(),
+                        child: _HeroSection(scale: scale),
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    SizedBox(height: 14 * scale),
 
-                    // -- Pitch centralizado --------------------------------
-                    FadeTransition(
-                      opacity: _cardsFade,
-                      child: const _PitchSection(),
-                    ),
-
-                    const SizedBox(height: 28),
-
-                    // -- Feature Cards (vertical centrado) -----------------
+                    // ── Cards de features (3 colunas) ────────────────────────
                     SlideTransition(
                       position: _cardsSlide,
                       child: FadeTransition(
                         opacity: _cardsFade,
-                        child: const _FeatureCards(),
+                        child: _FeatureCards(scale: scale),
                       ),
                     ),
 
-                    const SizedBox(height: 36),
+                    SizedBox(height: 14 * scale),
 
-                    // -- CTA Buttons ---------------------------------------
+                    // ── Stats row ────────────────────────────────────────────
+                    FadeTransition(
+                      opacity: _cardsFade,
+                      child: _StatsRow(scale: scale),
+                    ),
+
+                    SizedBox(height: 16 * scale),
+
+                    // ── CTA Buttons ──────────────────────────────────────────
                     ScaleTransition(
                       scale: _ctaScale,
                       child: _CtaSection(
+                        scale: scale,
                         onCadastro: () =>
                             Navigator.pushNamed(context, '/register'),
-                        onLogin: () => Navigator.pushNamed(context, '/login'),
+                        onLogin: () =>
+                            Navigator.pushNamed(context, '/login'),
                       ),
                     ),
 
-                    const SizedBox(height: 32),
+                    SizedBox(height: 10 * scale),
 
-                    // -- Footer --------------------------------------------
-                    const _FooterSection(),
+                    // ── Footer mínimo ────────────────────────────────────────
+                    FadeTransition(
+                      opacity: _heroFade,
+                      child: Text(
+                        '© ${DateTime.now().year} ShareWallet  •  Todos os direitos reservados',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          fontSize: 9 * scale,
+                        ),
+                      ),
+                    ),
 
-                    const SizedBox(height: 24),
+                    SizedBox(height: 8 * scale),
                   ],
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -149,35 +161,37 @@ class _LandingScreenState extends State<LandingScreen>
   }
 }
 
-// -- Hero Section --------------------------------------------------------------
+// ── Hero Section ────────────────────────────────────────────────────────────
 
 class _HeroSection extends StatelessWidget {
-  const _HeroSection();
+  final double scale;
+  const _HeroSection({required this.scale});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const SizedBox(height: 32),
+    final logoSize = 72.0 * scale;
 
-        // Logo com glow
+    return Column(
+      children: [
+        SizedBox(height: 18 * scale),
+
+        // Logo
         Container(
-          width: 96,
-          height: 96,
+          width: logoSize,
+          height: logoSize,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
+            borderRadius: BorderRadius.circular(logoSize * 0.28),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF00E5B4).withValues(alpha: 0.3),
-                blurRadius: 32,
-                spreadRadius: 4,
-                offset: const Offset(0, 8),
+                color: const Color(0xFF00E5B4).withValues(alpha: 0.28),
+                blurRadius: 28,
+                spreadRadius: 3,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
+            borderRadius: BorderRadius.circular(logoSize * 0.28),
             child: Image.asset(
               'assets/images/sharewallet_logo.png',
               fit: BoxFit.cover,
@@ -187,28 +201,28 @@ class _HeroSection extends StatelessWidget {
                     colors: [Color(0xFF1A237E), Color(0xFF00BCD4)],
                   ),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.account_balance_wallet_rounded,
                   color: Colors.white,
-                  size: 52,
+                  size: logoSize * 0.54,
                 ),
               ),
             ),
           ),
         ),
 
-        const SizedBox(height: 22),
+        SizedBox(height: 14 * scale),
 
-        // Nome da plataforma
+        // Nome ShareWallet
         RichText(
           textAlign: TextAlign.center,
-          text: const TextSpan(
+          text: TextSpan(
             children: [
               TextSpan(
                 text: 'Share',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 36,
+                  fontSize: 30 * scale,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.5,
                 ),
@@ -216,8 +230,8 @@ class _HeroSection extends StatelessWidget {
               TextSpan(
                 text: 'Wallet',
                 style: TextStyle(
-                  color: Color(0xFF00E5B4),
-                  fontSize: 36,
+                  color: const Color(0xFF00E5B4),
+                  fontSize: 30 * scale,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.5,
                 ),
@@ -226,17 +240,17 @@ class _HeroSection extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(height: 10),
+        SizedBox(height: 6 * scale),
 
-        // Subtítulo - centralizado
-        const Text(
-          'Transforme suas conexões estratégicas\nem receita recorrente.',
+        // Tagline
+        Text(
+          'Transforme conexões em receita recorrente.',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white70,
-            fontSize: 15,
+            color: Colors.white.withValues(alpha: 0.65),
+            fontSize: 13 * scale,
             fontWeight: FontWeight.w400,
-            height: 1.6,
+            height: 1.5,
           ),
         ),
       ],
@@ -244,94 +258,11 @@ class _HeroSection extends StatelessWidget {
   }
 }
 
-// -- Pitch Section - totalmente centralizado -----------------------------------
-
-class _PitchSection extends StatelessWidget {
-  const _PitchSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: const Color(0xFF00E5B4).withValues(alpha: 0.2),
-          width: 1,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        color: const Color(0xFF00E5B4).withValues(alpha: 0.04),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Ícone centralizado
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00E5B4).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.hub_rounded,
-              color: Color(0xFF00E5B4),
-              size: 24,
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-          // Título centralizado
-          const Text(
-            'Bem-vindo à ShareWallet',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF00E5B4),
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Destaque centralizado
-          const Text(
-            'Sua rede de contatos é o seu maior ativo.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              height: 1.5,
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // Corpo - centralizado
-          Text(
-            'Gerencie, rastreie e expanda seus ganhos digitais.'
-            'Transforme conexões estratégicas em receita recorrente'
-            'e assuma o controle da sua performance financeira.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.55),
-              fontSize: 13,
-              height: 1.7,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// -- Feature Cards - ícone acima, texto centralizado --------------------------
+// ── Feature Cards ─────────────────────────────────────────────────────────────
 
 class _FeatureCards extends StatelessWidget {
-  const _FeatureCards();
+  final double scale;
+  const _FeatureCards({required this.scale});
 
   @override
   Widget build(BuildContext context) {
@@ -339,29 +270,28 @@ class _FeatureCards extends StatelessWidget {
       _FeatureData(
         icon: Icons.track_changes_rounded,
         color: Color(0xFF00E5B4),
-        title: 'Rastreamento em tempo real',
-        desc: 'Monitore cliques, conversões e\ncomissões instantaneamente.',
+        title: 'Rastreamento',
+        desc: 'Cliques, conversões e comissões em tempo real.',
       ),
       _FeatureData(
         icon: Icons.pix_rounded,
         color: Color(0xFF00BCD4),
-        title: 'Saque via PIX',
-        desc: 'Receba seus ganhos direto\nna sua conta em segundos.',
+        title: 'Saque PIX',
+        desc: 'Receba seus ganhos direto na conta em segundos.',
       ),
       _FeatureData(
         icon: Icons.bar_chart_rounded,
         color: Color(0xFFFFD740),
-        title: 'Dashboard completo',
-        desc: 'Visualize sua performance\ncom métricas detalhadas.',
+        title: 'Dashboard',
+        desc: 'Performance com métricas detalhadas.',
       ),
     ];
 
-    // Grid 3 colunas - IntrinsicHeight força todos os cards à mesma altura
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: features
-            .map((f) => Expanded(child: _FeatureCard(feature: f)))
+            .map((f) => Expanded(child: _FeatureCard(feature: f, scale: scale)))
             .toList(),
       ),
     );
@@ -383,61 +313,56 @@ class _FeatureData {
 
 class _FeatureCard extends StatelessWidget {
   final _FeatureData feature;
-  const _FeatureCard({required this.feature});
+  final double scale;
+  const _FeatureCard({required this.feature, required this.scale});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 5),
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: EdgeInsets.symmetric(
+          vertical: 14 * scale, horizontal: 8 * scale),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: feature.color.withValues(alpha: 0.18),
+          color: feature.color.withValues(alpha: 0.20),
           width: 1,
         ),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisSize: MainAxisSize.max, // ocupa toda a altura dada pelo IntrinsicHeight
         children: [
-          // Ícone no topo centralizado
           Container(
-            width: 48,
-            height: 48,
+            width: 42 * scale,
+            height: 42 * scale,
             decoration: BoxDecoration(
               color: feature.color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(feature.icon, color: feature.color, size: 24),
+            child: Icon(feature.icon,
+                color: feature.color, size: 20 * scale),
           ),
-
-          const SizedBox(height: 12),
-
-          // Título centralizado
+          SizedBox(height: 10 * scale),
           Text(
             feature.title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 12,
+              fontSize: 11 * scale,
               fontWeight: FontWeight.w700,
               height: 1.3,
             ),
           ),
-
-          const SizedBox(height: 6),
-
-          // Descrição centralizada
+          SizedBox(height: 5 * scale),
           Text(
             feature.desc,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.45),
-              fontSize: 11,
-              height: 1.45,
+              fontSize: 10 * scale,
+              height: 1.4,
             ),
           ),
         ],
@@ -446,44 +371,129 @@ class _FeatureCard extends StatelessWidget {
   }
 }
 
-// -- CTA Section ---------------------------------------------------------------
+// ── Stats Row ─────────────────────────────────────────────────────────────────
 
-class _CtaSection extends StatelessWidget {
-  final VoidCallback onCadastro;
-  final VoidCallback onLogin;
+class _StatsRow extends StatelessWidget {
+  final double scale;
+  const _StatsRow({required this.scale});
 
-  const _CtaSection({required this.onCadastro, required this.onLogin});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+          vertical: 12 * scale, horizontal: 16 * scale),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF00E5B4).withValues(alpha: 0.12),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _StatItem(value: '10K+', label: 'Afiliados',
+              color: const Color(0xFF00E5B4), scale: scale),
+          Container(
+            width: 1, height: 32 * scale,
+            color: Colors.white.withValues(alpha: 0.1),
+          ),
+          _StatItem(value: 'R\$ 2M+', label: 'Pagos',
+              color: const Color(0xFF00BCD4), scale: scale),
+          Container(
+            width: 1, height: 32 * scale,
+            color: Colors.white.withValues(alpha: 0.1),
+          ),
+          _StatItem(value: '99.9%', label: 'Uptime',
+              color: const Color(0xFFFFD740), scale: scale),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+  final double scale;
+  const _StatItem({
+    required this.value,
+    required this.label,
+    required this.color,
+    required this.scale,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 15 * scale,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
+          ),
+        ),
+        SizedBox(height: 2 * scale),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.4),
+            fontSize: 10 * scale,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── CTA Section ───────────────────────────────────────────────────────────────
+
+class _CtaSection extends StatelessWidget {
+  final VoidCallback onCadastro;
+  final VoidCallback onLogin;
+  final double scale;
+
+  const _CtaSection({
+    required this.onCadastro,
+    required this.onLogin,
+    required this.scale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
       children: [
         // Botão primário
         SizedBox(
           width: double.infinity,
+          height: 50 * scale,
           child: ElevatedButton(
             onPressed: onCadastro,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00E5B4),
               foregroundColor: const Color(0xFF0A1628),
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: EdgeInsets.zero,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(13),
               ),
               elevation: 0,
             ),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.rocket_launch_rounded, size: 20),
-                SizedBox(width: 8),
+                Icon(Icons.rocket_launch_rounded, size: 18 * scale),
+                SizedBox(width: 8 * scale),
                 Text(
-                  'Começar agora  -  é grátis',
+                  'Começar agora  —  é grátis',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 15 * scale,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 0.3,
+                    letterSpacing: 0.2,
                   ),
                 ),
               ],
@@ -491,116 +501,44 @@ class _CtaSection extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(height: 12),
+        SizedBox(height: 10 * scale),
 
         // Botão secundário
         SizedBox(
           width: double.infinity,
+          height: 46 * scale,
           child: OutlinedButton(
             onPressed: onLogin,
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white70,
               side: BorderSide(
-                color: Colors.white.withValues(alpha: 0.2),
+                color: Colors.white.withValues(alpha: 0.18),
                 width: 1,
               ),
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: EdgeInsets.zero,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(13),
               ),
             ),
-            child: const Text(
+            child: Text(
               'Já tenho uma conta',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: 14 * scale,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ),
 
-        const SizedBox(height: 14),
+        SizedBox(height: 10 * scale),
 
         Text(
-          'Ao criar sua conta você concorda com nossos\nTermos de Uso e Política de Privacidade.',
+          'Ao criar sua conta você concorda com nossos Termos de Uso.',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.3),
-            fontSize: 11,
+            color: Colors.white.withValues(alpha: 0.25),
+            fontSize: 10 * scale,
             height: 1.5,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// -- Footer Section ------------------------------------------------------------
-
-class _FooterSection extends StatelessWidget {
-  const _FooterSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Divider(
-          color: Colors.white.withValues(alpha: 0.08),
-          indent: 32,
-          endIndent: 32,
-        ),
-        const SizedBox(height: 16),
-
-        // Social proof row - centralizado
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            _StatChip(value: '10K+', label: 'Afiliados'),
-            SizedBox(width: 28),
-            _StatChip(value: 'R\$ 2M+', label: 'Pagos'),
-            SizedBox(width: 28),
-            _StatChip(value: '99.9%', label: 'Uptime'),
-          ],
-        ),
-
-        const SizedBox(height: 16),
-
-        Text(
-          '© 2025 ShareWallet * Todos os direitos reservados',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.2),
-            fontSize: 10,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  final String value;
-  final String label;
-  const _StatChip({required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          value,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Color(0xFF00E5B4),
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.4),
-            fontSize: 11,
           ),
         ),
       ],
