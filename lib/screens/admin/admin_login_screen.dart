@@ -84,7 +84,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Affiliate Wallet  -  Área Restrita',
+                    'ShareWallet  -  Área Restrita',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 14,

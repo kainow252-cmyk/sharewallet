@@ -1,5 +1,5 @@
 // ===============================================================================
-// firebase_auth_service.dart - Affiliate Wallet
+// firebase_auth_service.dart - ShareWallet
 // -----------------------------------------------------------------------------
 // Gerencia autenticação Firebase com três provedores:
 //   1. Email + Senha  (Firebase Auth nativo)

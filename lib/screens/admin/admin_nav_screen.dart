@@ -159,7 +159,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
                                     color: Colors.white,
                                     fontWeight: FontWeight.w800,
                                     fontSize: 16)),
-                            Text('Affiliate Wallet',
+                            Text('ShareWallet',
                                 style: TextStyle(
                                     color: Color(0xFF6DBF9A), fontSize: 11)),
                           ],
