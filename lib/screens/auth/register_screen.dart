@@ -284,312 +284,430 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       ),
       body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              // Steps
-              Container(
-                color: AppColors.primary,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Row(
-                  children: List.generate(3, (i) {
-                    return Expanded(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: i <= _currentStep
-                                    ? AppColors.gold
-                                    : Colors.white.withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ),
-                          if (i < 2) const SizedBox(width: 4),
-                        ],
-                      ),
-                    );
-                  }),
-                ),
-              ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // scale: 700px = 1.0 (referência); telas menores diminuem proporcionalmente
+            final double scale = (constraints.maxHeight / 700).clamp(0.60, 1.0);
+            final double fieldHeight = 48.0 * scale;
+            final double gap = 10.0 * scale;
+            final double hPad = 16.0 * scale;
+            final double iconSz = 18.0 * scale;
+            final double labelSz = 13.0 * scale;
+            final double hintSz = 12.0 * scale;
+            final double btnH = 44.0 * scale;
 
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_sponsorController.text.isNotEmpty) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.gold.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                                color: AppColors.gold.withValues(alpha: 0.4)),
-                          ),
+            return Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  // ── Barra de progresso ──────────────────────────────────
+                  Container(
+                    color: AppColors.primary,
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 10 * scale),
+                    child: Row(
+                      children: List.generate(3, (i) {
+                        return Expanded(
                           child: Row(
                             children: [
-                              const Icon(Icons.person_add_rounded,
-                                  color: AppColors.gold, size: 18),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Indicado por: ${_sponsorController.text}',
-                                style: const TextStyle(
-                                    color: AppColors.goldDark,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      _buildField(
-                        controller: _nomeController,
-                        label: 'Nome completo',
-                        icon: Icons.person_rounded,
-                        validator: (v) =>
-                            v!.trim().split('').length < 2 ? 'Informe nome e sobrenome' : null,
-                      ),
-                      const SizedBox(height: 14),
-                      _buildField(
-                        controller: _cpfController,
-                        label: 'CPF',
-                        icon: Icons.badge_rounded,
-                        keyboardType: TextInputType.number,
-                        hint: '000.000.000-00',
-                        validator: (v) => v!.length < 11 ? 'CPF inválido' : null,
-                      ),
-                      const SizedBox(height: 14),
-                      _buildField(
-                        controller: _emailController,
-                        label: 'E-mail',
-                        icon: Icons.email_outlined,
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) =>
-                            !v!.contains('@') ? 'E-mail inválido' : null,
-                      ),
-                      const SizedBox(height: 14),
-                      _buildField(
-                        controller: _telefoneController,
-                        label: 'Telefone / WhatsApp',
-                        icon: Icons.phone_rounded,
-                        keyboardType: TextInputType.phone,
-                        hint: '(11) 99999-9999',
-                        validator: (v) => v!.length < 10 ? 'Telefone inválido' : null,
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _senhaController,
-                        obscureText: !_showPassword,
-                        decoration: InputDecoration(
-                          labelText: 'Senha',
-                          prefixIcon: const Icon(Icons.lock_outline_rounded,
-                              color: AppColors.primary),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _showPassword
-                                  ? Icons.visibility_off_rounded
-                                  : Icons.visibility_rounded,
-                              color: AppColors.textHint,
-                            ),
-                            onPressed: () =>
-                                setState(() => _showPassword = !_showPassword),
-                          ),
-                        ),
-                        validator: (v) =>
-                            v!.length < 6 ? 'Mínimo 6 caracteres' : null,
-                      ),
-                      const SizedBox(height: 14),
-                      _buildField(
-                        controller: _confirmarController,
-                        label: 'Confirmar senha',
-                        icon: Icons.lock_rounded,
-                        obscure: true,
-                        validator: (v) => v != _senhaController.text
-                            ? 'Senhas não conferem'
-                            : null,
-                      ),
-                      const SizedBox(height: 14),
-                      _buildField(
-                        controller: _sponsorController,
-                        label: 'Código do afiliado (opcional)',
-                        icon: Icons.link_rounded,
-                        hint: 'Ex: ABC123',
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Checkbox(
-                            value: _aceitouTermos,
-                            onChanged: (v) =>
-                                setState(() => _aceitouTermos = v ?? false),
-                            activeColor: AppColors.primary,
-                          ),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: RichText(
-                                text: const TextSpan(
-                                  style: TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 13),
-                                  children: [
-                                    TextSpan(text: 'Aceito os'),
-                                    TextSpan(
-                                      text: 'Termos de Uso',
-                                      style: TextStyle(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                    TextSpan(text: 'e a'),
-                                    TextSpan(
-                                      text: 'Política de Privacidade',
-                                      style: TextStyle(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
+                              Expanded(
+                                child: Container(
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: i <= _currentStep
+                                        ? AppColors.gold
+                                        : Colors.white.withValues(alpha: 0.3),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
                                 ),
                               ),
-                            ),
+                              if (i < 2) const SizedBox(width: 4),
+                            ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      PrimaryButton(
-                        label: 'Criar Conta Grátis',
-                        onPressed: auth.isLoading || _socialLoading
-                            ? null
-                            : _register,
-                        isLoading: auth.isLoading,
-                        icon: Icons.rocket_launch_rounded,
-                      ),
+                        );
+                      }),
+                    ),
+                  ),
 
-                      // -- Divisor "ou cadastre-se com" ----------------------
-                      const SizedBox(height: 24),
-                      Row(
+                  // ── Conteúdo principal ──────────────────────────────────
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: hPad, vertical: gap),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Divider(
-                              color: AppColors.textHint.withValues(alpha: 0.4),
-                              thickness: 1,
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              'ou cadastre-se com',
-                              style: TextStyle(
-                                color: AppColors.textHint,
-                                fontSize: 12,
+                          // Banner "indicado por" (opcional)
+                          if (_sponsorController.text.isNotEmpty) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.all(10 * scale),
+                              decoration: BoxDecoration(
+                                color: AppColors.gold.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: AppColors.gold
+                                        .withValues(alpha: 0.4)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.person_add_rounded,
+                                      color: AppColors.gold, size: iconSz),
+                                  SizedBox(width: 8 * scale),
+                                  Text(
+                                    'Indicado por: ${_sponsorController.text}',
+                                    style: TextStyle(
+                                        color: AppColors.goldDark,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: hintSz),
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                          Expanded(
-                            child: Divider(
-                              color: AppColors.textHint.withValues(alpha: 0.4),
-                              thickness: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
+                            SizedBox(height: gap),
+                          ],
 
-                      // -- Botões sociais ------------------------------------
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _RegisterSocialButton(
-                              label: 'Google',
-                              icon: _GoogleRegisterIcon(),
-                              onPressed: _socialLoading || auth.isLoading
-                                  ? null
-                                  : _registerWithGoogle,
-                              isLoading: _socialLoading,
-                            ),
+                          // ── Campos do formulário ──────────────────────
+                          _buildScaledField(
+                            controller: _nomeController,
+                            label: 'Nome completo',
+                            icon: Icons.person_rounded,
+                            fieldHeight: fieldHeight,
+                            iconSz: iconSz,
+                            labelSz: labelSz,
+                            validator: (v) => v!.trim().split(' ').length < 2
+                                ? 'Informe nome e sobrenome'
+                                : null,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _RegisterSocialButton(
-                              label: 'Facebook',
-                              icon: const Icon(
-                                Icons.facebook_rounded,
-                                color: Color(0xFF1877F2),
-                                size: 22,
+                          SizedBox(height: gap),
+                          _buildScaledField(
+                            controller: _cpfController,
+                            label: 'CPF',
+                            icon: Icons.badge_rounded,
+                            keyboardType: TextInputType.number,
+                            hint: '000.000.000-00',
+                            fieldHeight: fieldHeight,
+                            iconSz: iconSz,
+                            labelSz: labelSz,
+                            hintSz: hintSz,
+                            validator: (v) =>
+                                v!.length < 11 ? 'CPF inválido' : null,
+                          ),
+                          SizedBox(height: gap),
+                          _buildScaledField(
+                            controller: _emailController,
+                            label: 'E-mail',
+                            icon: Icons.email_outlined,
+                            keyboardType: TextInputType.emailAddress,
+                            fieldHeight: fieldHeight,
+                            iconSz: iconSz,
+                            labelSz: labelSz,
+                            validator: (v) =>
+                                !v!.contains('@') ? 'E-mail inválido' : null,
+                          ),
+                          SizedBox(height: gap),
+                          _buildScaledField(
+                            controller: _telefoneController,
+                            label: 'Telefone / WhatsApp',
+                            icon: Icons.phone_rounded,
+                            keyboardType: TextInputType.phone,
+                            hint: '(11) 99999-9999',
+                            fieldHeight: fieldHeight,
+                            iconSz: iconSz,
+                            labelSz: labelSz,
+                            hintSz: hintSz,
+                            validator: (v) =>
+                                v!.length < 10 ? 'Telefone inválido' : null,
+                          ),
+                          SizedBox(height: gap),
+
+                          // Senha (com toggle)
+                          SizedBox(
+                            height: fieldHeight,
+                            child: TextFormField(
+                              controller: _senhaController,
+                              obscureText: !_showPassword,
+                              style: TextStyle(fontSize: labelSz),
+                              decoration: InputDecoration(
+                                labelText: 'Senha',
+                                labelStyle: TextStyle(fontSize: labelSz),
+                                contentPadding: EdgeInsets.symmetric(
+                                    vertical: (fieldHeight - labelSz * 1.4) / 2),
+                                prefixIcon: Icon(Icons.lock_outline_rounded,
+                                    color: AppColors.primary, size: iconSz),
+                                prefixIconConstraints: BoxConstraints(
+                                    minWidth: iconSz + 24,
+                                    minHeight: fieldHeight),
+                                suffixIcon: IconButton(
+                                  iconSize: iconSz,
+                                  padding: EdgeInsets.zero,
+                                  icon: Icon(
+                                    _showPassword
+                                        ? Icons.visibility_off_rounded
+                                        : Icons.visibility_rounded,
+                                    color: AppColors.textHint,
+                                    size: iconSz,
+                                  ),
+                                  onPressed: () => setState(
+                                      () => _showPassword = !_showPassword),
+                                ),
                               ),
-                              onPressed: _socialLoading || auth.isLoading
-                                  ? null
-                                  : _registerWithFacebook,
-                              isLoading: _socialLoading,
+                              validator: (v) =>
+                                  v!.length < 6 ? 'Mínimo 6 caracteres' : null,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceVariant,
-                            borderRadius: BorderRadius.circular(8),
+                          SizedBox(height: gap),
+                          _buildScaledField(
+                            controller: _confirmarController,
+                            label: 'Confirmar senha',
+                            icon: Icons.lock_rounded,
+                            obscure: true,
+                            fieldHeight: fieldHeight,
+                            iconSz: iconSz,
+                            labelSz: labelSz,
+                            validator: (v) => v != _senhaController.text
+                                ? 'Senhas não conferem'
+                                : null,
                           ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
+                          SizedBox(height: gap),
+                          _buildScaledField(
+                            controller: _sponsorController,
+                            label: 'Código do afiliado (opcional)',
+                            icon: Icons.link_rounded,
+                            hint: 'Ex: ABC123',
+                            fieldHeight: fieldHeight,
+                            iconSz: iconSz,
+                            labelSz: labelSz,
+                            hintSz: hintSz,
+                          ),
+                          SizedBox(height: gap),
+
+                          // ── Aceite de termos ──────────────────────────
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Icon(Icons.security_rounded,
-                                  color: AppColors.primary, size: 16),
-                              SizedBox(width: 6),
-                              Text(
-                                'Pagamentos seguros via Woovi PIX',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary),
+                              SizedBox(
+                                width: 32 * scale,
+                                height: 32 * scale,
+                                child: Checkbox(
+                                  value: _aceitouTermos,
+                                  onChanged: (v) => setState(
+                                      () => _aceitouTermos = v ?? false),
+                                  activeColor: AppColors.primary,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ),
+                              SizedBox(width: 6 * scale),
+                              Expanded(
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: hintSz),
+                                    children: const [
+                                      TextSpan(text: 'Aceito os '),
+                                      TextSpan(
+                                        text: 'Termos de Uso',
+                                        style: TextStyle(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                      TextSpan(text: ' e a '),
+                                      TextSpan(
+                                        text: 'Política de Privacidade',
+                                        style: TextStyle(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ],
                           ),
-                        ),
+                          SizedBox(height: gap * 1.4),
+
+                          // ── Botão principal ───────────────────────────
+                          SizedBox(
+                            height: btnH,
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: auth.isLoading || _socialLoading
+                                  ? null
+                                  : _register,
+                              icon: auth.isLoading
+                                  ? SizedBox(
+                                      width: iconSz,
+                                      height: iconSz,
+                                      child: const CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white))
+                                  : Icon(Icons.rocket_launch_rounded,
+                                      size: iconSz, color: Colors.white),
+                              label: Text(
+                                'Criar Conta Grátis',
+                                style: TextStyle(
+                                    fontSize: labelSz,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: gap * 1.4),
+
+                          // ── Divisor "ou cadastre-se com" ──────────────
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Divider(
+                                  color:
+                                      AppColors.textHint.withValues(alpha: 0.4),
+                                  thickness: 1,
+                                ),
+                              ),
+                              Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10 * scale),
+                                child: Text(
+                                  'ou cadastre-se com',
+                                  style: TextStyle(
+                                      color: AppColors.textHint,
+                                      fontSize: hintSz),
+                                ),
+                              ),
+                              Expanded(
+                                child: Divider(
+                                  color:
+                                      AppColors.textHint.withValues(alpha: 0.4),
+                                  thickness: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: gap),
+
+                          // ── Botões sociais ────────────────────────────
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _RegisterSocialButton(
+                                  label: 'Google',
+                                  icon: _GoogleRegisterIcon(),
+                                  onPressed: _socialLoading || auth.isLoading
+                                      ? null
+                                      : _registerWithGoogle,
+                                  isLoading: _socialLoading,
+                                  height: btnH,
+                                  fontSize: labelSz,
+                                  iconSz: iconSz,
+                                ),
+                              ),
+                              SizedBox(width: 10 * scale),
+                              Expanded(
+                                child: _RegisterSocialButton(
+                                  label: 'Facebook',
+                                  icon: Icon(
+                                    Icons.facebook_rounded,
+                                    color: const Color(0xFF1877F2),
+                                    size: iconSz,
+                                  ),
+                                  onPressed: _socialLoading || auth.isLoading
+                                      ? null
+                                      : _registerWithFacebook,
+                                  isLoading: _socialLoading,
+                                  height: btnH,
+                                  fontSize: labelSz,
+                                  iconSz: iconSz,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: gap),
+
+                          // ── Rodapé segurança ──────────────────────────
+                          Center(
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 10 * scale,
+                                  vertical: 6 * scale),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceVariant,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.security_rounded,
+                                      color: AppColors.primary, size: iconSz),
+                                  SizedBox(width: 5 * scale),
+                                  Text(
+                                    'Pagamentos seguros via Woovi PIX',
+                                    style: TextStyle(
+                                        fontSize: hintSz,
+                                        color: AppColors.textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: gap),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildField({
+  // Mantido para compatibilidade (não usado na tela principal mas pode ser usado em outros lugares)
+  Widget _buildScaledField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
+    required double fieldHeight,
+    required double iconSz,
+    required double labelSz,
+    double? hintSz,
     TextInputType? keyboardType,
     String? hint,
     bool obscure = false,
     String? Function(String?)? validator,
   }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      obscureText: obscure,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon, color: AppColors.primary),
+    final double fHintSz = hintSz ?? labelSz;
+    return SizedBox(
+      height: fieldHeight,
+      child: TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
+        obscureText: obscure,
+        style: TextStyle(fontSize: labelSz),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          labelStyle: TextStyle(fontSize: labelSz),
+          hintStyle: TextStyle(fontSize: fHintSz),
+          contentPadding: EdgeInsets.symmetric(
+              vertical: (fieldHeight - labelSz * 1.4) / 2),
+          prefixIcon: Icon(icon, color: AppColors.primary, size: iconSz),
+          prefixIconConstraints:
+              BoxConstraints(minWidth: iconSz + 24, minHeight: fieldHeight),
+        ),
+        validator: validator,
       ),
-      validator: validator,
     );
   }
+
 }
 
 // -- Widget: Botão Social para Cadastro ---------------------------------------
@@ -599,50 +717,59 @@ class _RegisterSocialButton extends StatelessWidget {
   final Widget icon;
   final VoidCallback? onPressed;
   final bool isLoading;
+  final double height;
+  final double fontSize;
+  final double iconSz;
 
   const _RegisterSocialButton({
     required this.label,
     required this.icon,
     required this.onPressed,
     this.isLoading = false,
+    this.height = 44,
+    this.fontSize = 13,
+    this.iconSz = 18,
   });
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: isLoading ? null : onPressed,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        side: BorderSide(
-          color: AppColors.textHint.withValues(alpha: 0.4),
+    return SizedBox(
+      height: height,
+      child: OutlinedButton(
+        onPressed: isLoading ? null : onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          side: BorderSide(
+            color: AppColors.textHint.withValues(alpha: 0.4),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          backgroundColor: Colors.white,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        backgroundColor: Colors.white,
-      ),
-      child: isLoading
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(width: 22, height: 22, child: icon),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
+        child: isLoading
+            ? SizedBox(
+                width: iconSz,
+                height: iconSz,
+                child: const CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(width: iconSz, height: iconSz, child: icon),
+                  SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: fontSize,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+      ),
     );
   }
 }
