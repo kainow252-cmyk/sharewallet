@@ -2354,187 +2354,222 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
           ),
 
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
-                // Instrução
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6C3CE1).withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: const Color(0xFF6C3CE1).withValues(alpha: 0.2)),
-                  ),
-                  child: const Row(
+                // Instrução compacta
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        color: Color(0xFF6C3CE1), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Escaneie o QR Code com o app do seu banco para pagar '
+                        'a 1ª parcela e autorizar as cobranças mensais automáticas.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // QR Code + Copia e Cola lado a lado (layout compacto)
+                if (r.brCode.isNotEmpty) ...[
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.info_outline_rounded,
-                          color: Color(0xFF6C3CE1), size: 20),
-                      SizedBox(width: 10),
+                      // QR Code menor à esquerda
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.cardBorder),
+                        ),
+                        child: QrImageView(
+                          data: r.brCode,
+                          version: QrVersions.auto,
+                          size: 120,
+                          backgroundColor: Colors.white,
+                          errorCorrectionLevel: QrErrorCorrectLevel.M,
+                          errorStateBuilder: (_, __) => const SizedBox(
+                            width: 120,
+                            height: 120,
+                            child: Icon(Icons.qr_code_2_rounded,
+                                size: 80, color: AppColors.textHint),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Copia e Cola à direita
                       Expanded(
-                        child: Text(
-                          'Escaneie o QR Code abaixo com o app do seu banco.\n'
-                          'Você pagará a 1ª parcela e autorizará as cobranças mensais automáticas.',
-                          style: TextStyle(fontSize: 13,
-                              color: AppColors.textPrimary, height: 1.5),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('PIX Copia e Cola',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                  color: AppColors.textPrimary,
+                                )),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceVariant,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.cardBorder),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      r.brCode,
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 4,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: _copiarCodigo,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                        minWidth: 28, minHeight: 28),
+                                    icon: Icon(
+                                      _copiou
+                                          ? Icons.check_rounded
+                                          : Icons.copy_rounded,
+                                      color: _copiou
+                                          ? AppColors.success
+                                          : const Color(0xFF6C3CE1),
+                                      size: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 38,
+                              child: ElevatedButton.icon(
+                                onPressed: _copiarCodigo,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _copiou
+                                      ? AppColors.success
+                                      : const Color(0xFF6C3CE1),
+                                  padding: EdgeInsets.zero,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                                icon: Icon(
+                                  _copiou
+                                      ? Icons.check_rounded
+                                      : Icons.copy_all_rounded,
+                                  color: Colors.white,
+                                  size: 15,
+                                ),
+                                label: Text(
+                                  _copiou ? 'Copiado!' : 'Copiar Código',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 20),
-
-                // QR Code visual gerado localmente a partir do brCode (EMV)
-                // A Woovi não expõe endpoint público de imagem para Pix Automático,
-                // então geramos o QR diretamente com qr_flutter.
-                if (r.brCode.isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.cardBorder),
-                    ),
-                    child: QrImageView(
-                      data: r.brCode,
-                      version: QrVersions.auto,
-                      size: 200,
-                      backgroundColor: Colors.white,
-                      errorCorrectionLevel: QrErrorCorrectLevel.M,
-                      errorStateBuilder: (_, __) => const Icon(
-                        Icons.qr_code_2_rounded, size: 160, color: AppColors.textHint),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text('Escaneie com o app do seu banco',
-                      style: TextStyle(fontSize: 12, color: AppColors.textHint)),
-                  const SizedBox(height: 16),
-                  const Row(children: [
-                    Expanded(child: Divider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('ou', style: TextStyle(color: AppColors.textHint)),
-                    ),
-                    Expanded(child: Divider()),
-                  ]),
-                  const SizedBox(height: 16),
-                ],
-
-                // Código Pix Copia e Cola
-                if (r.brCode.isNotEmpty) ...[
-                  const Text('PIX Copia e Cola',
-                      style: TextStyle(fontWeight: FontWeight.w700,
-                          fontSize: 13, color: AppColors.textPrimary)),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.cardBorder),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.pix_rounded,
-                            color: Color(0xFF6C3CE1), size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(r.brCode,
-                              style: const TextStyle(fontSize: 10,
-                                  color: AppColors.textSecondary),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 2),
-                        ),
-                        IconButton(
-                          onPressed: _copiarCodigo,
-                          icon: Icon(
-                            _copiou ? Icons.check_rounded : Icons.copy_rounded,
-                            color: _copiou ? AppColors.success
-                                : const Color(0xFF6C3CE1),
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _copiarCodigo,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _copiou ? AppColors.success
-                            : const Color(0xFF6C3CE1),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      icon: Icon(_copiou ? Icons.check_rounded
-                          : Icons.copy_all_rounded, color: Colors.white),
-                      label: Text(
-                        _copiou ? 'Código Copiado!' : 'Copiar Código PIX',
-                        style: const TextStyle(color: Colors.white,
-                            fontWeight: FontWeight.w700, fontSize: 15),
-                      ),
-                    ),
-                  ),
-                ],
-
-                if (r.paymentLinkUrl.isNotEmpty) ...[
                   const SizedBox(height: 10),
+                ],
+
+                // Link externo (compacto)
+                if (r.paymentLinkUrl.isNotEmpty) ...[
                   SizedBox(
                     width: double.infinity,
+                    height: 36,
                     child: OutlinedButton.icon(
                       onPressed: _abrirLink,
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        side: const BorderSide(color: Color(0xFF6C3CE1)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        side: const BorderSide(
+                            color: Color(0xFF6C3CE1), width: 1),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(10)),
                       ),
                       icon: const Icon(Icons.open_in_new_rounded,
-                          color: Color(0xFF6C3CE1), size: 18),
+                          color: Color(0xFF6C3CE1), size: 15),
                       label: const Text('Abrir link de pagamento',
-                          style: TextStyle(color: Color(0xFF6C3CE1),
-                              fontWeight: FontWeight.w600)),
+                          style: TextStyle(
+                            color: Color(0xFF6C3CE1),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          )),
                     ),
                   ),
+                  const SizedBox(height: 8),
                 ],
 
-                const SizedBox(height: 16),
+                // Nota de cobrança automática (compacta)
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: AppColors.success.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: AppColors.success.withValues(alpha: 0.3)),
+                        color: AppColors.success.withValues(alpha: 0.25)),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.verified_rounded,
-                          color: AppColors.success, size: 18),
-                      SizedBox(width: 8),
+                      const Icon(Icons.verified_rounded,
+                          color: AppColors.success, size: 14),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Após o pagamento, as próximas cobranças serão debitadas '
-                          'automaticamente todo mês pelo Banco Central.',
-                          style: TextStyle(fontSize: 12,
-                              color: AppColors.success, height: 1.4),
+                          'Próximas cobranças automáticas via Banco Central.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.success.withValues(alpha: 0.9),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: widget.onNovaTentativa,
-                  child: const Text('Tentar novamente / Corrigir dados',
-                      style: TextStyle(color: AppColors.textHint, fontSize: 12)),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: widget.onNovaTentativa,
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 32),
+                    ),
+                    child: const Text(
+                      'Corrigir dados / Tentar novamente',
+                      style: TextStyle(
+                        color: AppColors.textHint,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
