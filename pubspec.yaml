@@ -41,6 +41,7 @@ dependencies:
   url_launcher: ^6.3.1
   share_plus: ^10.1.4
   qr_flutter: ^4.1.0
+  package_info_plus: ^8.3.0
 
   # Foto de perfil
   image_picker: 1.1.2

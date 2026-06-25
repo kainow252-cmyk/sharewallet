@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import '../../services/update_service.dart';
+import '../../widgets/update_dialog.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -80,6 +83,18 @@ class _SplashScreenState extends State<SplashScreen>
     } else {
       // Vai para landing page (pitch) antes do login
       Navigator.pushReplacementNamed(context, '/landing');
+    }
+
+    // Checa update em background (apenas Android, não bloqueia navegação)
+    if (!kIsWeb) {
+      Future.microtask(() async {
+        if (!mounted) return;
+        final update = await UpdateService.check();
+        if (!mounted) return;
+        if (update.hasUpdate) {
+          await UpdateDialog.show(context, update);
+        }
+      });
     }
   }
 

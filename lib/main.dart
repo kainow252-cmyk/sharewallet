@@ -32,6 +32,7 @@ import 'screens/products/my_subscriptions_screen.dart';
 import 'screens/admin/admin_login_screen.dart';
 import 'screens/admin/admin_nav_screen.dart';
 import 'screens/products/buy_screen.dart';
+import 'screens/download/apk_download_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -172,6 +173,7 @@ class ShareWalletApp extends StatelessWidget {
           '/subscriptions': (_) => const MySubscriptionsScreen(),
           '/admin/login': (_) => const AdminLoginScreen(),
           '/admin': (_) => const AdminNavScreen(),
+          '/apk':   (_) => const ApkDownloadScreen(),
         },
         onGenerateRoute: (settings) {
           final name = settings.name ?? '';
