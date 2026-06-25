@@ -744,6 +744,18 @@ class _SaleDocsDialogState extends State<_SaleDocsDialog> {
     'certidao': 'Certidão de Nascimento',
   };
 
+  /// Para chaves de campos personalizados (ex: "ano_moto_1234567890"),
+  /// remove o sufixo numérico e converte underscores em espaços capitalizados.
+  static String _resolveLabel(String key) {
+    if (_docLabels.containsKey(key)) return _docLabels[key]!;
+    // Remove sufixo numérico de timestamp (últimos dígitos após o último _)
+    final cleaned = key.replaceAll(RegExp(r'_\d+$'), '');
+    return cleaned
+        .split('_')
+        .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -827,10 +839,12 @@ class _SaleDocsDialogState extends State<_SaleDocsDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: (_docsData ?? {}).entries.map((e) {
-                      final label   = _docLabels[e.key] ?? e.key;
+                      final label   = _resolveLabel(e.key);
                       final val     = e.value?.toString() ?? '';
                       final isImg   = val.startsWith('data:image');
                       final isGeo   = e.key == 'geolocalizacao';
+                      final isCustomField = !isImg && !isGeo &&
+                          !_docLabels.containsKey(e.key);
 
                       // Tenta decodificar JSON de geolocalização
                       Map<String, dynamic>? geoMap;
@@ -846,13 +860,25 @@ class _SaleDocsDialogState extends State<_SaleDocsDialog> {
                             Row(
                               children: [
                                 Icon(
-                                  isGeo ? Icons.my_location_rounded : Icons.insert_drive_file_rounded,
+                                  isGeo
+                                      ? Icons.my_location_rounded
+                                      : isCustomField
+                                          ? Icons.edit_note_rounded
+                                          : Icons.insert_drive_file_rounded,
                                   size: 13,
-                                  color: isGeo ? Colors.blue : Colors.white38,
+                                  color: isGeo
+                                      ? Colors.blue
+                                      : isCustomField
+                                          ? Colors.amber
+                                          : Colors.white38,
                                 ),
                                 const SizedBox(width: 5),
                                 Text(label, style: TextStyle(
-                                    color: isGeo ? Colors.blue[200] : Colors.white70,
+                                    color: isGeo
+                                        ? Colors.blue[200]
+                                        : isCustomField
+                                            ? Colors.amber[200]
+                                            : Colors.white70,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600)),
                               ],
@@ -955,9 +981,37 @@ class _SaleDocsDialogState extends State<_SaleDocsDialog> {
                                 ),
                               ),
                             ] else ...[
-                              Text(
-                                val.length > 100 ? '${val.substring(0, 100)}...' : val,
-                                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                              // Campo personalizado (texto livre digitado pelo comprador)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: Colors.amber.withValues(alpha: 0.25)),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.edit_note_rounded,
+                                        size: 15, color: Colors.amber),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        val.isEmpty ? '—' : val,
+                                        style: TextStyle(
+                                          color: val.isEmpty
+                                              ? Colors.white24
+                                              : Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ],

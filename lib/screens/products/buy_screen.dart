@@ -2873,12 +2873,31 @@ class _DocUploadStepState extends State<_DocUploadStep> {
   /// chave → valor
   /// Para documentos normais: base64 da imagem ("data:image/...")
   /// Para geolocalização: string JSON  '{"lat":..,"lng":..,"acc":..,"ts":..}'
+  /// Para campos personalizados: texto digitado pelo comprador
   final Map<String, String> _docs = {};
+
+  /// Controllers de texto para cada campo personalizado (key → controller)
+  late final Map<String, TextEditingController> _fieldCtrls;
 
   /// Controla o estado de carregamento individual por chave
   final Map<String, bool> _loading = {};
 
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fieldCtrls = {
+      for (final f in widget.product.customFields)
+        f.key: TextEditingController()
+    };
+  }
+
+  @override
+  void dispose() {
+    for (final c in _fieldCtrls.values) c.dispose();
+    super.dispose();
+  }
 
   // ── Metadados de cada tipo de documento ──────────────────────────────────
   static const _docInfo = <String, (String, IconData, bool)>{
@@ -2990,7 +3009,9 @@ class _DocUploadStepState extends State<_DocUploadStep> {
   }
 
   bool get _allDone =>
-      widget.product.docsRequired.every((k) => _docs.containsKey(k));
+      widget.product.docsRequired.every((k) => _docs.containsKey(k)) &&
+      widget.product.customFields.every(
+          (f) => _fieldCtrls[f.key]?.text.trim().isNotEmpty == true);
 
   Future<void> _submit() async {
     if (!_allDone) {
@@ -3004,6 +3025,11 @@ class _DocUploadStepState extends State<_DocUploadStep> {
     }
     setState(() => _isSubmitting = true);
     try {
+      // Mescla respostas dos campos personalizados no mapa de docs
+      for (final f in widget.product.customFields) {
+        final text = _fieldCtrls[f.key]?.text.trim() ?? '';
+        if (text.isNotEmpty) _docs[f.key] = text;
+      }
       await widget.onContinue(_docs);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -3185,6 +3211,85 @@ class _DocUploadStepState extends State<_DocUploadStep> {
               ),
             );
           }),
+
+          // ── Campos personalizados (texto livre) ──────────────────────────
+          if (widget.product.customFields.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            const Text(
+              'Informações adicionais',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...widget.product.customFields.map((f) {
+              final ctrl = _fieldCtrls[f.key]!;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: AnimatedBuilder(
+                  animation: ctrl,
+                  builder: (_, __) {
+                    final filled = ctrl.text.trim().isNotEmpty;
+                    return TextFormField(
+                      controller: ctrl,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        labelText: f.label,
+                        hintText: 'Digite ${f.label.toLowerCase()}',
+                        prefixIcon: Icon(
+                          Icons.edit_note_rounded,
+                          color: filled
+                              ? AppColors.success
+                              : AppColors.primary,
+                          size: 20,
+                        ),
+                        suffixIcon: filled
+                            ? const Icon(Icons.check_circle_rounded,
+                                color: AppColors.success, size: 20)
+                            : null,
+                        filled: true,
+                        fillColor: filled
+                            ? AppColors.success.withValues(alpha: 0.05)
+                            : AppColors.surfaceVariant,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                              color: AppColors.cardBorder, width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: filled
+                                ? AppColors.success
+                                : AppColors.cardBorder,
+                            width: 1.5,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                              color: AppColors.primary, width: 2),
+                        ),
+                        labelStyle: TextStyle(
+                          color: filled
+                              ? AppColors.success
+                              : AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textPrimary),
+                    );
+                  },
+                ),
+              );
+            }),
+          ],
 
           const SizedBox(height: 8),
 
