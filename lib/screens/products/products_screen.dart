@@ -703,282 +703,188 @@ class _CategoryHeader extends StatelessWidget {
   }
 }
 
-// -- Card de produto ------------------------------------------------------------
+// -- Card de produto (ExpansionTile compacto) ----------------------------------
 
-class _ProductCard extends StatefulWidget {
+class _ProductCard extends StatelessWidget {
   final ProductModel product;
   const _ProductCard({required this.product});
 
   @override
-  State<_ProductCard> createState() => _ProductCardState();
-}
-
-class _ProductCardState extends State<_ProductCard> {
-  bool _expanded = false;
-
-  @override
   Widget build(BuildContext context) {
-    final product = widget.product;
+    final p = product;
     final auth = context.read<AuthService>();
     final affiliateCode = auth.currentUser?.affiliateCode ?? 'ABC123';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: product.isPixRecorrente
-              ? AppColors.primary.withValues(alpha: 0.25)
-              : AppColors.cardBorder,
-          width: product.isPixRecorrente ? 1.5 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: p.isPixRecorrente
+                ? AppColors.primary.withValues(alpha: 0.3)
+                : AppColors.cardBorder,
+            width: p.isPixRecorrente ? 1.5 : 1,
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // -- Header ----------------------------------------------------------
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Ícone categoria — Icon Material colorido por categoria
-                _CategoryIconAvatar(categoria: product.categoria),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Nome + badge tipo de cobrança
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              product.nome,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          _ChargeBadge(product: product),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        product.descricao,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                            height: 1.4),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
-          ),
-
-          // -- Preço + comissão -------------------------------------------------
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceVariant,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                // Valor
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Valor',
-                          style: TextStyle(
-                              fontSize: 11, color: AppColors.textHint)),
-                      const SizedBox(height: 2),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            product.valorFormatado,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          if (product.periodicidade != null)
-                            Padding(
-                              padding:
-                                  const EdgeInsets.only(left: 3, bottom: 3),
-                              child: Text(
-                                '/${product.periodicidade}',
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textHint),
-                              ),
-                            ),
-                        ],
-                      ),
-                      if (product.isPixRecorrente && product.diaCobranca != null)
-                        Row(
-                          children: [
-                            const Icon(Icons.calendar_today_rounded,
-                                size: 11, color: AppColors.textHint),
-                            const SizedBox(width: 3),
-                            Text(
-                              'Todo dia ${product.diaCobranca}',
-                              style: const TextStyle(
-                                  fontSize: 11, color: AppColors.textHint),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-
-                // Sua comissão
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.greenGradient,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        product.comissaoFormatada,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Text(
-                        '${product.comissaoPercent}% comissão',
-                        style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500),
-                      ),
-                      if (product.recorrente)
-                        const Text(
-                          'por mês',
-                          style: TextStyle(
-                              color: Colors.white60,
-                              fontSize: 10),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // -- Benefícios (expansível) ------------------------------------------
-          if (product.beneficiosList.isNotEmpty) ...[
-            GestureDetector(
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(
-                  children: [
-                    const Icon(Icons.checklist_rounded,
-                        color: AppColors.primary, size: 16),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'O que o cliente recebe',
-                      style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
-                    ),
-                    const Spacer(),
-                    Icon(
-                      _expanded
-                          ? Icons.expand_less_rounded
-                          : Icons.expand_more_rounded,
-                      color: AppColors.primary,
-                      size: 18,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (_expanded)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: Column(
-                  children: product.beneficiosList
-                      .map((b) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.check_circle_outline_rounded,
-                                    color: AppColors.success, size: 14),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(b,
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondary)),
-                                ),
-                              ],
-                            ),
-                          ))
-                      .toList(),
-                ),
-              ),
           ],
-
-          const Divider(height: 1, indent: 16, endIndent: 16),
-
-          // -- Ações: Divulgar link rastreável ---------------------------------
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () =>
-                        _showShareSheet(context, product, affiliateCode),
-                    icon: const Icon(Icons.share_rounded,
-                        size: 16, color: Colors.white),
-                    label: const Text(
-                      'Divulgar',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      elevation: 2,
-                    ),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          iconColor: AppColors.textHint,
+          collapsedIconColor: AppColors.textHint,
+          // ── Linha resumo ────────────────────────────────────────────────────
+          leading: _CategoryIconAvatarSmall(categoria: p.categoria),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  p.nome,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 6),
+              _ChargeBadge(product: p),
+            ],
           ),
-        ],
+          subtitle: Row(
+            children: [
+              Text(
+                p.valorFormatado,
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary),
+              ),
+              if (p.periodicidade != null)
+                Text(
+                  '/${p.periodicidade}',
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textHint),
+                ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  gradient: AppColors.greenGradient,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${p.comissaoPercent}% · ${p.comissaoFormatada}${p.recorrente ? "/mês" : ""}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          // ── Conteúdo expandido ───────────────────────────────────────────────
+          children: [
+            const Divider(color: AppColors.cardBorder, height: 1),
+            const SizedBox(height: 10),
+
+            // Descrição
+            Text(
+              p.descricao,
+              style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  height: 1.5),
+            ),
+
+            // Dia de cobrança
+            if (p.isPixRecorrente && p.diaCobranca != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.calendar_today_rounded,
+                      size: 12, color: AppColors.textHint),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Cobrança todo dia ${p.diaCobranca}',
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textHint),
+                  ),
+                ],
+              ),
+            ],
+
+            // Benefícios
+            if (p.beneficiosList.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Icon(Icons.checklist_rounded,
+                      color: AppColors.primary, size: 13),
+                  const SizedBox(width: 5),
+                  const Text(
+                    'O que o cliente recebe',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ...p.beneficiosList.map((b) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle_outline_rounded,
+                            color: AppColors.success, size: 13),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(b,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary)),
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
+
+            const SizedBox(height: 10),
+            // Botão Divulgar
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () =>
+                    _showShareSheet(context, p, affiliateCode),
+                icon: const Icon(Icons.share_rounded,
+                    size: 15, color: Colors.white),
+                label: const Text(
+                  'Divulgar produto',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1220,6 +1126,35 @@ class _ProductCardState extends State<_ProductCard> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// -- Avatar de ícone da categoria no card de produto (versão compacta 38px) ----
+class _CategoryIconAvatarSmall extends StatelessWidget {
+  final String categoria;
+  const _CategoryIconAvatarSmall({required this.categoria});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _CategoryIconAvatar._color(categoria);
+    final icon  = _CategoryIconAvatar._icon(categoria);
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            color.withValues(alpha: 0.18),
+            color.withValues(alpha: 0.08),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Center(child: Icon(icon, color: color, size: 20)),
     );
   }
 }

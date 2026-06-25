@@ -1369,7 +1369,7 @@ class _ExportButton extends StatelessWidget {
   }
 }
 
-// -- Row: Afiliado -------------------------------------------------------------
+// -- Row: Afiliado (ExpansionTile compacto) ------------------------------------
 class _AffiliateRow extends StatelessWidget {
   final AdminAffiliate a;
   final NumberFormat fmt;
@@ -1378,18 +1378,22 @@ class _AffiliateRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = a.status == 'ativo' ? AppColors.success : AppColors.warning;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 0),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          iconColor: AppColors.textHint,
+          collapsedIconColor: AppColors.textHint,
+          leading: Container(
+            width: 32, height: 32,
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
@@ -1400,64 +1404,65 @@ class _AffiliateRow extends StatelessWidget {
                 style: const TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w800,
-                    fontSize: 16),
+                    fontSize: 14),
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(a.nome,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: AppColors.textPrimary),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(a.status,
-                          style: TextStyle(
-                              color: statusColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                  ],
-                ),
-                Text(a.email,
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(a.nome,
                     style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: AppColors.textPrimary),
                     overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    _Mini(label: 'Código', value: a.affiliateCode),
-                    const SizedBox(width: 12),
-                    _Mini(
-                        label: 'Comissões',
-                        value: fmt.format(a.totalComissoes),
-                        color: AppColors.gold),
-                    const SizedBox(width: 12),
-                    _Mini(
-                        label: 'Saldo',
-                        value: fmt.format(a.saldoDisponivel),
-                        color: AppColors.success),
-                  ],
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(a.status,
+                    style: TextStyle(
+                        color: statusColor,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          subtitle: Text(
+            '${a.affiliateCode} · ${fmt.format(a.totalComissoes)} comissões',
+            style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+          ),
+          children: [
+            const Divider(color: AppColors.cardBorder, height: 1),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.email_outlined, size: 12, color: AppColors.textHint),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(a.email,
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      overflow: TextOverflow.ellipsis),
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                _Mini(label: 'Código', value: a.affiliateCode),
+                const SizedBox(width: 16),
+                _Mini(label: 'Comissões', value: fmt.format(a.totalComissoes), color: AppColors.gold),
+                const SizedBox(width: 16),
+                _Mini(label: 'Saldo', value: fmt.format(a.saldoDisponivel), color: AppColors.success),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1472,73 +1477,91 @@ class _WithdrawalRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final df = DateFormat('dd/MM/yyyy HH:mm');
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: w.statusColor.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: w.statusColor.withValues(alpha: 0.3)),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          iconColor: AppColors.textHint,
+          collapsedIconColor: AppColors.textHint,
+          leading: Container(
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: w.statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.pix_rounded, color: w.statusColor, size: 20),
+            child: Icon(Icons.pix_rounded, color: w.statusColor, size: 18),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(w.affiliateNome,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: AppColors.textPrimary),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    Text(
-                      fmt.format(w.valor),
-                      style: TextStyle(
-                          color: w.statusColor,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14),
-                    ),
-                  ],
-                ),
-                Text(w.pixKey,
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(w.affiliateNome,
                     style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: AppColors.textPrimary),
                     overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    _Mini(
-                        label: 'Status',
-                        value: w.statusLabel,
-                        color: w.statusColor),
-                    const SizedBox(width: 12),
-                    _Mini(
-                        label: 'Solicitado',
-                        value: df.format(w.solicitadoEm)),
-                    if (w.txId != null && w.txId!.isNotEmpty) ...[
-                      const SizedBox(width: 12),
-                      _Mini(label: 'Tx ID', value: w.txId!),
-                    ],
-                  ],
+              ),
+              const SizedBox(width: 6),
+              Text(fmt.format(w.valor),
+                  style: TextStyle(
+                      color: w.statusColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12)),
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: w.statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(5),
                 ),
+                child: Text(w.statusLabel,
+                    style: TextStyle(
+                        color: w.statusColor,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          subtitle: Text(
+            w.pixKey,
+            style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+            overflow: TextOverflow.ellipsis,
+          ),
+          children: [
+            const Divider(color: AppColors.cardBorder, height: 1),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 16,
+              runSpacing: 4,
+              children: [
+                _Mini(label: 'Status', value: w.statusLabel, color: w.statusColor),
+                _Mini(label: 'Solicitado', value: df.format(w.solicitadoEm)),
+                if (w.txId != null && w.txId!.isNotEmpty)
+                  _Mini(label: 'Tx ID', value: w.txId!.length > 12 ? w.txId!.substring(0, 12) + '…' : w.txId!),
               ],
             ),
-          ),
-        ],
+            if (w.motivo != null && w.motivo!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, size: 11, color: AppColors.error),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(w.motivo!,
+                        style: const TextStyle(color: AppColors.error, fontSize: 11)),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -1696,150 +1719,119 @@ class _VendaRow extends StatelessWidget {
                     : v.clienteEmail.isNotEmpty ? v.clienteEmail
                     : 'Cliente não identificado';
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: v.statusColor.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Ícone com badge de tipo
-          Stack(
-            clipBehavior: Clip.none,
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: v.statusColor.withValues(alpha: 0.3)),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          iconColor: AppColors.textHint,
+          collapsedIconColor: AppColors.textHint,
+          leading: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: tipoColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(tipoIcon, color: tipoColor, size: 18),
+          ),
+          title: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: tipoColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(tipoIcon, color: tipoColor, size: 20),
+              Expanded(
+                child: Text(v.productNome,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: AppColors.textPrimary),
+                    overflow: TextOverflow.ellipsis),
               ),
-              Positioned(
-                right: -4, top: -4,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: tipoColor,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(tipoLabel,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w800)),
+              const SizedBox(width: 6),
+              Text(fmt.format(v.valor),
+                  style: TextStyle(
+                      color: v.statusColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12)),
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: v.statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(5),
                 ),
+                child: Text(v.statusLabel,
+                    style: TextStyle(
+                        color: v.statusColor,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700)),
               ),
             ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          subtitle: Text(
+            '$cliente · $tipoLabel',
+            style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+            overflow: TextOverflow.ellipsis,
+          ),
+          children: [
+            const Divider(color: AppColors.cardBorder, height: 1),
+            const SizedBox(height: 8),
+            Row(
               children: [
-                // Linha 1: produto + valor
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(v.productNome,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: AppColors.textPrimary),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(fmt.format(v.valor),
-                            style: TextStyle(
-                                color: v.statusColor,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13)),
-                        if (v.comissao > 0)
-                          Text('+ ${fmt.format(v.comissao)} comissão',
-                              style: const TextStyle(
-                                  color: AppColors.gold,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                // Linha 2: cliente nome + email
-                Row(
-                  children: [
-                    const Icon(Icons.person_rounded,
-                        size: 11, color: AppColors.textHint),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(cliente,
-                          style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w500),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-                if (v.clienteNome.isNotEmpty && v.clienteEmail.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 15),
-                    child: Text(v.clienteEmail,
-                        style: const TextStyle(
-                            fontSize: 10, color: AppColors.textHint),
-                        overflow: TextOverflow.ellipsis),
+                const Icon(Icons.person_rounded, size: 11, color: AppColors.textHint),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    v.clienteNome.isNotEmpty && v.clienteEmail.isNotEmpty
+                        ? '${v.clienteNome} · ${v.clienteEmail}'
+                        : cliente,
+                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                const SizedBox(height: 3),
-                // Linha 3: afiliado
-                if (v.affiliateCode.isNotEmpty)
-                  Row(
-                    children: [
-                      const Icon(Icons.handshake_rounded,
-                          size: 11, color: AppColors.textHint),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          v.affiliateNome.isNotEmpty
-                              ? '${v.affiliateNome} (${v.affiliateCode})'
-                              : v.affiliateCode,
-                          style: const TextStyle(
-                              fontSize: 11, color: AppColors.textSecondary),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 5),
-                // Linha 4: status + data + payment_id
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 4,
-                  children: [
-                    _Mini(
-                        label: 'Status',
-                        value: v.statusLabel,
-                        color: v.statusColor),
-                    _Mini(
-                        label: 'Data',
-                        value: df.format(v.createdAt)),
-                    if (v.paymentId.isNotEmpty)
-                      _Mini(
-                          label: 'Payment ID',
-                          value: v.paymentId.length > 10
-                              ? '${v.paymentId.substring(0, 10)}…'
-                              : v.paymentId,
-                          color: AppColors.textHint),
-                  ],
                 ),
               ],
             ),
-          ),
-        ],
+            if (v.affiliateCode.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Row(
+                  children: [
+                    const Icon(Icons.handshake_rounded, size: 11, color: AppColors.textHint),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        v.affiliateNome.isNotEmpty
+                            ? '${v.affiliateNome} (${v.affiliateCode})'
+                            : v.affiliateCode,
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              children: [
+                _Mini(label: 'Data', value: df.format(v.createdAt)),
+                if (v.comissao > 0)
+                  _Mini(label: 'Comissão', value: fmt.format(v.comissao), color: AppColors.gold),
+                if (v.paymentId.isNotEmpty)
+                  _Mini(
+                      label: 'Payment ID',
+                      value: v.paymentId.length > 12
+                          ? '${v.paymentId.substring(0, 12)}\u2026'
+                          : v.paymentId,
+                      color: AppColors.textHint),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
