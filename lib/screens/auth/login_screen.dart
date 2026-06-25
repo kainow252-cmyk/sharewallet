@@ -458,10 +458,32 @@ class _LoginScreenState extends State<LoginScreen> {
               // Header
               Expanded(
                 flex: 2,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+                child: Stack(
+                  children: [
+                    // Botão voltar — canto superior esquerdo
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        onPressed: () => Navigator.pushReplacementNamed(
+                            context, '/landing'),
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                        color: Colors.white.withValues(alpha: 0.85),
+                        iconSize: 20,
+                        tooltip: 'Voltar',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white.withValues(alpha: 0.12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.all(8),
+                        ),
+                      ),
+                    ),
+                    // Logo + nome centralizado
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
                       Container(
                         width: 80,
                         height: 80,
@@ -518,10 +540,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white70, fontSize: 13),
                       ),
-                    ],
-                  ),
-                ),
-              ),
+                    ],           // fecha Column children
+                  ),             // fecha Column
+                ),               // fecha Center
+              ],                 // fecha Stack children
+            ),                   // fecha Stack
+              ),                 // fecha Expanded child
 
               // Form
               Expanded(
