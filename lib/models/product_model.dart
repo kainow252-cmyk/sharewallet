@@ -45,7 +45,8 @@ class ProductModel {
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
     ChargeType ct = ChargeType.pixRecorrente;
-    final raw = json['chargeType']?.toString() ?? '';
+    // API retorna snake_case (charge_type); suporte a camelCase legado (chargeType)
+    final raw = (json['charge_type'] ?? json['chargeType'])?.toString() ?? '';
     if (raw == 'pixAvulso') ct = ChargeType.pixAvulso;
     if (raw == 'pixAutomatico') ct = ChargeType.pixRecorrente; // legado
     if (raw == 'unico') ct = ChargeType.pixAvulso;             // legado

@@ -170,28 +170,30 @@ class SubscriptionModel {
     if (json['status'] == 'cancelada') st = SubscriptionStatus.cancelada;
     if (json['status'] == 'aguardando') st = SubscriptionStatus.aguardando;
 
+    // API retorna snake_case; suporte a camelCase legado
+    final rawCt = (json['charge_type'] ?? json['chargeType'])?.toString() ?? '';
     ChargeType ct = ChargeType.pixRecorrente;
-    if (json['chargeType'] == 'pixAvulso') ct = ChargeType.pixAvulso;
+    if (rawCt == 'pixAvulso' || rawCt == 'unico') ct = ChargeType.pixAvulso;
 
     return SubscriptionModel(
       id: json['id']?.toString() ?? '',
-      productId: json['productId']?.toString() ?? '',
-      productNome: json['productNome'] ?? '',
+      productId: (json['product_id'] ?? json['productId'])?.toString() ?? '',
+      productNome: json['product_nome'] ?? json['productNome'] ?? '',
       valor: (json['valor'] ?? 0).toDouble(),
       comissao: (json['comissao'] ?? 0).toDouble(),
-      affiliateCode: json['affiliateCode'] ?? '',
-      affiliateNome: json['affiliateNome'],
+      affiliateCode: json['affiliate_code'] ?? json['affiliateCode'] ?? '',
+      affiliateNome: json['affiliate_nome'] ?? json['affiliateNome'],
       status: st,
       chargeType: ct,
-      dataInicio: DateTime.tryParse(json['dataInicio'] ?? '') ?? DateTime.now(),
-      dataCancelamento: json['dataCancelamento'] != null
-          ? DateTime.tryParse(json['dataCancelamento'])
+      dataInicio: DateTime.tryParse(json['data_inicio'] ?? json['dataInicio'] ?? '') ?? DateTime.now(),
+      dataCancelamento: (json['data_cancelamento'] ?? json['dataCancelamento']) != null
+          ? DateTime.tryParse(json['data_cancelamento'] ?? json['dataCancelamento'])
           : null,
       proximaCobranca:
-          DateTime.tryParse(json['proximaCobranca'] ?? '') ?? DateTime.now(),
-      diaCobranca: json['diaCobranca'] ?? 5,
-      pixKey: json['pixKey'],
-      wooviSubscriptionId: json['wooviSubscriptionId'],
+          DateTime.tryParse(json['proxima_cobranca'] ?? json['proximaCobranca'] ?? '') ?? DateTime.now(),
+      diaCobranca: json['dia_cobranca'] ?? json['diaCobranca'] ?? 5,
+      pixKey: json['pix_key'] ?? json['pixKey'],
+      wooviSubscriptionId: json['woovi_subscription_id'] ?? json['wooviSubscriptionId'],
       motivo: json['motivo'],
     );
   }
