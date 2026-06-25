@@ -38,8 +38,13 @@ class WooviService {
     String? customerCpf,
     String? customerPhone,
     String? comment,
+    // Callback para receber a mensagem de erro da Woovi
+    void Function(String)? onError,
   }) async {
     try {
+      // CPF: limpa máscara antes de enviar
+      final cpfClean = customerCpf?.replaceAll(RegExp(r'\D'), '');
+
       final res = await http.post(
         Uri.parse('$_base/api/charge/woovi'),
         headers: {'Content-Type': 'application/json'},
@@ -52,11 +57,11 @@ class WooviService {
           'productNome':      productNome,
           'comissaoCentavos': commissionCents,
           if (affiliatePixKey != null) 'affiliatePixKey': affiliatePixKey,
-          if (customerName  != null) 'customerName':  customerName,
-          if (customerEmail != null) 'customerEmail': customerEmail,
-          if (customerCpf   != null) 'customerCpf':   customerCpf,
-          if (customerPhone != null) 'customerPhone': customerPhone,
-          if (comment       != null) 'comment':       comment,
+          if (customerName  != null && customerName.isNotEmpty)   'customerName':  customerName,
+          if (customerEmail != null && customerEmail.isNotEmpty)  'customerEmail': customerEmail,
+          if (cpfClean      != null && cpfClean.length == 11)     'customerCpf':   cpfClean,
+          if (customerPhone != null && customerPhone.isNotEmpty)  'customerPhone': customerPhone,
+          if (comment       != null) 'comment': comment,
         }),
       ).timeout(const Duration(seconds: 30));
 
@@ -64,12 +69,17 @@ class WooviService {
       if (kDebugMode) debugPrint('[WooviService] createCharge ${res.statusCode}: $data');
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        return ChargeResult.fromJson(data);
+        return ChargeResult.fromJson(data['result'] ?? data);
       }
-      if (kDebugMode) debugPrint('[WooviService] Erro charge: ${data['error']}');
+
+      // Extrai mensagem de erro real para exibir ao usuário
+      final errMsg = _extractError(data);
+      if (kDebugMode) debugPrint('[WooviService] Erro charge: $errMsg');
+      onError?.call(errMsg);
       return null;
     } catch (e) {
       if (kDebugMode) debugPrint('[WooviService] createCharge exception: $e');
+      onError?.call('Erro de conexão. Verifique sua internet e tente novamente.');
       return null;
     }
   }
@@ -87,7 +97,7 @@ class WooviService {
     required String productId,
     required String productNome,
     int commissionCents = 0,
-    int? dayGenerateCharge,           // dia do mês para cobrar (padrão: hoje)
+    // dayGenerateCharge é ignorado — Worker usa 25 fixo (regra Woovi PAYMENT_ON_APPROVAL)
     // Dados do cliente (obrigatório para Pix Automático)
     required String customerName,
     required String customerCpf,      // CPF sem formatação
@@ -102,8 +112,13 @@ class WooviService {
     required String state,
     String complement = '',
     String? comment,
+    // Callback para receber a mensagem de erro da Woovi
+    void Function(String)? onError,
   }) async {
     try {
+      final cpfClean = customerCpf.replaceAll(RegExp(r'\D'), '');
+      final phoneClean = customerPhone?.replaceAll(RegExp(r'\D'), '');
+
       final res = await http.post(
         Uri.parse('$_base/api/subscription/woovi'),
         headers: {'Content-Type': 'application/json'},
@@ -115,16 +130,16 @@ class WooviService {
           'productId':        productId,
           'productNome':      productNome,
           'comissaoCentavos': commissionCents,
-          if (dayGenerateCharge != null) 'dayGenerateCharge': dayGenerateCharge,
+          // dayGenerateCharge: o worker usa 25 fixo (PAYMENT_ON_APPROVAL exige)
           if (comment != null) 'comment': comment,
           'customer': {
             'name':  customerName,
-            'taxID': customerCpf.replaceAll(RegExp(r'\D'), ''),
+            'taxID': cpfClean,
             'email': customerEmail,
-            if (customerPhone != null)
-              'phone': customerPhone.replaceAll(RegExp(r'\D'), ''),
+            if (phoneClean != null && phoneClean.isNotEmpty)
+              'phone': phoneClean,
             'address': {
-              'zipcode':       zipcode,
+              'zipcode':       zipcode.replaceAll(RegExp(r'\D'), ''),
               'street':        street,
               'number':        number,
               'neighborhood':  neighborhood,
@@ -140,14 +155,29 @@ class WooviService {
       if (kDebugMode) debugPrint('[WooviService] createSubscription ${res.statusCode}: $data');
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        return SubscriptionResult.fromJson(data);
+        return SubscriptionResult.fromJson(data['result'] ?? data);
       }
-      if (kDebugMode) debugPrint('[WooviService] Erro subscription: ${data['error']}');
+
+      // Extrai mensagem de erro real para exibir ao usuário
+      final errMsg = _extractError(data);
+      if (kDebugMode) debugPrint('[WooviService] Erro subscription: $errMsg');
+      onError?.call(errMsg);
       return null;
     } catch (e) {
       if (kDebugMode) debugPrint('[WooviService] createSubscription exception: $e');
+      onError?.call('Erro de conexão. Verifique sua internet e tente novamente.');
       return null;
     }
+  }
+
+  // ── Helper: extrai mensagem de erro do response do worker ───────────────
+  static String _extractError(Map<String, dynamic> data) {
+    final raw = data['error'] as String?
+             ?? data['message'] as String?
+             ?? data['result']?['error'] as String?
+             ?? 'Erro desconhecido. Tente novamente.';
+    // Remove prefixo "Woovi: " para mensagem mais limpa ao usuário
+    return raw.startsWith('Woovi: ') ? raw.substring(7) : raw;
   }
 
   // ── Polling status da venda ────────────────────────────────────────────

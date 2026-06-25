@@ -243,13 +243,24 @@ class _BuyScreenState extends State<BuyScreen> {
     // correlationID único por tentativa de pagamento
     final correlationID = 'sw_${widget.productId}_${widget.affiliateCode}_${DateTime.now().millisecondsSinceEpoch}';
     // userId do afiliado (dono do produto / recebedor da comissão)
-    // O Worker busca o afiliado pelo affiliateCode para pegar a pixKey da subconta
-    final affiliateUserId = widget.affiliateCode; // será resolvido no Worker
+    final affiliateUserId = widget.affiliateCode;
 
-    // -- PIX Avulso: cria charge com split para subconta do afiliado -------
+    // Helper: exibe snackbar com mensagem de erro
+    void mostrarErro(String msg) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    }
+
+    // -- PIX Avulso: cria charge ----------------------------------------
     if (_product!.isPixAvulso) {
-      final valorCents      = (_product!.valor * 100).round();
-      final comissaoCents   = (_product!.valorComissao * 100).round();
+      final valorCents    = (_product!.valor * 100).round();
+      final comissaoCents = (_product!.valorComissao * 100).round();
 
       final result = await WooviService.createCharge(
         correlationID:    correlationID,
@@ -264,6 +275,7 @@ class _BuyScreenState extends State<BuyScreen> {
         customerCpf:      _cpfCtrl.text.trim(),
         customerPhone:    _celularCtrl.text.trim().isNotEmpty ? _celularCtrl.text.trim() : null,
         comment:          _product!.nome,
+        onError:          mostrarErro,
       );
 
       if (!mounted) return;
@@ -280,20 +292,11 @@ class _BuyScreenState extends State<BuyScreen> {
             );
           }
         });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erro ao gerar PIX. Tente novamente.'),
-            backgroundColor: AppColors.error,
-            duration: Duration(seconds: 5),
-          ),
-        );
       }
       return;
     }
 
     // -- PIX Automático: cria assinatura recorrente (Banco Central) --------
-    // PAYMENT_ON_APPROVAL: cliente escaneia QR → paga 1ª parcela + autoriza futuras.
     setState(() { _preapprovalResult = null; });
 
     final valorCents    = (_product!.valor * 100).round();
@@ -319,6 +322,7 @@ class _BuyScreenState extends State<BuyScreen> {
       state:           _estadoCtrl.text.trim().toUpperCase(),
       complement:      _compCtrl.text.trim(),
       comment:         _product!.nome,
+      onError:         mostrarErro,
     );
 
     if (!mounted) return;
@@ -335,14 +339,6 @@ class _BuyScreenState extends State<BuyScreen> {
           );
         }
       });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erro ao criar assinatura. Verifique os dados e tente novamente.'),
-          backgroundColor: AppColors.error,
-          duration: Duration(seconds: 6),
-        ),
-      );
     }
   }
 
