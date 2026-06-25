@@ -463,269 +463,313 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.darkGreenGradient),
         child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Expanded(
-                flex: 2,
-                child: Stack(
+          child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    MediaQuery.of(context).padding.bottom,
+              ),
+              child: IntrinsicHeight(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Botão voltar — canto superior esquerdo
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IconButton(
-                        onPressed: () => Navigator.pushReplacementNamed(
-                            context, '/landing'),
-                        icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                        color: Colors.white.withValues(alpha: 0.85),
-                        iconSize: 20,
-                        tooltip: 'Voltar',
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.white.withValues(alpha: 0.12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.all(8),
-                        ),
-                      ),
-                    ),
-                    // Logo + nome centralizado
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                    // ── Header compacto ──────────────────────────────────
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 18),
+                      child: Stack(
+                        alignment: Alignment.center,
                         children: [
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF00E5B4).withValues(alpha: 0.35),
-                              blurRadius: 20,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(22),
-                          child: Image.asset(
-                            'assets/images/sharewallet_logo.png',
-                            width: 80, height: 80, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
-                              Icons.account_balance_wallet_rounded,
-                              color: Colors.white, size: 45,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      RichText(
-                        text: const TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Share',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.5,
+                          // Botão voltar — canto superior esquerdo
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            child: IconButton(
+                              onPressed: () => Navigator.pushReplacementNamed(
+                                  context, '/landing'),
+                              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                              color: Colors.white.withValues(alpha: 0.85),
+                              iconSize: 20,
+                              tooltip: 'Voltar',
+                              style: IconButton.styleFrom(
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.all(8),
                               ),
                             ),
-                            TextSpan(
-                              text: 'Wallet',
-                              style: TextStyle(
-                                color: Color(0xFF00E5B4),
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Transforme conexões em receita recorrente.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white70, fontSize: 13),
-                      ),
-                    ],           // fecha Column children
-                  ),             // fecha Column
-                ),               // fecha Center
-              ],                 // fecha Stack children
-            ),                   // fecha Stack
-              ),                 // fecha Expanded child
-
-              // Form
-              Expanded(
-                flex: 3,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(28),
-                  decoration: const BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                  ),
-                  child: Form(
-                    key: _formKey,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Entrar',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textPrimary,
-                            ),
                           ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Acesse sua conta de afiliado',
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                          ),
-                          const SizedBox(height: 28),
-                          TextFormField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              labelText: 'E-mail',
-                              prefixIcon: Icon(Icons.email_outlined, color: AppColors.primary),
-                            ),
-                            validator: (v) =>
-                                v!.isEmpty ? 'Informe seu e-mail' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _senhaController,
-                            obscureText: !_showPassword,
-                            decoration: InputDecoration(
-                              labelText: 'Senha',
-                              prefixIcon: const Icon(Icons.lock_outline_rounded,
-                                  color: AppColors.primary),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _showPassword
-                                      ? Icons.visibility_off_rounded
-                                      : Icons.visibility_rounded,
-                                  color: AppColors.textHint,
-                                ),
-                                onPressed: () =>
-                                    setState(() => _showPassword = !_showPassword),
-                              ),
-                            ),
-                            validator: (v) =>
-                                v!.length < 6 ? 'Mínimo 6 caracteres' : null,
-                          ),
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: _forgotPassword,
-                              child: const Text('Esqueceu a senha?',
-                                  style: TextStyle(color: AppColors.primary)),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          PrimaryButton(
-                            label: 'Entrar',
-                            onPressed: auth.isLoading || _socialLoading ? null : _login,
-                            isLoading: auth.isLoading,
-                            icon: Icons.login_rounded,
-                          ),
-
-                          // -- Divisor "ou" ----------------------------------
-                          const SizedBox(height: 24),
-                          Row(
+                          // Logo + título
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Expanded(
-                                child: Divider(
-                                  color: AppColors.textHint.withValues(alpha: 0.4),
-                                  thickness: 1,
+                              const SizedBox(height: 44), // espaço para o botão voltar
+                              Container(
+                                width: 72,
+                                height: 72,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF00E5B4)
+                                          .withValues(alpha: 0.35),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Text(
-                                  'ou entre com',
-                                  style: TextStyle(
-                                    color: AppColors.textHint,
-                                    fontSize: 12,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Image.asset(
+                                    'assets/images/sharewallet_logo.png',
+                                    width: 72,
+                                    height: 72,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                      Icons.account_balance_wallet_rounded,
+                                      color: Colors.white,
+                                      size: 40,
+                                    ),
                                   ),
                                 ),
                               ),
-                              Expanded(
-                                child: Divider(
-                                  color: AppColors.textHint.withValues(alpha: 0.4),
-                                  thickness: 1,
+                              const SizedBox(height: 10),
+                              RichText(
+                                text: const TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Share',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: 'Wallet',
+                                      style: TextStyle(
+                                        color: Color(0xFF00E5B4),
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Transforme conexões em receita recorrente.',
+                                textAlign: TextAlign.center,
+                                style:
+                                    TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                              const SizedBox(height: 4),
                             ],
                           ),
-                          const SizedBox(height: 16),
-
-                          // -- Botões sociais --------------------------------
-                          Row(
-                            children: [
-                              // Google
-                              Expanded(
-                                child: _SocialButton(
-                                  label: 'Google',
-                                  icon: _GoogleIcon(),
-                                  onPressed: _socialLoading || auth.isLoading
-                                      ? null
-                                      : _loginWithGoogle,
-                                  isLoading: _socialLoading,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              // Facebook / Meta
-                              Expanded(
-                                child: _SocialButton(
-                                  label: 'Facebook',
-                                  icon: const Icon(
-                                    Icons.facebook_rounded,
-                                    color: Color(0xFF1877F2),
-                                    size: 22,
-                                  ),
-                                  onPressed: _socialLoading || auth.isLoading
-                                      ? null
-                                      : _loginWithFacebook,
-                                  isLoading: _socialLoading,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('Não tem conta?',
-                                  style: TextStyle(color: AppColors.textSecondary)),
-                              GestureDetector(
-                                onTap: () =>
-                                    Navigator.pushNamed(context, '/register'),
-                                child: const Text(
-                                  'Cadastre-se',
-                                  style: TextStyle(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
                         ],
                       ),
                     ),
-                  ),
+
+                    // ── Painel branco (form) — ocupa o resto da tela ─────
+                    Expanded(
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                        decoration: const BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(28)),
+                        ),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Entrar',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Acesse sua conta de afiliado',
+                                style: TextStyle(
+                                    color: AppColors.textSecondary, fontSize: 13),
+                              ),
+                              const SizedBox(height: 18),
+
+                              // E-mail
+                              TextFormField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                decoration: const InputDecoration(
+                                  labelText: 'E-mail',
+                                  prefixIcon: Icon(Icons.email_outlined,
+                                      color: AppColors.primary),
+                                ),
+                                validator: (v) =>
+                                    v!.isEmpty ? 'Informe seu e-mail' : null,
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Senha
+                              TextFormField(
+                                controller: _senhaController,
+                                obscureText: !_showPassword,
+                                decoration: InputDecoration(
+                                  labelText: 'Senha',
+                                  prefixIcon: const Icon(
+                                      Icons.lock_outline_rounded,
+                                      color: AppColors.primary),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _showPassword
+                                          ? Icons.visibility_off_rounded
+                                          : Icons.visibility_rounded,
+                                      color: AppColors.textHint,
+                                    ),
+                                    onPressed: () => setState(
+                                        () => _showPassword = !_showPassword),
+                                  ),
+                                ),
+                                validator: (v) =>
+                                    v!.length < 6 ? 'Mínimo 6 caracteres' : null,
+                              ),
+                              const SizedBox(height: 4),
+
+                              // Esqueceu a senha
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: _forgotPassword,
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4, vertical: 4),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text('Esqueceu a senha?',
+                                      style:
+                                          TextStyle(color: AppColors.primary)),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Botão Entrar
+                              PrimaryButton(
+                                label: 'Entrar',
+                                onPressed:
+                                    auth.isLoading || _socialLoading ? null : _login,
+                                isLoading: auth.isLoading,
+                                icon: Icons.login_rounded,
+                              ),
+
+                              // -- Divisor "ou entre com" -------------------
+                              const SizedBox(height: 18),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Divider(
+                                      color: AppColors.textHint
+                                          .withValues(alpha: 0.4),
+                                      thickness: 1,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10),
+                                    child: Text(
+                                      'ou entre com',
+                                      style: TextStyle(
+                                        color: AppColors.textHint,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Divider(
+                                      color: AppColors.textHint
+                                          .withValues(alpha: 0.4),
+                                      thickness: 1,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+
+                              // -- Botões sociais Google + Facebook ---------
+                              Row(
+                                children: [
+                                  // Google
+                                  Expanded(
+                                    child: _SocialButton(
+                                      label: 'Google',
+                                      icon: _GoogleIcon(),
+                                      onPressed: _socialLoading || auth.isLoading
+                                          ? null
+                                          : _loginWithGoogle,
+                                      isLoading: _socialLoading,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // Facebook / Meta
+                                  Expanded(
+                                    child: _SocialButton(
+                                      label: 'Facebook',
+                                      icon: const Icon(
+                                        Icons.facebook_rounded,
+                                        color: Color(0xFF1877F2),
+                                        size: 22,
+                                      ),
+                                      onPressed: _socialLoading || auth.isLoading
+                                          ? null
+                                          : _loginWithFacebook,
+                                      isLoading: _socialLoading,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+
+                              // -- Cadastre-se ------------------------------
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text('Não tem conta?',
+                                      style: TextStyle(
+                                          color: AppColors.textSecondary)),
+                                  GestureDetector(
+                                    onTap: () => Navigator.pushNamed(
+                                        context, '/register'),
+                                    child: const Text(
+                                      ' Cadastre-se',
+                                      style: TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
