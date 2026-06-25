@@ -870,9 +870,9 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     ${widget.clienteNome.isNotEmpty ? '<div class="row"><span class="label">Cliente:</span><span class="value">${widget.clienteNome}</span></div>' : ''}
     ${widget.clienteEmail.isNotEmpty ? '<div class="row"><span class="label">E-mail:</span><span class="value">${widget.clienteEmail}</span></div>' : ''}
     <div class="row"><span class="label">Data/Hora:</span><span class="value">$dataHora</span></div>
-    <div class="row"><span class="label">Status:</span><span class="value">PIX Confirmado ✓</span></div>
+    <div class="row"><span class="label">Pagamento:</span><span class="value">PIX — Confirmado ✓</span></div>
   </div>
-  <div class="footer">Documento gerado em $dataHora — ShareWallet © 2025</div>
+  <div class="footer">Documento gerado em $dataHora — ShareWallet © ${DateTime.now().year}</div>
 </div>
 <script>window.onload = function() { window.print(); }</script>
 </body>
@@ -1018,200 +1018,478 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
     );
   }
 
-  // -- Widget do comprovante (também capturado para imagem) -----------------
+  // -- Widget do comprovante premium (também capturado para imagem) ----------
   Widget _buildComprovanteWidget(String primeiroNome) {
+    // Protocolo único baseado no timestamp atual
+    final protocolo = 'SW${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+    final dataHoraAtual = _formatarDataHora(DateTime.now());
+    final temImagem = widget.product.imagemUrl != null &&
+        widget.product.imagemUrl!.isNotEmpty;
+
     return Container(
       color: AppColors.background,
       child: Column(
         children: [
-          // -- Animação de sucesso ------------------------------------------
-          FadeTransition(
-            opacity: _fadeAnim,
-            child: ScaleTransition(
-              scale: _scaleAnim,
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: const BoxDecoration(
-                  color: AppColors.success,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_rounded, color: Colors.white, size: 56),
-              ),
-            ),
-          ),
 
-          const SizedBox(height: 20),
-
-          // -- Título --------------------------------------------------------
-          FadeTransition(
-            opacity: _fadeAnim,
-            child: Column(
-              children: [
-                Text(
-                  'Parabéns, $primeiroNome!',
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textPrimary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Sua compra foi confirmada com sucesso!',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: AppColors.textSecondary,
-                    height: 1.4,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // -- Card do produto comprado ---------------------------------------
+          // ── Card principal do comprovante ──────────────────────────────────
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: AppColors.darkGreenGradient,
-              borderRadius: BorderRadius.circular(20),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppColors.cardBorder, width: 1),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.success.withValues(alpha: 0.2),
-                  blurRadius: 20,
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  blurRadius: 24,
                   offset: const Offset(0, 8),
                 ),
               ],
             ),
+            clipBehavior: Clip.antiAlias,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(widget.product.chargeTypeIcon,
-                          color: Colors.white, size: 28),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(widget.product.nome,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 17,
-                                  fontWeight: FontWeight.w800)),
-                          Text(widget.product.chargeTypeLabel,
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(widget.product.valorFormatado,
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 22,
-                                fontWeight: FontWeight.w900)),
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
+
+                // ── Header com gradiente + animação ─────────────────────────
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+                  decoration: const BoxDecoration(
+                    gradient: AppColors.darkGreenGradient,
+                  ),
+                  child: Column(
+                    children: [
+                      // Logo + check animado
+                      FadeTransition(
+                        opacity: _fadeAnim,
+                        child: ScaleTransition(
+                          scale: _scaleAnim,
+                          child: Stack(
+                            alignment: Alignment.center,
                             children: [
-                              Icon(Icons.check_circle_rounded,
-                                  color: Colors.white, size: 12),
-                              SizedBox(width: 4),
-                              Text('Confirmado',
-                                  style: TextStyle(
+                              // Anel externo pulsante
+                              Container(
+                                width: 96,
+                                height: 96,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                ),
+                              ),
+                              // Ícone central
+                              Container(
+                                width: 72,
+                                height: 72,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.95),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.15),
+                                      blurRadius: 12,
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.check_rounded,
+                                  color: AppColors.success,
+                                  size: 40,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      FadeTransition(
+                        opacity: _fadeAnim,
+                        child: Column(
+                          children: [
+                            Text(
+                              'Pagamento Confirmado!',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: -0.5,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    offset: const Offset(0, 1),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Olá, $primeiroNome! Sua compra foi aprovada.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white.withValues(alpha: 0.85),
+                                height: 1.4,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Imagem do produto (se disponível) ────────────────────────
+                if (temImagem) ...[
+                  Container(
+                    width: double.infinity,
+                    height: 180,
+                    color: const Color(0xFF0A3D28),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.network(
+                          widget.product.imagemUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: AppColors.primaryDark,
+                            child: const Icon(Icons.image_not_supported_rounded,
+                                color: Colors.white38, size: 40),
+                          ),
+                        ),
+                        // Gradiente sutil sobre a imagem
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.45),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // Badge "Produto Adquirido" sobre a imagem
+                        Positioned(
+                          bottom: 12, right: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: AppColors.success,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.verified_rounded,
+                                    color: Colors.white, size: 13),
+                                SizedBox(width: 4),
+                                Text('Produto Adquirido',
+                                    style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,
-                                      fontWeight: FontWeight.w700)),
-                            ],
+                                      fontWeight: FontWeight.w700,
+                                    )),
+                              ],
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
-                if (widget.product.descricao.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(widget.product.descricao,
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12, height: 1.4)),
                   ),
                 ],
+
+                // ── Detalhes do produto ──────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Ícone do tipo de produto
+                      if (!temImagem)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(right: 14),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryLight.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(widget.product.chargeTypeIcon,
+                              color: AppColors.primary, size: 26),
+                        ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.product.nome,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                                height: 1.3,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    widget.product.chargeTypeLabel,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Valor em destaque
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            widget.product.valorFormatado,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.primary,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_rounded,
+                                    color: AppColors.success, size: 11),
+                                SizedBox(width: 3),
+                                Text('Pago',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.success,
+                                    )),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Divisor ──────────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 1,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [
+                              AppColors.cardBorder.withValues(alpha: 0),
+                              AppColors.cardBorder,
+                            ]),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.receipt_long_rounded,
+                            color: AppColors.primary, size: 14),
+                      ),
+                      Expanded(
+                        child: Container(
+                          height: 1,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [
+                              AppColors.cardBorder,
+                              AppColors.cardBorder.withValues(alpha: 0),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Dados do comprador ───────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Column(
+                    children: [
+                      _infoRowPremium(
+                        icon: Icons.person_rounded,
+                        label: 'Comprador',
+                        value: widget.clienteNome,
+                        iconColor: const Color(0xFF1565C0),
+                        bgColor: const Color(0xFF1565C0),
+                      ),
+                      if (widget.clienteEmail.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _infoRowPremium(
+                          icon: Icons.email_rounded,
+                          label: 'E-mail',
+                          value: widget.clienteEmail,
+                          iconColor: const Color(0xFF6A1B9A),
+                          bgColor: const Color(0xFF6A1B9A),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      _infoRowPremium(
+                        icon: Icons.calendar_today_rounded,
+                        label: 'Data',
+                        value: dataHoraAtual,
+                        iconColor: const Color(0xFFF57C00),
+                        bgColor: const Color(0xFFF57C00),
+                      ),
+                      const SizedBox(height: 10),
+                      _infoRowPremium(
+                        icon: Icons.pix_rounded,
+                        label: 'Pagamento',
+                        value: 'PIX — Processado com segurança',
+                        iconColor: const Color(0xFF00796B),
+                        bgColor: const Color(0xFF00796B),
+                      ),
+                      const SizedBox(height: 10),
+                      _infoRowPremium(
+                        icon: Icons.tag_rounded,
+                        label: 'Protocolo',
+                        value: protocolo,
+                        iconColor: AppColors.primary,
+                        bgColor: AppColors.primary,
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Rodapé com linha decorativa ──────────────────────────────
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    border: Border(
+                      top: BorderSide(color: AppColors.cardBorder, width: 1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.security_rounded,
+                          color: AppColors.success, size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Compra verificada e protegida  •  ShareWallet © ${DateTime.now().year}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textHint.withValues(alpha: 0.9),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               ],
             ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // -- Info do cliente e data -----------------------------------------
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.cardBorder),
-            ),
-            child: Column(
-              children: [
-                _infoRow(Icons.person_rounded, 'Cliente', widget.clienteNome),
-                if (widget.clienteEmail.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _infoRow(Icons.email_rounded, 'E-mail', widget.clienteEmail),
-                ],
-                const SizedBox(height: 8),
-                _infoRow(Icons.calendar_today_rounded, 'Data', _formatarDataHora(DateTime.now())),
-                const SizedBox(height: 8),
-                _infoRow(Icons.pix_rounded, 'Pagamento', 'PIX  -  Mercado Pago'),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // -- Rodapé do comprovante -----------------------------------------
-          Text(
-            'ShareWallet  -  Pagamento processado com segurança via PIX',
-            style: TextStyle(
-                fontSize: 10,
-                color: AppColors.textHint.withValues(alpha: 0.8)),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
+  // -- InfoRow premium com ícone colorido com fundo -------------------------
+  Widget _infoRowPremium({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color iconColor,
+    required Color bgColor,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: bgColor.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: iconColor, size: 17),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textHint,
+                    letterSpacing: 0.3,
+                  )),
+              const SizedBox(height: 1),
+              Text(value,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Mantido para compatibilidade (usado no PDF HTML)
   Widget _infoRow(IconData icon, String label, String value) => Row(
     children: [
       Icon(icon, color: AppColors.primary, size: 16),
       const SizedBox(width: 8),
-      Text('$label:', style: const TextStyle(
+      Text('$label: ', style: const TextStyle(
           fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
       Expanded(
         child: Text(value,
@@ -1912,7 +2190,7 @@ class _HowItWorks extends StatelessWidget {
   Widget build(BuildContext context) {
     final steps = product.isPixRecorrente ? [
       '1. Preencha seus dados e clique em "Assinar agora"',
-      '2. O checkout seguro do Mercado Pago abrirá com Pix Automático',
+      '2. Escaneie o QR Code gerado com o app do seu banco',
       '3. Escolha seu banco (Nubank, BB, Itaú, Bradesco, Caixa...)',
       '4. Autorize uma única vez no app do seu banco',
       '5. As cobranças mensais seguintes são automáticas — sem novo QR Code',
