@@ -196,5 +196,13 @@
 <body>
   <!-- O login usa Firebase signInWithPopup com OAuth redirect nativo -->
   <script src="flutter_bootstrap.js" async></script>
+
+  <!--
+    PWA Install / Update Manager
+    Detecta se o app está instalado, oferece instalação na primeira visita
+    e exibe banner de atualização quando uma nova versão é deployada.
+    Carregado de forma diferida (defer) para não bloquear o Flutter.
+  -->
+  <script src="pwa_install.js" defer></script>
 </body>
 </html>
