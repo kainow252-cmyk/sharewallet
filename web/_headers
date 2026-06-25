@@ -44,7 +44,18 @@
 
 /manifest.json
   Content-Type: application/json; charset=utf-8
-  Cache-Control: no-store, no-cache, max-age=0
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Surrogate-Control: no-store
+
+/icons/*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Surrogate-Control: no-store
+
+/favicon.png
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
 
 /assets/FontManifest.json
   Cache-Control: no-store, no-cache, must-revalidate
