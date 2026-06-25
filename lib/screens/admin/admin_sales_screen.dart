@@ -517,7 +517,7 @@ class _SalesList extends StatelessWidget {
   }
 }
 
-// ── Card de venda ──────────────────────────────────────────────────────────────
+// ── Tile compacto de venda (ExpansionTile) ─────────────────────────────────────
 class _SaleCard extends StatelessWidget {
   final AdminSale sale;
 
@@ -525,166 +525,178 @@ class _SaleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0D2B1A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1A4030), width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Linha 1: produto + status + tipo
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    sale.productNome,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Tipo badge
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: sale.chargeType == 'pixRecorrente'
-                        ? Colors.blue[900]!.withValues(alpha: 0.8)
-                        : Colors.purple[900]!.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    sale.chargeTypeLabel,
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: sale.chargeType == 'pixRecorrente'
-                            ? Colors.blue[200]
-                            : Colors.purple[200]),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                // Status badge
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: sale.statusColor.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                        color: sale.statusColor.withValues(alpha: 0.5)),
-                  ),
-                  child: Text(
-                    sale.statusLabel,
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: sale.statusColor),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
+    final s = sale;
+    final isRecorrente = s.chargeType == 'pixRecorrente';
 
-            // Linha 2: cliente
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D2B1A),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF1A4030), width: 1),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          iconColor: Colors.white38,
+          collapsedIconColor: Colors.white24,
+          // ── Linha resumo ──────────────────────────────────────────────────
+          leading: Icon(
+            isRecorrente
+                ? Icons.autorenew_rounded
+                : Icons.pix_rounded,
+            size: 22,
+            color: isRecorrente ? Colors.blue[300] : Colors.purple[300],
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  s.productNome,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Tipo badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isRecorrente
+                      ? Colors.blue[900]!.withValues(alpha: 0.8)
+                      : Colors.purple[900]!.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  s.chargeTypeLabel,
+                  style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      color: isRecorrente
+                          ? Colors.blue[200]
+                          : Colors.purple[200]),
+                ),
+              ),
+              const SizedBox(width: 4),
+              // Status badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: s.statusColor.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: s.statusColor.withValues(alpha: 0.5)),
+                ),
+                child: Text(
+                  s.statusLabel,
+                  style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      color: s.statusColor),
+                ),
+              ),
+            ],
+          ),
+          subtitle: Text(
+            _fmtDate(s.createdAt),
+            style: const TextStyle(color: Colors.white38, fontSize: 10),
+          ),
+          // ── Conteúdo expandido ────────────────────────────────────────────
+          children: [
+            const Divider(color: Color(0xFF1A4030), height: 1),
+            const SizedBox(height: 8),
+
+            // Cliente
             Row(
               children: [
                 const Icon(Icons.person_outline_rounded,
                     size: 13, color: Colors.white38),
-                const SizedBox(width: 4),
+                const SizedBox(width: 5),
                 Expanded(
                   child: Text(
-                    sale.clienteNome.isNotEmpty
-                        ? '${sale.clienteNome}'
-                            '${sale.clienteEmail.isNotEmpty ? ' · ${sale.clienteEmail}' : ''}'
-                        : sale.clienteEmail.isNotEmpty
-                            ? sale.clienteEmail
+                    s.clienteNome.isNotEmpty
+                        ? '${s.clienteNome}'
+                            '${s.clienteEmail.isNotEmpty ? ' · ${s.clienteEmail}' : ''}'
+                        : s.clienteEmail.isNotEmpty
+                            ? s.clienteEmail
                             : 'Cliente não identificado',
-                    style:
-                        const TextStyle(color: Colors.white60, fontSize: 12),
+                    style: const TextStyle(color: Colors.white60, fontSize: 12),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 5),
 
-            // Linha 3: afiliado + data
+            // Afiliado
             Row(
               children: [
                 const Icon(Icons.link_rounded,
                     size: 13, color: Colors.white38),
-                const SizedBox(width: 4),
+                const SizedBox(width: 5),
                 Expanded(
                   child: Text(
-                    sale.affiliateCode.isNotEmpty
-                        ? '${sale.affiliateCode}'
-                            '${sale.affiliateNome.isNotEmpty ? ' · ${sale.affiliateNome}' : ''}'
+                    s.affiliateCode.isNotEmpty
+                        ? '${s.affiliateCode}'
+                            '${s.affiliateNome.isNotEmpty ? ' · ${s.affiliateNome}' : ''}'
                         : 'Sem afiliado',
-                    style:
-                        const TextStyle(color: Colors.white54, fontSize: 11),
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
                     overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _fmtDate(sale.createdAt),
-                  style: const TextStyle(
-                      color: Colors.white38, fontSize: 11),
                 ),
               ],
             ),
             const SizedBox(height: 8),
 
-            // Linha 4: valores + botão docs
+            // Valores + ações
             Row(
               children: [
                 _ValorBadge(
                     label: 'Valor',
-                    value:
-                        'R\$ ${sale.valor.toStringAsFixed(2)}',
+                    value: 'R\$ ${s.valor.toStringAsFixed(2)}',
                     color: AppColors.gold),
                 const SizedBox(width: 8),
                 _ValorBadge(
                     label: 'Comissão',
-                    value:
-                        'R\$ ${sale.comissao.toStringAsFixed(2)}',
+                    value: 'R\$ ${s.comissao.toStringAsFixed(2)}',
                     color: AppColors.primary),
                 const Spacer(),
-                // Botão Ver Documentos
+                // Botão Docs
                 GestureDetector(
-                  onTap: () => _showDocsDialog(context, sale),
+                  onTap: () => _showDocsDialog(context, s),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.blue.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(7),
-                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                      border:
+                          Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.folder_open_rounded, size: 12, color: Colors.blue),
+                        Icon(Icons.folder_open_rounded,
+                            size: 12, color: Colors.blue),
                         SizedBox(width: 4),
-                        Text('Docs', style: TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.w600)),
+                        Text('Docs',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.blue,
+                                fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),
                 ),
-                if (sale.paymentId.isNotEmpty) ...[
+                if (s.paymentId.isNotEmpty) ...[
                   const SizedBox(width: 6),
                   GestureDetector(
                     onTap: () {
-                      Clipboard.setData(
-                          ClipboardData(text: sale.paymentId));
+                      Clipboard.setData(ClipboardData(text: s.paymentId));
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                             content: Text('Payment ID copiado'),
@@ -698,7 +710,7 @@ class _SaleCard extends StatelessWidget {
                             size: 12, color: Colors.white24),
                         const SizedBox(width: 3),
                         Text(
-                          '#${sale.paymentId.length > 10 ? sale.paymentId.substring(0, 10) : sale.paymentId}…',
+                          '#${s.paymentId.length > 10 ? s.paymentId.substring(0, 10) : s.paymentId}…',
                           style: const TextStyle(
                               color: Colors.white24, fontSize: 10),
                         ),

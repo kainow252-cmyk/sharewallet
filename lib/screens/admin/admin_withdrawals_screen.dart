@@ -326,7 +326,7 @@ class _WithdrawalList extends StatelessWidget {
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 20),
       itemCount: withdrawals.length,
       itemBuilder: (ctx, i) => _WithdrawalCard(
         withdrawal: withdrawals[i],
@@ -340,7 +340,7 @@ class _WithdrawalList extends StatelessWidget {
   }
 }
 
-// -- Card do saque -------------------------------------------------------------
+// -- Card compacto do saque (ExpansionTile) ------------------------------------
 class _WithdrawalCard extends StatelessWidget {
   final AdminWithdrawal withdrawal;
   final bool showActions;
@@ -360,115 +360,102 @@ class _WithdrawalCard extends StatelessWidget {
     final dtFmt = DateFormat('dd/MM/yyyy HH:mm');
     final w     = withdrawal;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: w.statusColor.withValues(alpha: 0.25)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                // Avatar
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: w.statusColor.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      w.affiliateNome.isNotEmpty
-                          ? w.affiliateNome[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                          color: w.statusColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(w.affiliateNome,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 15)),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(
-                              color:
-                                  AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              w.affiliateCode,
-                              style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      fmt.format(w.valor),
-                      style: TextStyle(
-                          color: w.statusColor,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: w.statusColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        w.statusLabel,
-                        style: TextStyle(
-                            color: w.statusColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: w.statusColor.withValues(alpha: 0.25)),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          // ── Linha resumo ─────────────────────────────────────────────────
+          leading: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: w.statusColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: 10),
+            child: Center(
+              child: Text(
+                w.affiliateNome.isNotEmpty
+                    ? w.affiliateNome[0].toUpperCase()
+                    : '?',
+                style: TextStyle(
+                    color: w.statusColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  w.affiliateNome,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Código
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  w.affiliateCode,
+                  style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Valor
+              Text(
+                fmt.format(w.valor),
+                style: TextStyle(
+                    color: w.statusColor,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12),
+              ),
+              const SizedBox(width: 5),
+              // Status badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: w.statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  w.statusLabel,
+                  style: TextStyle(
+                      color: w.statusColor,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          // ── Conteúdo expandido ────────────────────────────────────────────
+          children: [
+            const Divider(color: AppColors.cardBorder, height: 1),
+            const SizedBox(height: 8),
 
-            // Info PIX e datas
+            // Chave PIX
             Row(
               children: [
                 const Icon(Icons.pix_rounded,
                     size: 13, color: AppColors.textSecondary),
-                const SizedBox(width: 4),
+                const SizedBox(width: 5),
                 Expanded(
                   child: Text(
                     w.pixKey,
@@ -480,17 +467,20 @@ class _WithdrawalCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
+
+            // Datas
             Text(
               'Solicitado: ${dtFmt.format(w.solicitadoEm)}',
-              style: const TextStyle(
-                  color: AppColors.textHint, fontSize: 11),
+              style: const TextStyle(color: AppColors.textHint, fontSize: 11),
             ),
             if (w.processadoEm != null)
               Text(
                 'Processado: ${dtFmt.format(w.processadoEm!)}',
-                style: const TextStyle(
-                    color: AppColors.textHint, fontSize: 11),
+                style:
+                    const TextStyle(color: AppColors.textHint, fontSize: 11),
               ),
+
+            // TX ID
             if (w.txId != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -512,11 +502,13 @@ class _WithdrawalCard extends StatelessWidget {
                   ],
                 ),
               ),
+
+            // Motivo recusa
             if (w.motivo != null && w.motivo!.isNotEmpty) ...[
               const SizedBox(height: 6),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: AppColors.error.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
@@ -536,37 +528,36 @@ class _WithdrawalCard extends StatelessWidget {
               ),
             ],
 
-            // Botões de ação (apenas pendentes)
+            // Botões ação (apenas pendentes)
             if (showActions) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: onReject,
-                      icon: const Icon(Icons.cancel_rounded, size: 16),
-                      label: const Text('Recusar'),
+                      icon: const Icon(Icons.cancel_rounded, size: 15),
+                      label: const Text('Recusar',
+                          style: TextStyle(fontSize: 12)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.error,
                         side: const BorderSide(color: AppColors.error),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 10),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     flex: 2,
                     child: ElevatedButton.icon(
                       onPressed: onApprove,
-                      icon: const Icon(Icons.check_circle_rounded,
-                          size: 16),
-                      label: const Text('Aprovar via PIX'),
+                      icon: const Icon(Icons.check_circle_rounded, size: 15),
+                      label: const Text('Aprovar via PIX',
+                          style: TextStyle(fontSize: 12)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.success,
                         foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 10),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                     ),
                   ),
