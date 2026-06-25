@@ -364,6 +364,20 @@ class AdminService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── initFromExistingSession ─────────────────────────────────────────────
+  // Chamado quando o admin loga pelo login normal de afiliado e é redirecionado
+  // para /admin. O Firebase Auth já está ativo — apenas ativa o flag _isAdmin
+  // e carrega os dados sem exigir senha novamente.
+  Future<void> initFromExistingSession() async {
+    if (_isAdmin) return; // já inicializado
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null) return;
+    if (firebaseUser.email?.toLowerCase() != _adminEmail.toLowerCase()) return;
+    _isAdmin = true;
+    await loadAll();
+    notifyListeners();
+  }
+
   // -- Carregar tudo via D1 (paralelo) ----------------------------------------
   // CRÍTICO: sempre usa try/catch/finally para garantir que _isLoadingData
   // seja resetado para false mesmo se qualquer sub-chamada lançar exceção.

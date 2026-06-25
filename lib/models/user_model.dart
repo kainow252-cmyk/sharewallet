@@ -1,3 +1,9 @@
+// Lista de emails com acesso de administrador
+// Adicione aqui quantos emails admin forem necessários
+const _adminEmails = {
+  'admin@affiliatewallet.com',
+};
+
 class UserModel {
   final String id;
   final String nome;
@@ -29,6 +35,9 @@ class UserModel {
     this.pixKey = '',
     this.pixKeyType = 'EMAIL',
   });
+
+  // ── Getter de admin: email-based, sem necessidade de campo extra no banco ──
+  bool get isAdmin => _adminEmails.contains(email.trim().toLowerCase());
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
@@ -66,7 +75,7 @@ class UserModel {
         'pix_key_type': pixKeyType,
       };
 
-  String get primeiroNome => nome.split('').first;
+  String get primeiroNome => nome.split(' ').first;
 
   UserModel copyWith({
     String? id,

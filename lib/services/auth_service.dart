@@ -16,6 +16,9 @@ class AuthService extends ChangeNotifier {
   bool get isLoggedIn => _currentUser != null;
   String? get error => _error;
 
+  // ── Getter de admin: verdadeiro se o usuário logado é admin ──────────────
+  bool get isAdmin => _currentUser?.isAdmin ?? false;
+
   // -- Inicialização: restaura sessão Firebase ------------------------------
 
   Future<void> init() async {

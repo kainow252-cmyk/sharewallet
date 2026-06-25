@@ -79,7 +79,12 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (auth.isLoggedIn) {
-      Navigator.pushReplacementNamed(context, '/home');
+      // Admin → vai direto para o painel administrativo
+      if (auth.isAdmin) {
+        Navigator.pushReplacementNamed(context, '/admin');
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
     } else {
       // Vai para landing page (pitch) antes do login
       Navigator.pushReplacementNamed(context, '/landing');

@@ -36,6 +36,16 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ── Helper: redireciona para admin ou home conforme o email logado ────────
+  void _navegarAposLogin() {
+    final auth = context.read<AuthService>();
+    if (auth.isAdmin) {
+      Navigator.pushReplacementNamed(context, '/admin');
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  }
+
   // Verifica se voltou de um redirect do Google Sign-In
   Future<void> _checkRedirectResult() async {
     final result = await FirebaseAuthService.getRedirectResult();
@@ -49,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Facebook em modo dev pode não ter email
       final email = (result.email?.isNotEmpty == true)
           ? result.email!
-          : '${result.uid}@${providerName}-login.com';
+          : '${result.uid}@$providerName-login.com';
 
       final ok = await auth.loginWithFirebase(
         uid: result.uid!,
@@ -59,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
         provider: providerName,
       );
       if (!mounted) return;
-      if (ok) Navigator.pushReplacementNamed(context, '/home');
+      if (ok) _navegarAposLogin();
     }
   }
 
@@ -69,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final ok = await auth.login(_emailController.text.trim(), _senhaController.text);
     if (!mounted) return;
     if (ok) {
-      Navigator.pushReplacementNamed(context, '/home');
+      _navegarAposLogin();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -99,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       if (ok) {
-        Navigator.pushReplacementNamed(context, '/home');
+        _navegarAposLogin();
       } else {
         _showError(auth.error ?? 'Erro ao entrar com Google');
       }
@@ -149,7 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       if (ok) {
-        Navigator.pushReplacementNamed(context, '/home');
+        _navegarAposLogin();
       } else {
         _showError(auth.error ?? 'Erro ao entrar com Facebook');
       }

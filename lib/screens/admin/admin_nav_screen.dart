@@ -37,6 +37,16 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
   int _selectedIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  @override
+  void initState() {
+    super.initState();
+    // Se o admin chegou aqui via login de afiliado (email-based redirect),
+    // o AdminService ainda não foi inicializado — fazemos isso agora.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminService>().initFromExistingSession();
+    });
+  }
+
   static const List<_NavItem> _items = [
     _NavItem(icon: Icons.dashboard_rounded,               label: 'Dashboard'),
     _NavItem(icon: Icons.inventory_2_rounded,             label: 'Produtos'),
