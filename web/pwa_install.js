@@ -298,29 +298,20 @@
   function registerSW() {
     if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker.addEventListener('message', function (ev) {
-      if (ev.data && ev.data.type === 'SW_UPDATE_AVAILABLE') {
-        // banner de update
+      if (!ev.data) return;
+
+      // Novo SW ativado → recarrega silenciosamente (auto-update)
+      if (ev.data.type === 'SW_AUTO_RELOAD') {
+        // Pequeno delay para o SW terminar de assumir o controle
         setTimeout(function () {
-          var el = document.createElement('div');
-          el.id  = 'pwa-banner';
-          el.innerHTML =
-            '<img src="' + ICON + '" alt="ShareWallet">' +
-            '<div class="pwa-txt">' +
-              '<b>🔄 Atualização disponível</b>' +
-              '<span>Nova versão do ShareWallet pronta</span>' +
-            '</div>' +
-            '<div class="pwa-actions">' +
-              '<button id="pwa-btn-install">Atualizar</button>' +
-              '<button id="pwa-btn-later">Depois</button>' +
-            '</div>';
-          document.body.appendChild(el);
-          document.getElementById('pwa-btn-install').onclick = function () {
-            window.location.reload(true);
-          };
-          document.getElementById('pwa-btn-later').onclick = function () {
-            closePanel('pwa-banner');
-          };
-        }, 1000);
+          window.location.reload(true);
+        }, 500);
+        return;
+      }
+
+      // Fallback: banner de atualização (não deve chegar aqui com o SW v3)
+      if (ev.data.type === 'SW_UPDATE_AVAILABLE') {
+        window.location.reload(true);
       }
     });
     navigator.serviceWorker.register('/app/sw_version.js', { scope: '/app/' })

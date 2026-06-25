@@ -1,14 +1,10 @@
 /**
- * sw_version.js — ShareWallet PWA Service Worker v2
+ * sw_version.js — ShareWallet PWA Service Worker v3
  *
- * IMPORTANTE: O Chrome só dispara beforeinstallprompt se houver um SW
- * registrado com fetch handler. Este SW é mínimo — não cacheia nada,
- * só intercepta o fetch e passa para a rede.
+ * Quando o app é aberto e detecta nova versão:
+ *  → Recarrega SILENCIOSAMENTE (sem pedir ao usuário)
  *
- * Também detecta mudança de APP_VERSION e notifica o cliente para
- * exibir o banner "Atualizar app".
- *
- * APP_VERSION é injetada pelo patch_build.py.
+ * APP_VERSION é injetada pelo patch_build.py a cada deploy.
  */
 
 var APP_VERSION   = '__APP_VERSION__';
@@ -16,7 +12,7 @@ var VERSION_CACHE = 'sw-ver-v1';
 
 /* ── Install: ativa imediatamente ─────────────────────────── */
 self.addEventListener('install', function(e) {
-  self.skipWaiting();
+  self.skipWaiting();  // assume controle sem esperar fechar abas
   e.waitUntil(
     caches.open(VERSION_CACHE).then(function(c) {
       return c.put('version', new Response(APP_VERSION,
@@ -27,54 +23,25 @@ self.addEventListener('install', function(e) {
 
 /* ── Activate: assume controle de todas as abas ───────────── */
 self.addEventListener('activate', function(e) {
-  e.waitUntil(clients.claim());
-});
-
-/* ── Fetch: OBRIGATÓRIO para Chrome considerar instalável ─── */
-/* Estratégia: network-first, sem cache próprio               */
-self.addEventListener('fetch', function(e) {
-  // Só intercepta requests do mesmo origin
-  if (!e.request.url.startsWith(self.location.origin)) return;
-
-  e.respondWith(
-    fetch(e.request).then(function(resp) {
-      // Aproveita para checar versão na raiz do app
-      var url = e.request.url;
-      if (url.endsWith('/app/') || url.endsWith('/app/index.html') ||
-          url.endsWith('/app')) {
-        checkVersion();
-      }
-      return resp;
-    }).catch(function() {
-      // Offline: tenta cache do browser (não temos cache próprio)
-      return fetch(e.request);
+  e.waitUntil(
+    clients.claim().then(function() {
+      // Ao ativar um novo SW, notifica TODOS os clientes para recarregar
+      return self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+        .then(function(list) {
+          list.forEach(function(cl) {
+            // Reload silencioso — sem mostrar banner
+            cl.postMessage({ type: 'SW_AUTO_RELOAD' });
+          });
+        });
     })
   );
 });
 
-/* ── Verifica versão e notifica se mudou ──────────────────── */
-function checkVersion() {
-  caches.open(VERSION_CACHE).then(function(c) {
-    c.match('version').then(function(r) {
-      if (!r) {
-        // Primeira vez — grava versão atual
-        c.put('version', new Response(APP_VERSION,
-          { headers: { 'Content-Type': 'text/plain' } }));
-        return;
-      }
-      r.text().then(function(cached) {
-        if (cached !== APP_VERSION) {
-          // Versão mudou — atualiza cache e notifica clientes
-          c.put('version', new Response(APP_VERSION,
-            { headers: { 'Content-Type': 'text/plain' } }));
-          self.clients.matchAll({ includeUncontrolled: true })
-            .then(function(list) {
-              list.forEach(function(cl) {
-                cl.postMessage({ type: 'SW_UPDATE_AVAILABLE', v: APP_VERSION });
-              });
-            });
-        }
-      });
-    });
-  });
-}
+/* ── Fetch: OBRIGATÓRIO para Chrome disparar beforeinstallprompt ── */
+self.addEventListener('fetch', function(e) {
+  if (!e.request.url.startsWith(self.location.origin)) return;
+  // Network-first: passa tudo para a rede, sem cache próprio
+  e.respondWith(fetch(e.request).catch(function() {
+    return new Response('Offline', { status: 503 });
+  }));
+});

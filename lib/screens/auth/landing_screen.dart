@@ -90,6 +90,7 @@ class _LandingScreenState extends State<LandingScreen>
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 22),
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
 
                     // ── Logo + título + subtítulo ───────────────────────────
@@ -101,8 +102,6 @@ class _LandingScreenState extends State<LandingScreen>
                       ),
                     ),
 
-                    SizedBox(height: 14 * scale),
-
                     // ── Cards de features (3 colunas) ────────────────────────
                     SlideTransition(
                       position: _cardsSlide,
@@ -112,15 +111,11 @@ class _LandingScreenState extends State<LandingScreen>
                       ),
                     ),
 
-                    SizedBox(height: 14 * scale),
-
                     // ── Stats row ────────────────────────────────────────────
                     FadeTransition(
                       opacity: _cardsFade,
                       child: _StatsRow(scale: scale),
                     ),
-
-                    SizedBox(height: 16 * scale),
 
                     // ── CTA Buttons ──────────────────────────────────────────
                     ScaleTransition(
@@ -134,22 +129,21 @@ class _LandingScreenState extends State<LandingScreen>
                       ),
                     ),
 
-                    SizedBox(height: 10 * scale),
-
                     // ── Footer mínimo ────────────────────────────────────────
                     FadeTransition(
                       opacity: _heroFade,
-                      child: Text(
-                        '© ${DateTime.now().year} ShareWallet  •  Todos os direitos reservados',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          fontSize: 9 * scale,
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: 6 * scale),
+                        child: Text(
+                          '© ${DateTime.now().year} ShareWallet  •  Todos os direitos reservados',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            fontSize: 9 * scale,
+                          ),
                         ),
                       ),
                     ),
-
-                    SizedBox(height: 8 * scale),
                   ],
                 ),
               );
