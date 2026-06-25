@@ -1,10 +1,11 @@
 /**
- * pwa_install.js — ShareWallet PWA Install v3
+ * pwa_install.js — ShareWallet PWA Install v4
  * Lógica:
  *   1. App já instalado (standalone)  → silêncio total
  *   2. beforeinstallprompt disparou   → banner automático bonito
- *   3. Prompt bloqueado pelo Chrome   → card visual "como instalar pelo menu"
- *   4. iOS Safari                     → card visual com seta para ícone compartilhar
+ *   3. Prompt bloqueado / Android sem prompt → silêncio total
+ *   4. iOS Safari                     → silêncio total
+ *   (guia de passos removido — confundia o usuário)
  */
 (function () {
   'use strict';
@@ -66,7 +67,7 @@
         'background:transparent;color:rgba(255,255,255,.4);font-size:11px;',
       '}',
 
-      /* ── card "instale pelo menu" (quando prompt bloqueado) ── */
+      /* ── card guia — mantido no CSS mas nunca exibido (reserva futura) ── */
       '#pwa-guide{',
         'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;',
         'background:linear-gradient(170deg,#0f2318 0%,#1c3522 100%);',
@@ -180,119 +181,10 @@
     };
   }
 
-  /* ── Guia manual — Android (menu ⋮ do Chrome) ───────────── */
-  function showAndroidGuide() {
-    if (document.getElementById('pwa-guide')) return;
-    if (document.getElementById('pwa-banner')) return;
-
-    var el = document.createElement('div');
-    el.id  = 'pwa-guide';
-    el.innerHTML =
-      '<div class="pwa-g-head">' +
-        '<img src="' + ICON + '" alt="ShareWallet">' +
-        '<div>' +
-          '<b>Instalar ShareWallet</b>' +
-          '<span>Adicione à sua tela inicial</span>' +
-        '</div>' +
-      '</div>' +
-
-      /* seta apontando canto direito = onde fica o ⋮ */
-      '<div class="pwa-arrow-hint">toque nos 3 pontos ⋮ &nbsp;↗</div>' +
-
-      '<div class="pwa-steps">' +
-
-        '<div class="pwa-step">' +
-          '<div class="pwa-num">1</div>' +
-          '<div class="pwa-step-txt">' +
-            '<b>Toque nos 3 pontos  ⋮</b>' +
-            '<span>Canto superior direito do Chrome</span>' +
-          '</div>' +
-          '<div class="pwa-step-ico">⋮</div>' +
-        '</div>' +
-
-        '<div class="pwa-step">' +
-          '<div class="pwa-num">2</div>' +
-          '<div class="pwa-step-txt">' +
-            '<b>Toque "Adicionar à tela inicial"</b>' +
-            '<span>ou "Instalar app" se aparecer</span>' +
-          '</div>' +
-          '<div class="pwa-step-ico">➕</div>' +
-        '</div>' +
-
-        '<div class="pwa-step">' +
-          '<div class="pwa-num">3</div>' +
-          '<div class="pwa-step-txt">' +
-            '<b>Toque "Adicionar"</b>' +
-            '<span>O ícone aparece na sua tela!</span>' +
-          '</div>' +
-          '<div class="pwa-step-ico">✅</div>' +
-        '</div>' +
-
-      '</div>' +
-      '<button id="pwa-guide-close">Fechar</button>';
-
-    document.body.appendChild(el);
-    document.getElementById('pwa-guide-close').onclick = function () {
-      markDismissed();
-      closePanel('pwa-guide');
-    };
-  }
-
-  /* ── Guia manual — iOS (botão compartilhar Safari) ──────── */
-  function showIOSGuide() {
-    if (document.getElementById('pwa-guide')) return;
-
-    var el = document.createElement('div');
-    el.id  = 'pwa-guide';
-    el.innerHTML =
-      '<div class="pwa-g-head">' +
-        '<img src="' + ICON + '" alt="ShareWallet">' +
-        '<div>' +
-          '<b>Instalar ShareWallet</b>' +
-          '<span>Adicione à sua tela inicial</span>' +
-        '</div>' +
-      '</div>' +
-
-      '<div class="pwa-arrow-hint">toque em Compartilhar &nbsp;↓</div>' +
-
-      '<div class="pwa-steps">' +
-
-        '<div class="pwa-step">' +
-          '<div class="pwa-num">1</div>' +
-          '<div class="pwa-step-txt">' +
-            '<b>Toque em Compartilhar  ⬆</b>' +
-            '<span>Ícone na barra inferior do Safari</span>' +
-          '</div>' +
-          '<div class="pwa-step-ico">⬆</div>' +
-        '</div>' +
-
-        '<div class="pwa-step">' +
-          '<div class="pwa-num">2</div>' +
-          '<div class="pwa-step-txt">' +
-            '<b>"Adicionar à Tela de Início"</b>' +
-            '<span>Role a lista para encontrar</span>' +
-          '</div>' +
-          '<div class="pwa-step-ico">➕</div>' +
-        '</div>' +
-
-        '<div class="pwa-step">' +
-          '<div class="pwa-num">3</div>' +
-          '<div class="pwa-step-txt">' +
-            '<b>Toque "Adicionar"</b>' +
-            '<span>O ícone aparece na tela!</span>' +
-          '</div>' +
-          '<div class="pwa-step-ico">✅</div>' +
-        '</div>' +
-
-      '</div>' +
-      '<button id="pwa-guide-close">Fechar</button>';
-
-    document.body.appendChild(el);
-    document.getElementById('pwa-guide-close').onclick = function () {
-      markDismissed();
-      closePanel('pwa-guide');
-    };
-  }
+  /* ── Guia manual — Android/iOS REMOVIDO ─────────────────────
+   * Não mostrar mais passos manuais: confunde o usuário.
+   * Só o banner automático quando o Chrome oferecer o prompt.
+   * ─────────────────────────────────────────────────────────── */
 
   /* ── SW registration ─────────────────────────────────────── */
   function registerSW() {
@@ -344,21 +236,16 @@
     // Dispensou recentemente → silêncio
     if (wasDismissed()) return;
 
-    // Só mostra em celular
+    // Só mostra em celular e APENAS quando o Chrome oferecer o prompt nativo
     if (!isIOS() && !isAndroid()) return;
 
-    // Aguarda 3s para o app carregar, depois decide
+    // Aguarda 3s para o app carregar e verifica se o prompt está disponível
     setTimeout(function () {
       if (_prompt) {
-        // Chrome deu o prompt → banner automático
+        // Chrome deu o prompt → banner automático (toque de 1 botão)
         showAutoBanner(_prompt);
-      } else if (isIOS()) {
-        // iOS → guia compartilhar
-        showIOSGuide();
-      } else {
-        // Android sem prompt (bloqueado) → guia menu ⋮
-        showAndroidGuide();
       }
+      // Sem prompt → silêncio total. Não mostrar guia de passos.
     }, 3000);
   }
 
