@@ -20,6 +20,12 @@
   Pragma: no-cache
   Surrogate-Control: no-store
 
+/sw_version.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Service-Worker-Allowed: /app/
+
 /flutter_service_worker.js
   Content-Type: application/javascript; charset=utf-8
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0

@@ -141,10 +141,21 @@ def deploy_version_sw():
     print(f'OK: sw_version.js deployado — APP_VERSION={version}')
 
 
+def copy_pwa_check():
+    src = os.path.join(WEB_DIR, 'pwa-check.html')
+    dst = os.path.join(BUILD_DIR, 'pwa-check.html')
+    if os.path.exists(src):
+        shutil.copy2(src, dst)
+        print('OK: pwa-check.html copiado para build/web/')
+    else:
+        print('SKIP: web/pwa-check.html não encontrado')
+
+
 if __name__ == '__main__':
     patch_bootstrap()
     deploy_kill_switch_sw()
     copy_headers()
     copy_pwa_install()
     deploy_version_sw()
+    copy_pwa_check()
     print('Patches aplicados com sucesso.')
