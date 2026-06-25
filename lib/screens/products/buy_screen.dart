@@ -17,7 +17,7 @@ import '../../services/woovi_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
 // ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html show FileUploadInputElement, FileReader;
+import 'dart:html' as html show FileUploadInputElement, FileReader, window;
 
 // --- Chaves para auto-fill ----------------------------------------------------
 const _kNome     = 'buyer_nome';
@@ -2870,40 +2870,91 @@ class _DocUploadStep extends StatefulWidget {
 }
 
 class _DocUploadStepState extends State<_DocUploadStep> {
-  final Map<String, String> _docs = {}; // chave → base64 da imagem
+  /// chave → valor
+  /// Para documentos normais: base64 da imagem ("data:image/...")
+  /// Para geolocalização: string JSON  '{"lat":..,"lng":..,"acc":..,"ts":..}'
+  final Map<String, String> _docs = {};
+
+  /// Controla o estado de carregamento individual por chave
+  final Map<String, bool> _loading = {};
+
   bool _isSubmitting = false;
 
-  // Mapa de labels e ícones para cada tipo de documento
-  static const _docInfo = {
-    'cnh':             ('CNH (Carteira de Habilitação)', Icons.badge_rounded),
-    'selfie':          ('Selfie / Foto com documento',   Icons.face_rounded),
-    'comp_residencia': ('Comprovante de Residência',     Icons.home_rounded),
-    'comp_renda':      ('Comprovante de Renda',          Icons.attach_money_rounded),
-    'geolocalizacao':  ('Geolocalização',                Icons.location_on_rounded),
-    'certidao':        ('Certidão de Nascimento',        Icons.article_rounded),
+  // ── Metadados de cada tipo de documento ──────────────────────────────────
+  static const _docInfo = <String, (String, IconData, bool)>{
+    // chave: (label, ícone, isGeo)
+    'cnh':             ('CNH (Carteira de Habilitação)', Icons.badge_rounded,            false),
+    'selfie':          ('Selfie / Foto com documento',   Icons.face_rounded,              false),
+    'comp_residencia': ('Comprovante de Residência',     Icons.home_rounded,              false),
+    'comp_renda':      ('Comprovante de Renda',          Icons.attach_money_rounded,      false),
+    'geolocalizacao':  ('Geolocalização',                Icons.my_location_rounded,       true),
+    'certidao':        ('Certidão de Nascimento',        Icons.article_rounded,           false),
   };
 
-  Future<void> _pickImage(String docKey) async {
-    try {
-      // Na web usamos input[type=file] via dart:html
-      if (kIsWeb) {
-        await _pickImageWeb(docKey);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao selecionar imagem: $e')),
-        );
-      }
+  // ── Ação genérica por tipo ───────────────────────────────────────────────
+  Future<void> _handle(String docKey) async {
+    final info = _docInfo[docKey];
+    final isGeo = info?.$3 ?? false;
+    if (isGeo) {
+      await _captureGeo();
+    } else {
+      await _pickImageWeb(docKey);
     }
   }
 
-  Future<void> _pickImageWeb(String docKey) async {
-    // Trigger de input file via JS interop (web only)
-    // Como não usamos dart:html diretamente, usamos um workaround com
-    // um elemento de formulário disparado via click
+  // ── Captura GPS via browser Geolocation API ──────────────────────────────
+  Future<void> _captureGeo() async {
+    setState(() => _loading['geolocalizacao'] = true);
     try {
+      final completer = Completer<Map<String, dynamic>>();
+
+      // Usa JS interop para chamar navigator.geolocation.getCurrentPosition
       // ignore: undefined_prefixed_name
+      html.window.navigator.geolocation.getCurrentPosition(
+        maximumAge: Duration.zero,
+        timeout: const Duration(seconds: 15),
+        enableHighAccuracy: true,
+      ).then((pos) {
+        completer.complete({
+          'lat': pos.coords!.latitude,
+          'lng': pos.coords!.longitude,
+          'acc': pos.coords!.accuracy,
+          'ts': DateTime.now().toIso8601String(),
+        });
+      }).catchError((dynamic e) {
+        // e é um GeolocationPositionError com código 1=PERMISSION_DENIED 2=UNAVAILABLE 3=TIMEOUT
+        completer.completeError(e);
+      });
+
+      final coords = await completer.future;
+      final value = json.encode(coords);
+      if (mounted) setState(() => _docs['geolocalizacao'] = value);
+    } catch (e) {
+      if (!mounted) return;
+      final s = e.toString();
+      final msg = s.contains('User denied') || s.contains('PERMISSION') || s.contains('code: 1')
+          ? 'Permissão de localização negada.\nPermita o acesso à localização no browser e tente novamente.'
+          : s.contains('code: 2') || s.contains('POSITION_UNAVAILABLE')
+              ? 'Não foi possível determinar sua localização. Verifique se o GPS está ativo.'
+              : s.contains('code: 3') || s.contains('TIMEOUT')
+                  ? 'Tempo esgotado ao obter localização. Tente novamente.'
+                  : 'Erro ao capturar localização. Verifique as permissões do browser.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loading.remove('geolocalizacao'));
+    }
+  }
+
+  // ── Seleciona imagem via input[type=file] (web) ──────────────────────────
+  Future<void> _pickImageWeb(String docKey) async {
+    setState(() => _loading[docKey] = true);
+    try {
       final input = html.FileUploadInputElement()..accept = 'image/*';
       input.click();
       await input.onChange.first;
@@ -2915,25 +2966,37 @@ class _DocUploadStepState extends State<_DocUploadStep> {
       final result = reader.result as String;
       if (mounted) setState(() => _docs[docKey] = result);
     } catch (_) {
-      // Fallback: mostra aviso
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'Para enviar documentos, por favor use o aplicativo móvel ou um browser desktop.')),
+          const SnackBar(content: Text('Erro ao selecionar imagem. Tente novamente.')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _loading.remove(docKey));
     }
   }
 
-  bool get _allUploaded =>
+  // ── Texto de status exibido no card da geolocalização ───────────────────
+  String _geoStatusText(String raw) {
+    try {
+      final m = json.decode(raw) as Map;
+      final lat  = (m['lat'] as num).toStringAsFixed(6);
+      final lng  = (m['lng'] as num).toStringAsFixed(6);
+      final acc  = (m['acc'] as num).toStringAsFixed(0);
+      return '$lat, $lng  (±${acc}m)';
+    } catch (_) {
+      return 'Localização capturada ✓';
+    }
+  }
+
+  bool get _allDone =>
       widget.product.docsRequired.every((k) => _docs.containsKey(k));
 
   Future<void> _submit() async {
-    if (!_allUploaded) {
+    if (!_allDone) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Envie todos os documentos obrigatórios para continuar.'),
+          content: Text('Complete todos os itens obrigatórios para continuar.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -2956,7 +3019,7 @@ class _DocUploadStepState extends State<_DocUploadStep> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cabeçalho
+          // ── Cabeçalho ────────────────────────────────────────────────────
           Row(
             children: [
               GestureDetector(
@@ -2991,25 +3054,23 @@ class _DocUploadStepState extends State<_DocUploadStep> {
           ),
           const SizedBox(height: 20),
 
-          // Card informativo
+          // ── Card informativo ─────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.2)),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
-                Icon(Icons.info_outline_rounded,
-                    color: AppColors.primary, size: 20),
+                Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 20),
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
-                    'Para finalizar sua compra, precisamos verificar alguns documentos. Tire fotos nítidas e legíveis.',
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
+                    'Para finalizar sua compra, precisamos verificar alguns dados. '
+                    'Fotos devem ser nítidas e legíveis.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
                 ),
               ],
@@ -3017,49 +3078,75 @@ class _DocUploadStepState extends State<_DocUploadStep> {
           ),
           const SizedBox(height: 20),
 
-          // Lista de documentos
+          // ── Lista de itens ───────────────────────────────────────────────
           ...docs.map((docKey) {
-            final info = _docInfo[docKey];
-            final label = info?.$1 ?? docKey;
-            final icon = info?.$2 ?? Icons.upload_file_rounded;
-            final uploaded = _docs.containsKey(docKey);
+            final info   = _docInfo[docKey];
+            final label  = info?.$1 ?? docKey;
+            final icon   = info?.$2 ?? Icons.upload_file_rounded;
+            final isGeo  = info?.$3 ?? false;
+            final done   = _docs.containsKey(docKey);
+            final busy   = _loading[docKey] == true;
+
+            // Texto de subtítulo
+            String subtitle;
+            if (busy) {
+              subtitle = isGeo ? 'Obtendo localização...' : 'Carregando...';
+            } else if (done) {
+              subtitle = isGeo
+                  ? _geoStatusText(_docs[docKey]!)
+                  : 'Enviado ✓  Toque para trocar';
+            } else {
+              subtitle = isGeo
+                  ? 'Toque para capturar sua localização GPS'
+                  : 'Toque para enviar foto';
+            }
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => _pickImage(docKey),
+                onTap: busy ? null : () => _handle(docKey),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: uploaded
+                    color: done
                         ? AppColors.success.withValues(alpha: 0.07)
                         : AppColors.surfaceVariant,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: uploaded
-                          ? AppColors.success
-                          : AppColors.cardBorder,
-                      width: uploaded ? 1.5 : 1,
+                      color: done ? AppColors.success : AppColors.cardBorder,
+                      width: done ? 1.5 : 1,
                     ),
                   ),
                   child: Row(
                     children: [
+                      // Ícone / spinner
                       Container(
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: uploaded
+                          color: done
                               ? AppColors.success.withValues(alpha: 0.1)
-                              : AppColors.primary.withValues(alpha: 0.08),
+                              : isGeo
+                                  ? Colors.blue.withValues(alpha: 0.08)
+                                  : AppColors.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: uploaded
-                            ? Icon(Icons.check_circle_rounded,
-                                color: AppColors.success, size: 24)
-                            : Icon(icon,
-                                color: AppColors.primary, size: 24),
+                        child: busy
+                            ? Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: isGeo ? Colors.blue : AppColors.primary,
+                                ),
+                              )
+                            : done
+                                ? Icon(Icons.check_circle_rounded,
+                                    color: AppColors.success, size: 24)
+                                : Icon(icon,
+                                    color: isGeo ? Colors.blue : AppColors.primary,
+                                    size: 24),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -3070,29 +3157,24 @@ class _DocUploadStepState extends State<_DocUploadStep> {
                                 style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    color: uploaded
+                                    color: done
                                         ? AppColors.success
                                         : AppColors.textPrimary)),
                             const SizedBox(height: 2),
-                            Text(
-                              uploaded
-                                  ? 'Enviado ✓  Toque para trocar'
-                                  : 'Toque para enviar foto',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: uploaded
-                                      ? AppColors.success
-                                          .withValues(alpha: 0.8)
-                                      : AppColors.textHint),
-                            ),
+                            Text(subtitle,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: done
+                                        ? AppColors.success.withValues(alpha: 0.8)
+                                        : AppColors.textHint)),
                           ],
                         ),
                       ),
                       Icon(
-                        uploaded
+                        done
                             ? Icons.check_rounded
-                            : Icons.camera_alt_rounded,
-                        color: uploaded
+                            : (isGeo ? Icons.my_location_rounded : Icons.camera_alt_rounded),
+                        color: done
                             ? AppColors.success
                             : AppColors.textHint,
                         size: 20,
@@ -3119,7 +3201,7 @@ class _DocUploadStepState extends State<_DocUploadStep> {
           ),
           const SizedBox(height: 6),
           Text(
-            '${_docs.length} de ${docs.length} documentos enviados',
+            '${_docs.length} de ${docs.length} itens concluídos',
             style: const TextStyle(
                 fontSize: 11, color: AppColors.textSecondary),
           ),
@@ -3132,7 +3214,7 @@ class _DocUploadStepState extends State<_DocUploadStep> {
             child: ElevatedButton.icon(
               onPressed: _isSubmitting
                   ? null
-                  : (_allUploaded ? _submit : null),
+                  : (_allDone ? _submit : null),
               icon: _isSubmitting
                   ? const SizedBox(
                       width: 18,
@@ -3142,11 +3224,11 @@ class _DocUploadStepState extends State<_DocUploadStep> {
                   : const Icon(Icons.arrow_forward_rounded),
               label: Text(_isSubmitting
                   ? 'Salvando...'
-                  : _allUploaded
+                  : _allDone
                       ? 'Continuar para Pagamento'
-                      : 'Envie todos os documentos'),
+                      : 'Complete todos os itens'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _allUploaded
+                backgroundColor: _allDone
                     ? AppColors.primary
                     : AppColors.textHint,
                 foregroundColor: Colors.white,

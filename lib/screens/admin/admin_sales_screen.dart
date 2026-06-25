@@ -827,28 +827,139 @@ class _SaleDocsDialogState extends State<_SaleDocsDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: (_docsData ?? {}).entries.map((e) {
-                      final label = _docLabels[e.key] ?? e.key;
-                      final val = e.value?.toString() ?? '';
-                      final isImg = val.startsWith('data:image');
+                      final label   = _docLabels[e.key] ?? e.key;
+                      final val     = e.value?.toString() ?? '';
+                      final isImg   = val.startsWith('data:image');
+                      final isGeo   = e.key == 'geolocalizacao';
+
+                      // Tenta decodificar JSON de geolocalização
+                      Map<String, dynamic>? geoMap;
+                      if (isGeo) {
+                        try { geoMap = json.decode(val) as Map<String, dynamic>; } catch (_) {}
+                      }
+
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.only(bottom: 14),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(label, style: const TextStyle(
-                                color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                            Row(
+                              children: [
+                                Icon(
+                                  isGeo ? Icons.my_location_rounded : Icons.insert_drive_file_rounded,
+                                  size: 13,
+                                  color: isGeo ? Colors.blue : Colors.white38,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(label, style: TextStyle(
+                                    color: isGeo ? Colors.blue[200] : Colors.white70,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600)),
+                              ],
+                            ),
                             const SizedBox(height: 6),
-                            if (isImg)
+                            if (isGeo && geoMap != null) ...[
+                              // Card GPS
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(children: [
+                                      const Icon(Icons.location_on_rounded, size: 14, color: Colors.blue),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Lat: ${(geoMap['lat'] as num).toStringAsFixed(6)}',
+                                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                      ),
+                                    ]),
+                                    const SizedBox(height: 2),
+                                    Row(children: [
+                                      const SizedBox(width: 18),
+                                      Text(
+                                        'Lng: ${(geoMap['lng'] as num).toStringAsFixed(6)}',
+                                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                      ),
+                                    ]),
+                                    if (geoMap['acc'] != null) ...[
+                                      const SizedBox(height: 2),
+                                      Row(children: [
+                                        const SizedBox(width: 18),
+                                        Text(
+                                          'Precisão: ±${(geoMap['acc'] as num).toStringAsFixed(0)}m',
+                                          style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                        ),
+                                      ]),
+                                    ],
+                                    if (geoMap['ts'] != null) ...[
+                                      const SizedBox(height: 2),
+                                      Row(children: [
+                                        const SizedBox(width: 18),
+                                        Text(
+                                          'Capturado: ${geoMap['ts'].toString().replaceAll('T', ' ').split('.').first}',
+                                          style: const TextStyle(color: Colors.white38, fontSize: 10),
+                                        ),
+                                      ]),
+                                    ],
+                                    const SizedBox(height: 8),
+                                    // Botão Google Maps
+                                    GestureDetector(
+                                      onTap: () {
+                                        final lat = geoMap!['lat'];
+                                        final lng = geoMap['lng'];
+                                        final mapsUrl = 'https://www.google.com/maps?q=$lat,$lng';
+                                        Clipboard.setData(ClipboardData(text: mapsUrl));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Link do Google Maps copiado!'),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.map_rounded, size: 13, color: Colors.blue),
+                                            SizedBox(width: 5),
+                                            Text('Copiar link Google Maps',
+                                                style: TextStyle(fontSize: 11, color: Colors.blue)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ] else if (isImg) ...[
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
-                                child: Image.network(val, height: 120, fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
-                                        const Text('Erro ao carregar imagem',
-                                            style: TextStyle(color: Colors.red, fontSize: 11))),
-                              )
-                            else
-                              Text(val.length > 80 ? '${val.substring(0, 80)}...' : val,
-                                  style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                                child: Image.network(
+                                  val,
+                                  height: 120,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Text('Erro ao carregar imagem',
+                                          style: TextStyle(color: Colors.red, fontSize: 11)),
+                                ),
+                              ),
+                            ] else ...[
+                              Text(
+                                val.length > 100 ? '${val.substring(0, 100)}...' : val,
+                                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                              ),
+                            ],
                           ],
                         ),
                       );
