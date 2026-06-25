@@ -1,10 +1,11 @@
 /**
- * pwa_install.js — ShareWallet PWA Install v5
+ * pwa_install.js — ShareWallet PWA Install v6
  * Lógica:
  *   1. App já instalado (standalone)  → silêncio total
- *   2. Rota /admin                    → troca manifest para manifest-admin.json
- *   3. beforeinstallprompt disparou   → banner automático bonito
- *   4. Prompt bloqueado / sem prompt  → silêncio total
+ *   2. Rota /produto/                 → silêncio total (comprador, não instalar)
+ *   3. Rota /admin                    → troca manifest para manifest-admin.json
+ *   4. beforeinstallprompt disparou   → banner automático bonito
+ *   5. Prompt bloqueado / sem prompt  → silêncio total
  */
 (function () {
   'use strict';
@@ -21,6 +22,10 @@
   function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
   function isAndroid() { return /android/i.test(navigator.userAgent); }
   function wasInstalled() { return localStorage.getItem(KEY_INSTALLED) === '1'; }
+  function isBuyerRoute() {
+    var hash = window.location.hash || '';
+    return hash.indexOf('/produto/') !== -1;
+  }
   function wasDismissed() {
     var t = localStorage.getItem(KEY_DISMISSED);
     return !!t && (Date.now() - parseInt(t)) < DISMISS_TTL;
@@ -240,8 +245,18 @@
     // Observa mudanças de hash (SPA navigation admin ↔ app)
     window.addEventListener('hashchange', swapManifestIfAdmin);
 
+    // Fecha banner de instalação ao navegar para rota de comprador
+    window.addEventListener('hashchange', function () {
+      if (isBuyerRoute()) {
+        closePanel('pwa-banner');
+        closePanel('pwa-guide');
+      }
+    });
+
     // Já está como PWA → silêncio total
     if (isStandalone()) { markInstalled(); return; }
+    // Rota de comprador (/produto/) → silêncio total, sem instalar app
+    if (isBuyerRoute()) return;
     // Já instalou antes → silêncio
     if (wasInstalled()) return;
     // Dispensou recentemente → silêncio
