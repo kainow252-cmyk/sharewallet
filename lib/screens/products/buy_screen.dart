@@ -3041,12 +3041,20 @@ class _DocUploadStepState extends State<_DocUploadStep> {
   // ── Metadados de cada tipo de documento ──────────────────────────────────
   static const _docInfo = <String, (String, IconData, bool)>{
     // chave: (label, ícone, isGeo)
-    'cnh':             ('CNH (Carteira de Habilitação)', Icons.badge_rounded,            false),
-    'selfie':          ('Selfie / Foto com documento',   Icons.face_rounded,              false),
-    'comp_residencia': ('Comprovante de Residência',     Icons.home_rounded,              false),
-    'comp_renda':      ('Comprovante de Renda',          Icons.attach_money_rounded,      false),
-    'geolocalizacao':  ('Geolocalização',                Icons.my_location_rounded,       true),
-    'certidao':        ('Certidão de Nascimento',        Icons.article_rounded,           false),
+    'cnh':             ('CNH (Carteira de Habilitação)',   Icons.badge_rounded,                     false),
+    'selfie':          ('Selfie / Foto com documento',     Icons.face_rounded,                      false),
+    'comp_residencia': ('Comprovante de Residência',       Icons.home_rounded,                      false),
+    'comp_renda':      ('Comprovante de Renda',            Icons.attach_money_rounded,              false),
+    'geolocalizacao':  ('Geolocalização',                  Icons.my_location_rounded,               true),
+    'certidao':        ('Certidão de Nascimento',          Icons.article_rounded,                   false),
+    // ── Novos ───────────────────────────────────────────────────────────────
+    'foto_moto':       ('Fotos da Moto',                   Icons.two_wheeler_rounded,               false),
+    'foto_carro':      ('Fotos do Carro',                  Icons.directions_car_rounded,            false),
+    'foto_celular':    ('Fotos do Celular',                Icons.smartphone_rounded,                false),
+    'print_imei':      ('Print do IMEI',                   Icons.perm_device_information_rounded,   false),
+    'foto_doc_moto':   ('Fotos Documento da Moto',         Icons.description_rounded,               false),
+    'foto_doc_carro':  ('Fotos Documento do Carro',        Icons.description_rounded,               false),
+    'nota_fiscal':     ('Nota Fiscal (se tiver)',          Icons.receipt_long_rounded,              false),
   };
 
   // ── Ação genérica por tipo ───────────────────────────────────────────────

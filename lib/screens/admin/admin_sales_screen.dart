@@ -742,6 +742,14 @@ class _SaleDocsDialogState extends State<_SaleDocsDialog> {
     'comp_renda': 'Comprovante de Renda',
     'geolocalizacao': 'Geolocalização',
     'certidao': 'Certidão de Nascimento',
+    // ── Novos ────────────────────────────────────────────────────────────────
+    'foto_moto':      'Fotos da Moto',
+    'foto_carro':     'Fotos do Carro',
+    'foto_celular':   'Fotos do Celular',
+    'print_imei':     'Print do IMEI',
+    'foto_doc_moto':  'Fotos Documento da Moto',
+    'foto_doc_carro': 'Fotos Documento do Carro',
+    'nota_fiscal':    'Nota Fiscal (se tiver)',
   };
 
   /// Para chaves de campos personalizados (ex: "ano_moto_1234567890"),

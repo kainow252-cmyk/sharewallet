@@ -399,12 +399,20 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
 
   // Documentos disponíveis para seleção
   static const _docOpts = [
-    ('cnh',              'CNH',                     Icons.badge_rounded),
-    ('selfie',           'Selfie / Foto',            Icons.face_rounded),
-    ('comp_residencia',  'Comprovante de Residência', Icons.home_rounded),
-    ('comp_renda',       'Comprovante de Renda',     Icons.attach_money_rounded),
-    ('geolocalizacao',   'Geolocalização',           Icons.location_on_rounded),
-    ('certidao',         'Certidão de Nascimento',   Icons.article_rounded),
+    ('cnh',              'CNH',                       Icons.badge_rounded),
+    ('selfie',           'Selfie / Foto',              Icons.face_rounded),
+    ('comp_residencia',  'Comprovante de Residência',  Icons.home_rounded),
+    ('comp_renda',       'Comprovante de Renda',       Icons.attach_money_rounded),
+    ('geolocalizacao',   'Geolocalização',             Icons.location_on_rounded),
+    ('certidao',         'Certidão de Nascimento',     Icons.article_rounded),
+    // ── Novos ───────────────────────────────────────────────────────────────
+    ('foto_moto',        'Fotos da Moto',              Icons.two_wheeler_rounded),
+    ('foto_carro',       'Fotos do Carro',             Icons.directions_car_rounded),
+    ('foto_celular',     'Fotos do Celular',           Icons.smartphone_rounded),
+    ('print_imei',       'Print do IMEI',              Icons.perm_device_information_rounded),
+    ('foto_doc_moto',    'Fotos Documento da Moto',    Icons.description_rounded),
+    ('foto_doc_carro',   'Fotos Documento do Carro',   Icons.description_rounded),
+    ('nota_fiscal',      'Nota Fiscal (se tiver)',     Icons.receipt_long_rounded),
   ];
 
   @override
