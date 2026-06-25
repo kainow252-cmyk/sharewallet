@@ -226,16 +226,17 @@ class FirebaseAuthService {
   // ignore: avoid_web_libraries_in_flutter
   static String _getCoopHeader() {
     try {
-      // Tenta abrir e fechar uma janela de teste para verificar se COOP bloqueia
-      // Nao e possivel ler o header diretamente do JS, mas podemos detectar via
-      // performance.getEntriesByType ou simplesmente usar redirect sempre em
-      // ambientes conhecidos por ter COOP (proxies como Genspark/Novita/Cloudflare Pages)
       final hostname = Uri.base.host;
+      // Usa redirect em todos os ambientes de produção/proxy conhecidos.
+      // Chrome bloqueia window.closed via COOP em sites HTTPS mesmo sem o header
+      // explícito — o signInWithRedirect é sempre mais confiável para web.
       if (hostname.contains('sandbox.novita') ||
           hostname.contains('genspark') ||
           hostname.contains('pages.dev') ||
           hostname.contains('netlify') ||
-          hostname.contains('vercel')) {
+          hostname.contains('vercel') ||
+          hostname.contains('sharewallet.com.br') ||
+          hostname.contains('sharewallet')) {
         return 'same-origin';
       }
       return '';
