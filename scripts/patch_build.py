@@ -27,10 +27,15 @@ def patch_bootstrap():
         content = f.read()
 
     # Remove serviceWorkerSettings block
+    # O flutter_bootstrap.js gerado pelo Flutter pode ter duas formas:
+    # 1. Minificada: _flutter.loader.load({serviceWorkerSettings:{serviceWorkerVersion:"..."}})
+    # 2. Com quebras de linha: _flutter.loader.load({\n  serviceWorkerSettings: {\n    ...\n  }\n});
+    # O re.DOTALL faz o '.' casar com '\n', permitindo capturar ambos os formatos.
     patched = re.sub(
-        r'_flutter\.loader\.load\(\{\s*serviceWorkerSettings:\s*\{[^}]*\}\s*\}\)',
+        r'_flutter\.loader\.load\(\{[\s\n]*serviceWorkerSettings\s*:\s*\{[^}]*\}[\s\n]*\}\)',
         '_flutter.loader.load({})',
-        content
+        content,
+        flags=re.DOTALL,
     )
 
     if patched != content:
