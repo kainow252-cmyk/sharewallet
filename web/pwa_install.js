@@ -1,341 +1,309 @@
 /**
- * pwa_install.js — ShareWallet PWA Install / Update Manager
+ * pwa_install.js — ShareWallet PWA Install / Update Manager v2
  *
  * Comportamento:
- *  1. Primeira visita no celular → banner "Instalar app" (se não instalado)
- *  2. Visitas seguintes com app instalado → sem banner
- *  3. Nova versão disponível (SW detecta) → banner "Atualizar app"
- *
- * Compatível com Chrome Android (BeforeInstallPromptEvent).
- * iOS Safari: mostra instrução manual "Compartilhar → Adicionar à tela de início".
+ *  1. Registra SW mínimo para o Chrome considerar o site "instalável"
+ *  2. Captura beforeinstallprompt → exibe banner customizado
+ *  3. Ao instalar → marca localStorage e remove banner
+ *  4. Visita seguinte com app instalado → sem banner
+ *  5. Nova versão detectada pelo SW → banner de atualização
+ *  6. iOS Safari → instrução manual (Compartilhar → Adicionar à tela)
  */
-
 (function () {
   'use strict';
 
-  /* ─── Constantes ─────────────────────────────────────────── */
-  var STORAGE_KEY_INSTALLED   = 'sw_pwa_installed';   // 'yes' quando instalou
-  var STORAGE_KEY_DISMISSED   = 'sw_pwa_dismissed';   // timestamp do último dismiss
-  var DISMISS_COOLDOWN_MS     = 3 * 24 * 60 * 60 * 1000; // 3 dias
-  var BANNER_DELAY_MS         = 3000;  // espera 3s antes de mostrar o banner
+  /* ─── Chaves localStorage ────────────────────────────────── */
+  var KEY_INSTALLED = 'sw_pwa_installed';
+  var KEY_DISMISSED = 'sw_pwa_dismissed';
+  var DISMISS_TTL   = 2 * 24 * 60 * 60 * 1000; // 2 dias
 
   /* ─── Utilitários ────────────────────────────────────────── */
-  function isMobile() {
-    return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
-  }
-
-  function isIOS() {
-    return /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  }
-
   function isStandalone() {
-    // Retorna true se o app JÁ está rodando como PWA instalada
     return window.matchMedia('(display-mode: standalone)').matches ||
-           window.navigator.standalone === true ||
-           document.referrer.indexOf('android-app://') === 0;
+           navigator.standalone === true;
+  }
+  function isIOS() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  }
+  function isAndroid() {
+    return /android/i.test(navigator.userAgent);
+  }
+  function isMobile() {
+    return isIOS() || isAndroid() ||
+           /windows phone|blackberry|mobile/i.test(navigator.userAgent);
+  }
+  function wasInstalled() {
+    return localStorage.getItem(KEY_INSTALLED) === '1';
+  }
+  function wasDismissed() {
+    var t = localStorage.getItem(KEY_DISMISSED);
+    return t && (Date.now() - parseInt(t)) < DISMISS_TTL;
+  }
+  function markInstalled() { localStorage.setItem(KEY_INSTALLED, '1'); }
+  function markDismissed() { localStorage.setItem(KEY_DISMISSED, String(Date.now())); }
+
+  /* ─── CSS (injetado uma vez) ─────────────────────────────── */
+  function injectCSS() {
+    if (document.getElementById('pwa-css')) return;
+    var s = document.createElement('style');
+    s.id = 'pwa-css';
+    s.textContent = [
+      /* Banner principal */
+      '#pwa-banner{',
+        'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;',
+        'background:linear-gradient(160deg,#0f1e12 0%,#1a2f1e 100%);',
+        'border-top:2px solid #C9A84C;',
+        'padding:14px 16px env(safe-area-inset-bottom,16px);',
+        'display:flex;align-items:center;gap:12px;',
+        'box-shadow:0 -6px 32px rgba(0,0,0,.7);',
+        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;',
+        'animation:pwa-up .35s cubic-bezier(.22,.68,0,1.2) both;',
+      '}',
+      '@keyframes pwa-up{from{transform:translateY(110%)}to{transform:translateY(0)}}',
+
+      '#pwa-banner .pwa-ico{',
+        'width:52px;height:52px;border-radius:13px;flex-shrink:0;overflow:hidden;',
+        'border:1.5px solid rgba(201,168,76,.4);',
+      '}',
+      '#pwa-banner .pwa-ico img{width:100%;height:100%;object-fit:cover;}',
+
+      '#pwa-banner .pwa-txt{flex:1;min-width:0;}',
+      '#pwa-banner .pwa-txt h3{',
+        'margin:0 0 3px;font-size:15px;font-weight:800;color:#fff;',
+      '}',
+      '#pwa-banner .pwa-txt p{',
+        'margin:0;font-size:12px;color:rgba(255,255,255,.65);line-height:1.4;',
+      '}',
+
+      '#pwa-banner .pwa-btns{display:flex;flex-direction:column;gap:7px;flex-shrink:0;}',
+
+      '#pwa-btn-ok{',
+        'padding:10px 18px;border-radius:10px;border:none;cursor:pointer;',
+        'font-size:13px;font-weight:800;letter-spacing:.3px;',
+        'background:linear-gradient(135deg,#C9A84C,#f0c84a);',
+        'color:#0f1e12;',
+        'box-shadow:0 3px 12px rgba(201,168,76,.5);',
+      '}',
+      '#pwa-btn-ok:active{opacity:.8;}',
+
+      '#pwa-btn-no{',
+        'padding:6px 10px;border-radius:8px;cursor:pointer;',
+        'border:1px solid rgba(255,255,255,.18);background:transparent;',
+        'color:rgba(255,255,255,.5);font-size:11px;text-align:center;',
+      '}',
+
+      /* iOS hint */
+      '#pwa-ios{',
+        'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;',
+        'background:linear-gradient(160deg,#0f1e12 0%,#1a2f1e 100%);',
+        'border-top:2px solid #C9A84C;',
+        'padding:18px 20px env(safe-area-inset-bottom,20px);',
+        'box-shadow:0 -6px 32px rgba(0,0,0,.7);',
+        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;',
+        'animation:pwa-up .35s cubic-bezier(.22,.68,0,1.2) both;',
+      '}',
+      '#pwa-ios h3{margin:0 0 12px;font-size:15px;font-weight:800;color:#C9A84C;}',
+      '#pwa-ios .pwa-step{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;}',
+      '#pwa-ios .pwa-step .pwa-num{',
+        'min-width:22px;height:22px;border-radius:50%;',
+        'background:#C9A84C;color:#0f1e12;',
+        'font-size:12px;font-weight:800;',
+        'display:flex;align-items:center;justify-content:center;',
+      '}',
+      '#pwa-ios .pwa-step p{margin:0;font-size:13px;color:rgba(255,255,255,.8);line-height:1.5;}',
+      '#pwa-ios .pwa-step strong{color:#fff;}',
+      '#pwa-ios-close{',
+        'margin-top:14px;width:100%;padding:11px;border-radius:10px;',
+        'border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);',
+        'color:rgba(255,255,255,.6);font-size:13px;cursor:pointer;',
+      '}',
+
+      /* Snackbar confirmação */
+      '#pwa-toast{',
+        'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);',
+        'background:#C9A84C;color:#0f1e12;font-weight:800;',
+        'padding:11px 22px;border-radius:28px;',
+        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;',
+        'font-size:13px;z-index:2147483647;white-space:nowrap;',
+        'box-shadow:0 4px 20px rgba(201,168,76,.6);',
+        'animation:pwa-up .3s ease both;',
+      '}',
+    ].join('');
+    document.head.appendChild(s);
   }
 
-  function wasRecentlyDismissed() {
-    var ts = localStorage.getItem(STORAGE_KEY_DISMISSED);
-    if (!ts) return false;
-    return (Date.now() - parseInt(ts, 10)) < DISMISS_COOLDOWN_MS;
-  }
-
-  function markInstalled() {
-    localStorage.setItem(STORAGE_KEY_INSTALLED, 'yes');
-  }
-
-  function isMarkedInstalled() {
-    return localStorage.getItem(STORAGE_KEY_INSTALLED) === 'yes';
-  }
-
-  /* ─── Estilos inline do banner ───────────────────────────── */
-  function injectStyles() {
-    var css = [
-      '#sw-pwa-banner {',
-      '  position: fixed; bottom: 0; left: 0; right: 0; z-index: 99999;',
-      '  background: linear-gradient(135deg, #071A10 0%, #0D2B1A 100%);',
-      '  border-top: 1.5px solid rgba(0,229,180,0.35);',
-      '  padding: 14px 16px 20px;',
-      '  box-shadow: 0 -4px 24px rgba(0,0,0,0.55);',
-      '  display: flex; align-items: center; gap: 12px;',
-      '  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;',
-      '  animation: sw-slide-up 0.35s cubic-bezier(.22,.68,0,1.2) both;',
-      '}',
-      '@keyframes sw-slide-up {',
-      '  from { transform: translateY(100%); opacity: 0; }',
-      '  to   { transform: translateY(0);    opacity: 1; }',
-      '}',
-      '#sw-pwa-banner .sw-icon {',
-      '  width: 48px; height: 48px; border-radius: 12px; flex-shrink: 0;',
-      '  background: rgba(0,229,180,0.12); border: 1.5px solid rgba(0,229,180,0.3);',
-      '  display: flex; align-items: center; justify-content: center; overflow: hidden;',
-      '}',
-      '#sw-pwa-banner .sw-icon img { width: 36px; height: 36px; object-fit: cover; border-radius: 8px; }',
-      '#sw-pwa-banner .sw-text { flex: 1; min-width: 0; }',
-      '#sw-pwa-banner .sw-text h3 {',
-      '  margin: 0 0 2px; font-size: 14px; font-weight: 700;',
-      '  color: #fff; line-height: 1.3;',
-      '}',
-      '#sw-pwa-banner .sw-text p {',
-      '  margin: 0; font-size: 12px; color: rgba(255,255,255,0.6); line-height: 1.4;',
-      '}',
-      '#sw-pwa-banner .sw-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }',
-      '#sw-pwa-btn-install, #sw-pwa-btn-update {',
-      '  padding: 9px 16px; border-radius: 9px; border: none; cursor: pointer;',
-      '  font-size: 13px; font-weight: 700; letter-spacing: 0.2px;',
-      '  background: linear-gradient(135deg, #00E5B4, #00C49A);',
-      '  color: #071A10;',
-      '  box-shadow: 0 2px 10px rgba(0,229,180,0.4);',
-      '  transition: opacity 0.15s;',
-      '}',
-      '#sw-pwa-btn-install:active, #sw-pwa-btn-update:active { opacity: 0.8; }',
-      '#sw-pwa-btn-dismiss {',
-      '  padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);',
-      '  background: transparent; color: rgba(255,255,255,0.5);',
-      '  font-size: 12px; cursor: pointer; text-align: center;',
-      '}',
-
-      /* Banner de instrução iOS */
-      '#sw-ios-hint {',
-      '  position: fixed; bottom: 0; left: 0; right: 0; z-index: 99999;',
-      '  background: linear-gradient(135deg, #071A10 0%, #0D2B1A 100%);',
-      '  border-top: 1.5px solid rgba(0,229,180,0.35);',
-      '  padding: 16px 20px 24px;',
-      '  box-shadow: 0 -4px 24px rgba(0,0,0,0.55);',
-      '  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;',
-      '  animation: sw-slide-up 0.35s cubic-bezier(.22,.68,0,1.2) both;',
-      '}',
-      '#sw-ios-hint h3 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #fff; }',
-      '#sw-ios-hint p { margin: 0 0 6px; font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.5; }',
-      '#sw-ios-hint .sw-ios-step { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }',
-      '#sw-ios-hint .sw-ios-step span { font-size: 20px; }',
-      '#sw-ios-hint .sw-ios-close {',
-      '  margin-top: 12px; width: 100%; padding: 10px; border-radius: 9px;',
-      '  border: 1px solid rgba(255,255,255,0.2); background: transparent;',
-      '  color: rgba(255,255,255,0.6); font-size: 13px; cursor: pointer;',
-      '}',
-
-      /* Snackbar de confirmação */
-      '#sw-snackbar {',
-      '  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);',
-      '  background: #00E5B4; color: #071A10; font-weight: 700;',
-      '  padding: 10px 20px; border-radius: 24px;',
-      '  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;',
-      '  font-size: 13px; z-index: 100000; white-space: nowrap;',
-      '  box-shadow: 0 4px 16px rgba(0,229,180,0.5);',
-      '  animation: sw-slide-up 0.3s ease both;',
-      '}',
-    ].join('\n');
-
-    var style = document.createElement('style');
-    style.textContent = css;
-    document.head.appendChild(style);
-  }
-
-  /* ─── Snackbar de confirmação ────────────────────────────── */
-  function showSnackbar(msg) {
-    var old = document.getElementById('sw-snackbar');
-    if (old) old.remove();
-    var el = document.createElement('div');
-    el.id = 'sw-snackbar';
+  /* ─── Toast ──────────────────────────────────────────────── */
+  function toast(msg) {
+    var el = document.getElementById('pwa-toast');
+    if (el) el.remove();
+    el = document.createElement('div');
+    el.id = 'pwa-toast';
     el.textContent = msg;
     document.body.appendChild(el);
-    setTimeout(function () { if (el.parentNode) el.remove(); }, 3500);
+    setTimeout(function(){ if(el.parentNode) el.remove(); }, 3500);
   }
 
-  /* ─── Banner principal (Android / Chrome) ───────────────── */
-  function buildBanner(type) {
-    // type: 'install' | 'update'
+  /* ─── Remove banner com slide-down ──────────────────────── */
+  function closeBanner(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.style.transition = 'transform .25s ease,opacity .25s ease';
+    el.style.transform  = 'translateY(110%)';
+    el.style.opacity    = '0';
+    setTimeout(function(){ if(el.parentNode) el.remove(); }, 280);
+  }
+
+  /* ─── Banner Android (install / update) ─────────────────── */
+  function showBanner(type) {
+    closeBanner('pwa-banner');
     var isUpdate = type === 'update';
 
-    var banner = document.createElement('div');
-    banner.id = 'sw-pwa-banner';
-    banner.innerHTML = [
-      '<div class="sw-icon">',
-      '  <img src="/app/icons/Icon-192.png" alt="ShareWallet" onerror="this.style.display=\'none\'">',
-      '</div>',
-      '<div class="sw-text">',
-      '  <h3>' + (isUpdate ? '🔄 Atualização disponível' : '📲 Instalar ShareWallet') + '</h3>',
-      '  <p>' + (isUpdate
-          ? 'Nova versão do app pronta. Atualize para aproveitar as melhorias!'
-          : 'Adicione à tela inicial e acesse sem precisar abrir o navegador.')
-      + '</p>',
-      '</div>',
-      '<div class="sw-actions">',
-      '  <button id="' + (isUpdate ? 'sw-pwa-btn-update' : 'sw-pwa-btn-install') + '">',
-      '    ' + (isUpdate ? 'Atualizar' : 'Instalar'),
-      '  </button>',
-      '  <button id="sw-pwa-btn-dismiss">Agora não</button>',
-      '</div>',
-    ].join('');
+    var el = document.createElement('div');
+    el.id  = 'pwa-banner';
+    el.innerHTML =
+      '<div class="pwa-ico">' +
+        '<img src="/app/icons/Icon-v202606251651-192.png" alt="ShareWallet">' +
+      '</div>' +
+      '<div class="pwa-txt">' +
+        '<h3>' + (isUpdate ? '🔄 Atualização disponível' : '📲 Instalar ShareWallet') + '</h3>' +
+        '<p>' + (isUpdate
+          ? 'Nova versão disponível. Toque para atualizar!'
+          : 'Adicione à tela inicial e acesse como um app!') + '</p>' +
+      '</div>' +
+      '<div class="pwa-btns">' +
+        '<button id="pwa-btn-ok">'  + (isUpdate ? 'Atualizar' : 'Instalar') + '</button>' +
+        '<button id="pwa-btn-no">Agora não</button>' +
+      '</div>';
 
-    return banner;
-  }
+    document.body.appendChild(el);
 
-  function removeBanner() {
-    var b = document.getElementById('sw-pwa-banner');
-    if (b) {
-      b.style.animation = 'none';
-      b.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
-      b.style.transform = 'translateY(100%)';
-      b.style.opacity = '0';
-      setTimeout(function () { if (b.parentNode) b.remove(); }, 280);
+    document.getElementById('pwa-btn-no').onclick = function() {
+      markDismissed();
+      closeBanner('pwa-banner');
+    };
+
+    if (isUpdate) {
+      document.getElementById('pwa-btn-ok').onclick = function() {
+        closeBanner('pwa-banner');
+        window.location.reload(true);
+      };
     }
+    // Para install: onclick setado externamente pelo _deferredPrompt
   }
 
-  /* ─── Instalar PWA (Android/Chrome) ─────────────────────── */
-  var _deferredPrompt = null;
+  /* ─── Banner iOS ─────────────────────────────────────────── */
+  function showIOSBanner() {
+    if (wasInstalled() || wasDismissed() || isStandalone()) return;
+    closeBanner('pwa-ios');
 
-  function showInstallBanner() {
-    if (!_deferredPrompt) return;
-    if (isStandalone() || isMarkedInstalled()) return;
-    if (wasRecentlyDismissed()) return;
+    var el = document.createElement('div');
+    el.id  = 'pwa-ios';
+    el.innerHTML =
+      '<h3>📲 Instalar ShareWallet</h3>' +
+      '<div class="pwa-step">' +
+        '<div class="pwa-num">1</div>' +
+        '<p>Toque no ícone <strong>Compartilhar</strong> ↑ na barra inferior do Safari</p>' +
+      '</div>' +
+      '<div class="pwa-step">' +
+        '<div class="pwa-num">2</div>' +
+        '<p>Role para baixo e toque em <strong>"Adicionar à Tela de Início"</strong></p>' +
+      '</div>' +
+      '<div class="pwa-step">' +
+        '<div class="pwa-num">3</div>' +
+        '<p>Toque em <strong>Adicionar</strong> — o ícone aparece na tela!</p>' +
+      '</div>' +
+      '<button id="pwa-ios-close">Entendi, talvez depois</button>';
 
-    var banner = buildBanner('install');
-    document.body.appendChild(banner);
-
-    document.getElementById('sw-pwa-btn-install').addEventListener('click', function () {
-      removeBanner();
-      _deferredPrompt.prompt();
-      _deferredPrompt.userChoice.then(function (result) {
-        if (result.outcome === 'accepted') {
-          markInstalled();
-          showSnackbar('✅ ShareWallet instalado com sucesso!');
-        }
-        _deferredPrompt = null;
-      });
-    });
-
-    document.getElementById('sw-pwa-btn-dismiss').addEventListener('click', function () {
-      localStorage.setItem(STORAGE_KEY_DISMISSED, Date.now().toString());
-      removeBanner();
-    });
+    document.body.appendChild(el);
+    document.getElementById('pwa-ios-close').onclick = function() {
+      markDismissed();
+      closeBanner('pwa-ios');
+    };
   }
 
-  /* ─── Banner de instrução iOS ────────────────────────────── */
-  function showIOSHint() {
-    if (isStandalone() || isMarkedInstalled()) return;
-    if (wasRecentlyDismissed()) return;
-
-    var hint = document.createElement('div');
-    hint.id = 'sw-ios-hint';
-    hint.innerHTML = [
-      '<h3>📲 Instalar ShareWallet no iPhone/iPad</h3>',
-      '<div class="sw-ios-step"><span>1️⃣</span><p>Toque no botão <strong>Compartilhar</strong> (ícone de seta para cima) na barra do Safari</p></div>',
-      '<div class="sw-ios-step"><span>2️⃣</span><p>Role para baixo e toque em <strong>"Adicionar à Tela de Início"</strong></p></div>',
-      '<div class="sw-ios-step"><span>3️⃣</span><p>Toque em <strong>Adicionar</strong> — pronto! O ícone aparecerá na sua tela</p></div>',
-      '<button class="sw-ios-close" id="sw-ios-close-btn">Entendi, talvez depois</button>',
-    ].join('');
-
-    document.body.appendChild(hint);
-
-    document.getElementById('sw-ios-close-btn').addEventListener('click', function () {
-      localStorage.setItem(STORAGE_KEY_DISMISSED, Date.now().toString());
-      var el = document.getElementById('sw-ios-hint');
-      if (el) el.remove();
-    });
-  }
-
-  /* ─── Banner de Atualização ──────────────────────────────── */
-  function showUpdateBanner() {
-    // Remove eventual banner de instalação
-    var existing = document.getElementById('sw-pwa-banner');
-    if (existing) existing.remove();
-
-    var banner = buildBanner('update');
-    document.body.appendChild(banner);
-
-    document.getElementById('sw-pwa-btn-update').addEventListener('click', function () {
-      removeBanner();
-      // Força reload sem cache para aplicar a nova versão
-      window.location.reload(true);
-    });
-
-    document.getElementById('sw-pwa-btn-dismiss').addEventListener('click', function () {
-      localStorage.setItem(STORAGE_KEY_DISMISSED, Date.now().toString());
-      removeBanner();
-    });
-  }
-
-  /* ─── Service Worker com detecção de versão ─────────────── */
+  /* ─── Service Worker mínimo ──────────────────────────────── */
   function registerSW() {
     if (!('serviceWorker' in navigator)) return;
 
-    // Escuta mensagem do SW indicando nova versão disponível
-    navigator.serviceWorker.addEventListener('message', function (event) {
-      if (event.data && event.data.type === 'SW_UPDATE_AVAILABLE') {
-        // Pequeno delay para não sobrepor o carregamento do Flutter
-        setTimeout(function () { showUpdateBanner(); }, 1500);
+    navigator.serviceWorker.addEventListener('message', function(ev) {
+      if (ev.data && ev.data.type === 'SW_UPDATE_AVAILABLE') {
+        setTimeout(function(){ showBanner('update'); }, 1000);
       }
     });
 
     navigator.serviceWorker.register('/app/sw_version.js', { scope: '/app/' })
-      .then(function (reg) {
-        // Verifica updates imediatamente e depois a cada 60s
+      .then(function(reg) {
         reg.update();
-        setInterval(function () { reg.update(); }, 60 * 1000);
-
-        // Quando um SW novo fica "waiting", notifica para atualizar
-        reg.addEventListener('updatefound', function () {
-          var newWorker = reg.installing;
-          if (!newWorker) return;
-          newWorker.addEventListener('statechange', function () {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // Novo SW instalado mas aguardando — avisa o usuário
-              setTimeout(function () { showUpdateBanner(); }, 1000);
+        setInterval(function(){ reg.update(); }, 60000);
+        reg.addEventListener('updatefound', function() {
+          var nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', function() {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              setTimeout(function(){ showBanner('update'); }, 800);
             }
           });
         });
       })
-      .catch(function (err) {
+      .catch(function(e) {
         // SW opcional — falha silenciosa
-        if (window.console) console.log('[PWA] SW registration skipped:', err.message);
       });
   }
 
-  /* ─── Detectar se já está instalado via appinstalled ─────── */
-  window.addEventListener('appinstalled', function () {
+  /* ─── Prompt de instalação ───────────────────────────────── */
+  var _prompt = null;
+
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    _prompt = e;
+
+    if (isStandalone() || wasInstalled() || wasDismissed()) return;
+
+    // Mostra banner após 2.5s (app já carregado)
+    setTimeout(function() {
+      showBanner('install');
+      var btn = document.getElementById('pwa-btn-ok');
+      if (!btn) return;
+      btn.onclick = function() {
+        closeBanner('pwa-banner');
+        _prompt.prompt();
+        _prompt.userChoice.then(function(r) {
+          if (r.outcome === 'accepted') {
+            markInstalled();
+            toast('✅ ShareWallet instalado!');
+          }
+          _prompt = null;
+        });
+      };
+    }, 2500);
+  });
+
+  window.addEventListener('appinstalled', function() {
     markInstalled();
-    removeBanner();
-    showSnackbar('✅ ShareWallet instalado! Acesse pelo ícone na sua tela.');
+    closeBanner('pwa-banner');
+    toast('✅ ShareWallet instalado com sucesso!');
   });
 
-  /* ─── Captura o prompt ANTES que o browser o descarte ────── */
-  window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault();  // impede o mini-infobar automático do Chrome
-    _deferredPrompt = e;
-
-    // Só mostra se não estiver em modo standalone e não tiver dismissado recentemente
-    if (!isStandalone() && !isMarkedInstalled() && !wasRecentlyDismissed()) {
-      setTimeout(function () { showInstallBanner(); }, BANNER_DELAY_MS);
-    }
-  });
-
-  /* ─── Init: roda assim que o DOM estiver pronto ──────────── */
+  /* ─── Init ───────────────────────────────────────────────── */
   function init() {
-    injectStyles();
+    injectCSS();
 
-    // Se já está rodando como PWA, marca como instalado e não mostra nada
+    // Já está rodando como PWA instalado
     if (isStandalone()) {
       markInstalled();
-      registerSW();  // ainda registra SW para detectar updates futuros
-      return;
-    }
-
-    // Apenas celulares
-    if (!isMobile()) {
       registerSW();
       return;
     }
 
-    // iOS: Chrome não suporta BeforeInstallPromptEvent — mostra hint manual
-    if (isIOS() && !isMarkedInstalled() && !wasRecentlyDismissed()) {
-      setTimeout(function () { showIOSHint(); }, BANNER_DELAY_MS);
-    }
-
-    // Android: o banner aparece via beforeinstallprompt (já capturado acima)
+    // Registra SW sempre (necessário para o Chrome disparar beforeinstallprompt)
     registerSW();
+
+    // iOS: instrução manual
+    if (isIOS() && !wasInstalled() && !wasDismissed()) {
+      setTimeout(showIOSBanner, 3000);
+    }
+    // Android: beforeinstallprompt é disparado automaticamente
+    // (o banner aparece via o listener acima)
   }
 
   if (document.readyState === 'loading') {
