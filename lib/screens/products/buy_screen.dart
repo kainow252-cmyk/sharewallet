@@ -683,14 +683,19 @@ class _BuyScreenState extends State<BuyScreen> {
             ],
 
             // -- PIX Automático: Card de autorização Woovi ---------------
-            if (_preapprovalResult != null &&
-                _preapprovalResult!.hasQrCode &&
-                product.isPixRecorrente) ...[
-              _PreapprovalCard(
-                result: _preapprovalResult!,
-                product: product,
-                onNovaTentativa: () => setState(() { _preapprovalResult = null; }),
-              ),
+            if (_preapprovalResult != null && product.isPixRecorrente) ...[
+              if (_preapprovalResult!.hasQrCode)
+                _PreapprovalCard(
+                  result: _preapprovalResult!,
+                  product: product,
+                  onNovaTentativa: () => setState(() { _preapprovalResult = null; }),
+                )
+              else
+                // Pix Automático criado com sucesso (sem QR — autorizado pelo banco)
+                _SubscriptionSuccessCard(
+                  result: _preapprovalResult!,
+                  onNovaTentativa: () => setState(() { _preapprovalResult = null; }),
+                ),
             ],
 
             const SizedBox(height: 12),
@@ -2262,6 +2267,140 @@ class _HowItWorks extends StatelessWidget {
                 style: const TextStyle(fontSize: 12,
                     color: Color(0xFF1565C0), height: 1.5)),
           )),
+        ],
+      ),
+    );
+  }
+}
+
+// -- Card de Sucesso Pix Automático sem QR Code --------------------------------
+// Exibido quando a Woovi cria a assinatura com status ACTIVE diretamente,
+// sem QR code (o banco do cliente já autorizou via app).
+class _SubscriptionSuccessCard extends StatelessWidget {
+  final SubscriptionResult result;
+  final VoidCallback onNovaTentativa;
+
+  const _SubscriptionSuccessCard({
+    required this.result,
+    required this.onNovaTentativa,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+            color: AppColors.success.withValues(alpha: 0.3), width: 1.5),
+      ),
+      child: Column(
+        children: [
+          // Ícone de sucesso
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check_circle_outline_rounded,
+                color: AppColors.success, size: 36),
+          ),
+          const SizedBox(height: 14),
+
+          // Título
+          const Text(
+            'Assinatura criada com sucesso!',
+            style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: AppColors.success),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+
+          // Subtítulo
+          const Text(
+            'Seu Pix Automático foi configurado. As cobranças serão\nprocessadas automaticamente todo mês.',
+            style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.5),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+
+          // Info box
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.info.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: AppColors.info.withValues(alpha: 0.2)),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded,
+                        size: 15, color: AppColors.info),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'O que acontece agora?',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.info),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '1. Você receberá um e-mail de confirmação\n'
+                  '2. A primeira cobrança será gerada em breve\n'
+                  '3. Acompanhe pelo app do seu banco',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                      height: 1.6),
+                ),
+              ],
+            ),
+          ),
+
+          if (result.wooviSubscriptionId.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'ID: ${result.wooviSubscriptionId.length > 20 ? result.wooviSubscriptionId.substring(0, 20) + "..." : result.wooviSubscriptionId}',
+              style: TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textHint.withValues(alpha: 0.6),
+                  fontFamily: 'monospace'),
+            ),
+          ],
+
+          const SizedBox(height: 16),
+
+          // Botão tentar novamente (caso queira refazer)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onNovaTentativa,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Tentar novamente'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                side: BorderSide(
+                    color: AppColors.cardBorder, width: 1.5),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
         ],
       ),
     );
