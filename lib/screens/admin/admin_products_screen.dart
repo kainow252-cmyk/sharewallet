@@ -394,6 +394,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   late bool _ativo;
   bool _bannerPreviewError = false;
   List<String> _docsRequired = [];
+  // Campos de texto personalizados criados pelo admin
+  List<CustomField> _customFields = [];
 
   // Documentos disponíveis para seleção
   static const _docOpts = [
@@ -424,6 +426,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _chargeType = p?.chargeType ?? ChargeType.pixRecorrente;
     _ativo = p?.ativo ?? true;
     _docsRequired = List<String>.from(p?.docsRequired ?? []);
+    _customFields = List<CustomField>.from(p?.customFields ?? []);
   }
 
   @override
@@ -462,6 +465,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       ativo: _ativo,
       imagemUrl: imgUrl.isEmpty ? null : imgUrl,
       docsRequired: _docsRequired,
+      customFields: _customFields,
     );
 
     final ok = await svc.saveProduct(produto, isNew: isNew);
@@ -994,6 +998,14 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                     ),
                     const SizedBox(height: 20),
 
+                    // ── Campos personalizados (texto livre) ──────────────
+                    _CustomFieldsEditor(
+                      fields: _customFields,
+                      onChanged: (updated) =>
+                          setState(() => _customFields = updated),
+                    ),
+                    const SizedBox(height: 20),
+
                     // -- Status ativo/inativo (mantido) ----------------------
                     const SizedBox(height: 0), // espaçamento já dado acima
 
@@ -1021,6 +1033,321 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
 }
 
 // -- Widgets auxiliares --------------------------------------------------------
+
+// ── Editor de campos personalizados ───────────────────────────────────────────
+class _CustomFieldsEditor extends StatefulWidget {
+  final List<CustomField> fields;
+  final ValueChanged<List<CustomField>> onChanged;
+
+  const _CustomFieldsEditor({
+    required this.fields,
+    required this.onChanged,
+  });
+
+  @override
+  State<_CustomFieldsEditor> createState() => _CustomFieldsEditorState();
+}
+
+class _CustomFieldsEditorState extends State<_CustomFieldsEditor> {
+  final _labelCtrl = TextEditingController();
+  bool _showInput = false;
+
+  @override
+  void dispose() {
+    _labelCtrl.dispose();
+    super.dispose();
+  }
+
+  String _slugify(String label) {
+    return label
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áàãâä]'), 'a')
+        .replaceAll(RegExp(r'[éèêë]'), 'e')
+        .replaceAll(RegExp(r'[íìîï]'), 'i')
+        .replaceAll(RegExp(r'[óòõôö]'), 'o')
+        .replaceAll(RegExp(r'[úùûü]'), 'u')
+        .replaceAll(RegExp(r'[ç]'), 'c')
+        .replaceAll(RegExp(r'[^a-z0-9]'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+  }
+
+  void _add() {
+    final label = _labelCtrl.text.trim();
+    if (label.isEmpty) return;
+    final key = '${_slugify(label)}_${DateTime.now().millisecondsSinceEpoch % 100000}';
+    final exists = widget.fields
+        .any((f) => f.label.toLowerCase() == label.toLowerCase());
+    if (exists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Já existe um campo com este nome.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    final newField = CustomField(key: key, label: label, enabled: true);
+    widget.onChanged([...widget.fields, newField]);
+    _labelCtrl.clear();
+    setState(() => _showInput = false);
+  }
+
+  void _toggle(int index, bool value) {
+    final updated = widget.fields.toList();
+    updated[index] = updated[index].copyWith(enabled: value);
+    widget.onChanged(updated);
+  }
+
+  void _delete(int index) {
+    final updated = widget.fields.toList()..removeAt(index);
+    widget.onChanged(updated);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabledCount = widget.fields.where((f) => f.enabled).length;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Cabeçalho ────────────────────────────────────────────────
+          Row(
+            children: [
+              const Icon(Icons.edit_note_rounded,
+                  color: AppColors.primary, size: 20),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Campos Personalizados',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: AppColors.textPrimary),
+                ),
+              ),
+              if (enabledCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$enabledCount ativo${enabledCount > 1 ? 's' : ''}',
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'O comprador deve preencher estes campos antes de pagar',
+            style: TextStyle(fontSize: 11, color: AppColors.textHint),
+          ),
+          const SizedBox(height: 14),
+
+          // ── Lista de campos (checkbox style) ─────────────────────────
+          if (widget.fields.isNotEmpty)
+            ...widget.fields.asMap().entries.map((e) {
+              final i = e.key;
+              final f = e.value;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: f.enabled
+                      ? AppColors.primary.withValues(alpha: 0.06)
+                      : AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: f.enabled
+                        ? AppColors.primary.withValues(alpha: 0.25)
+                        : AppColors.cardBorder,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Transform.scale(
+                      scale: 1.1,
+                      child: Checkbox(
+                        value: f.enabled,
+                        onChanged: (v) => _toggle(i, v ?? false),
+                        activeColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4)),
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    Icon(Icons.text_fields_rounded,
+                        size: 16,
+                        color: f.enabled
+                            ? AppColors.primary
+                            : AppColors.textHint),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _toggle(i, !f.enabled),
+                        child: Text(
+                          f.label,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: f.enabled
+                                ? AppColors.textPrimary
+                                : AppColors.textHint,
+                            decoration: f.enabled
+                                ? null
+                                : TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => _delete(i),
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          size: 17, color: AppColors.textHint),
+                      tooltip: 'Excluir campo',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                          minWidth: 36, minHeight: 36),
+                    ),
+                  ],
+                ),
+              );
+            }),
+
+          // ── Adicionar novo campo ──────────────────────────────────────
+          if (_showInput) ...[
+            if (widget.fields.isNotEmpty) const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _labelCtrl,
+                    autofocus: true,
+                    style: const TextStyle(
+                        color: AppColors.textPrimary, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Ex: Ano da moto, IMEI do celular...',
+                      hintStyle: TextStyle(
+                          color: AppColors.textHint, fontSize: 12),
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                              color: AppColors.cardBorder, width: 1)),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                              color: AppColors.primary, width: 1.5)),
+                    ),
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _add(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _add,
+                  child: Container(
+                    height: 42,
+                    width: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.check_rounded,
+                        color: Colors.white, size: 22),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () {
+                    _labelCtrl.clear();
+                    setState(() => _showInput = false);
+                  },
+                  child: Container(
+                    height: 42,
+                    width: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBorder,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.close_rounded,
+                        color: AppColors.textSecondary, size: 20),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            if (widget.fields.isNotEmpty) const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => setState(() => _showInput = true),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded,
+                        size: 16, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Adicionar campo personalizado',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (widget.fields.isEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Nenhum campo personalizado — compra direta',
+                style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textHint,
+                    fontStyle: FontStyle.italic),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _ChargeBadge extends StatelessWidget {
   final ProductModel product;
   const _ChargeBadge({required this.product});

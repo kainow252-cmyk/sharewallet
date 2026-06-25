@@ -2888,7 +2888,7 @@ class _DocUploadStepState extends State<_DocUploadStep> {
   void initState() {
     super.initState();
     _fieldCtrls = {
-      for (final f in widget.product.customFields)
+      for (final f in widget.product.activeCustomFields)
         f.key: TextEditingController()
     };
   }
@@ -3010,7 +3010,7 @@ class _DocUploadStepState extends State<_DocUploadStep> {
 
   bool get _allDone =>
       widget.product.docsRequired.every((k) => _docs.containsKey(k)) &&
-      widget.product.customFields.every(
+      widget.product.activeCustomFields.every(
           (f) => _fieldCtrls[f.key]?.text.trim().isNotEmpty == true);
 
   Future<void> _submit() async {
@@ -3026,7 +3026,7 @@ class _DocUploadStepState extends State<_DocUploadStep> {
     setState(() => _isSubmitting = true);
     try {
       // Mescla respostas dos campos personalizados no mapa de docs
-      for (final f in widget.product.customFields) {
+      for (final f in widget.product.activeCustomFields) {
         final text = _fieldCtrls[f.key]?.text.trim() ?? '';
         if (text.isNotEmpty) _docs[f.key] = text;
       }
@@ -3213,7 +3213,7 @@ class _DocUploadStepState extends State<_DocUploadStep> {
           }),
 
           // ── Campos personalizados (texto livre) ──────────────────────────
-          if (widget.product.customFields.isNotEmpty) ...[
+          if (widget.product.activeCustomFields.isNotEmpty) ...[
             const SizedBox(height: 16),
             const Divider(height: 1),
             const SizedBox(height: 16),
@@ -3226,7 +3226,7 @@ class _DocUploadStepState extends State<_DocUploadStep> {
               ),
             ),
             const SizedBox(height: 12),
-            ...widget.product.customFields.map((f) {
+            ...widget.product.activeCustomFields.map((f) {
               final ctrl = _fieldCtrls[f.key]!;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 14),

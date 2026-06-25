@@ -1,4 +1,40 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+
+// Representa um campo de texto livre exigido pelo admin antes do pagamento
+class CustomField {
+  final String key;     // identificador único (ex: 'ano_moto_1234')
+  final String label;   // texto exibido ao comprador (ex: 'Ano da moto')
+  final bool enabled;   // se marcado, aparece no fluxo do comprador
+
+  const CustomField({
+    required this.key,
+    required this.label,
+    this.enabled = true,
+  });
+
+  CustomField copyWith({String? key, String? label, bool? enabled}) =>
+      CustomField(
+        key: key ?? this.key,
+        label: label ?? this.label,
+        enabled: enabled ?? this.enabled,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'key': key,
+        'label': label,
+        'enabled': enabled,
+      };
+
+  factory CustomField.fromMap(Map<String, dynamic> m) => CustomField(
+        key: m['key']?.toString() ?? '',
+        label: m['label']?.toString() ?? '',
+        enabled: m['enabled'] != false, // default true se ausente (retrocompat)
+      );
+
+  @override
+  String toString() => 'CustomField($key: $label, enabled=$enabled)';
+}
 
 // -- Tipo de cobrança - somente Pix --------------------------------------------
 enum ChargeType {
@@ -19,7 +55,8 @@ class ProductModel {
   final String? periodicidade; // mensal, anual, etc.
   final int? diaCobranca;      // dia do mês para débito (ex: 5 = todo dia 5)
   final String? beneficios;    // lista de benefícios separada por '|'
-  final List<String> docsRequired; // documentos obrigatórios antes do pagamento
+  final List<String> docsRequired;       // documentos obrigatórios antes do pagamento
+  final List<CustomField> customFields;   // campos de texto livres definidos pelo admin
 
   ProductModel({
     required this.id,
@@ -35,10 +72,16 @@ class ProductModel {
     this.diaCobranca,
     this.beneficios,
     this.docsRequired = const [],
+    this.customFields = const [],
   });
 
   // Atalhos
-  bool get requiresDocs => docsRequired.isNotEmpty;
+  /// Campos ativos (enabled) para exibir ao comprador
+  List<CustomField> get activeCustomFields =>
+      customFields.where((f) => f.enabled).toList();
+
+  bool get requiresDocs =>
+      docsRequired.isNotEmpty || activeCustomFields.isNotEmpty;
   bool get recorrente => chargeType == ChargeType.pixRecorrente;
   bool get isPixRecorrente => chargeType == ChargeType.pixRecorrente;
   bool get isPixAvulso => chargeType == ChargeType.pixAvulso;
@@ -92,12 +135,26 @@ class ProductModel {
       diaCobranca: (json['dia_cobranca'] ?? json['diaCobranca']) as int?,
       beneficios: json['beneficios'] as String?,
       docsRequired: _parseDocsRequired(json['docs_required'] ?? json['docsRequired']),
+      customFields: _parseCustomFields(json['custom_fields'] ?? json['customFields']),
     );
   }
 
   static List<String> _parseDocsRequired(dynamic raw) {
     if (raw == null || raw.toString().isEmpty) return [];
     return raw.toString().split('|').where((s) => s.isNotEmpty).toList();
+  }
+
+  /// custom_fields é salvo como JSON na D1: '[{"key":"ano_moto","label":"Ano da moto"}]'
+  static List<CustomField> _parseCustomFields(dynamic raw) {
+    if (raw == null || raw.toString().isEmpty) return [];
+    try {
+      final list = jsonDecode(raw.toString()) as List;
+      return list
+          .map((e) => CustomField.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   double get valorComissao => valor * comissao;
@@ -165,6 +222,10 @@ class ProductModel {
         'diaCobranca': diaCobranca,
         'beneficios': beneficios,
         'docs_required': docsRequired.isEmpty ? null : docsRequired.join('|'),
+        // Salva TODOS os campos (enabled e disabled) para preservar histórico
+        'custom_fields': customFields.isEmpty
+            ? null
+            : jsonEncode(customFields.map((f) => f.toMap()).toList()),
       };
 
   // -- Produtos mock - todos somente Pix -------------------------------------
