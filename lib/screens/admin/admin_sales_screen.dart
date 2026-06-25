@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../services/admin_service.dart';
+import '../../services/cf_api_service.dart';
 import '../../theme/app_theme.dart';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -643,7 +644,7 @@ class _SaleCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            // Linha 4: valores
+            // Linha 4: valores + botão docs
             Row(
               children: [
                 _ValorBadge(
@@ -658,7 +659,28 @@ class _SaleCard extends StatelessWidget {
                         'R\$ ${sale.comissao.toStringAsFixed(2)}',
                     color: AppColors.primary),
                 const Spacer(),
-                if (sale.paymentId.isNotEmpty)
+                // Botão Ver Documentos
+                GestureDetector(
+                  onTap: () => _showDocsDialog(context, sale),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.folder_open_rounded, size: 12, color: Colors.blue),
+                        SizedBox(width: 4),
+                        Text('Docs', style: TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+                if (sale.paymentId.isNotEmpty) ...[
+                  const SizedBox(width: 6),
                   GestureDetector(
                     onTap: () {
                       Clipboard.setData(
@@ -683,7 +705,171 @@ class _SaleCard extends StatelessWidget {
                       ],
                     ),
                   ),
+                ],
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Dialog de documentos ───────────────────────────────────────────────────────
+void _showDocsDialog(BuildContext context, AdminSale sale) {
+  showDialog(
+    context: context,
+    builder: (ctx) => _SaleDocsDialog(sale: sale),
+  );
+}
+
+class _SaleDocsDialog extends StatefulWidget {
+  final AdminSale sale;
+  const _SaleDocsDialog({required this.sale});
+  @override
+  State<_SaleDocsDialog> createState() => _SaleDocsDialogState();
+}
+
+class _SaleDocsDialogState extends State<_SaleDocsDialog> {
+  bool _loading = true;
+  Map<String, dynamic>? _docsData;
+  String? _error;
+
+  static const _docLabels = {
+    'cnh': 'CNH',
+    'selfie': 'Selfie / Foto',
+    'comp_residencia': 'Comprovante de Residência',
+    'comp_renda': 'Comprovante de Renda',
+    'geolocalizacao': 'Geolocalização',
+    'certidao': 'Certidão de Nascimento',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final result = await CfApiService.getSaleDocs(widget.sale.id);
+      if (!mounted) return;
+      if (result == null) {
+        setState(() { _error = 'Nenhum documento encontrado para esta venda.'; _loading = false; });
+        return;
+      }
+      final raw = result['docs_data'];
+      Map<String, dynamic> docs = {};
+      if (raw is Map) {
+        docs = Map<String, dynamic>.from(raw);
+      } else if (raw is String) {
+        try { docs = Map<String, dynamic>.from(json.decode(raw)); } catch (_) {}
+      }
+      setState(() { _docsData = docs; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = 'Erro: $e'; _loading = false; });
+    }
+  }
+
+  void _copyLink() {
+    final link = 'https://api.sharewallet.com.br/api/sale-docs/${widget.sale.id}';
+    Clipboard.setData(ClipboardData(text: link));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Link copiado!'), duration: Duration(seconds: 2)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF0D2B1A),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.folder_copy_rounded, color: Colors.blue, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('Documentos da Venda',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15))),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('Venda: ${widget.sale.id}',
+                style: const TextStyle(color: Colors.white38, fontSize: 11)),
+            Text('Cliente: ${widget.sale.clienteNome.isNotEmpty ? widget.sale.clienteNome : widget.sale.clienteEmail}',
+                style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            const Divider(color: Colors.white12, height: 20),
+            if (_loading)
+              const Center(child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(color: Colors.blue),
+              ))
+            else if (_error != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(_error!, style: const TextStyle(color: Colors.orange, fontSize: 13)),
+              )
+            else ...[
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 300),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: (_docsData ?? {}).entries.map((e) {
+                      final label = _docLabels[e.key] ?? e.key;
+                      final val = e.value?.toString() ?? '';
+                      final isImg = val.startsWith('data:image');
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(label, style: const TextStyle(
+                                color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            if (isImg)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(val, height: 120, fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const Text('Erro ao carregar imagem',
+                                            style: TextStyle(color: Colors.red, fontSize: 11))),
+                              )
+                            else
+                              Text(val.length > 80 ? '${val.substring(0, 80)}...' : val,
+                                  style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _copyLink,
+                icon: const Icon(Icons.link_rounded, size: 16),
+                label: const Text('Copiar link de documentos'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue,
+                  side: const BorderSide(color: Colors.blue),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
             ),
           ],
         ),

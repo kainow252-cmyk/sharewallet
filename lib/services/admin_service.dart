@@ -633,6 +633,7 @@ class AdminService extends ChangeNotifier {
     'diaCobranca': r['dia_cobranca'], 'beneficios': r['beneficios'],
     'imagem_url': r['imagem_url'],
     'ativo': r['ativo'] == 1 || r['ativo'] == true,
+    'docs_required': r['docs_required'],
   };
 
   Future<bool> saveProduct(ProductModel product, {bool isNew = false}) async {

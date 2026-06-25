@@ -393,6 +393,17 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   late ChargeType _chargeType;
   late bool _ativo;
   bool _bannerPreviewError = false;
+  List<String> _docsRequired = [];
+
+  // Documentos disponíveis para seleção
+  static const _docOpts = [
+    ('cnh',              'CNH',                     Icons.badge_rounded),
+    ('selfie',           'Selfie / Foto',            Icons.face_rounded),
+    ('comp_residencia',  'Comprovante de Residência', Icons.home_rounded),
+    ('comp_renda',       'Comprovante de Renda',     Icons.attach_money_rounded),
+    ('geolocalizacao',   'Geolocalização',           Icons.location_on_rounded),
+    ('certidao',         'Certidão de Nascimento',   Icons.article_rounded),
+  ];
 
   @override
   void initState() {
@@ -412,6 +423,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _imagemUrl = TextEditingController(text: p?.imagemUrl ?? '');
     _chargeType = p?.chargeType ?? ChargeType.pixRecorrente;
     _ativo = p?.ativo ?? true;
+    _docsRequired = List<String>.from(p?.docsRequired ?? []);
   }
 
   @override
@@ -449,6 +461,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       beneficios: beneficiosStr.isEmpty ? null : beneficiosStr,
       ativo: _ativo,
       imagemUrl: imgUrl.isEmpty ? null : imgUrl,
+      docsRequired: _docsRequired,
     );
 
     final ok = await svc.saveProduct(produto, isNew: isNew);
@@ -865,6 +878,125 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 20),
+
+                    // -- Documentos obrigatórios ----------------------------
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.cardBorder),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.folder_copy_rounded,
+                                  color: AppColors.primary, size: 18),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Documentos Obrigatórios',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: AppColors.textPrimary),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'O comprador deve enviar estes documentos antes de pagar',
+                            style: TextStyle(
+                                fontSize: 11, color: AppColors.textHint),
+                          ),
+                          const SizedBox(height: 12),
+                          ..._docOpts.map((opt) {
+                            final key = opt.$1;
+                            final label = opt.$2;
+                            final icon = opt.$3;
+                            final checked = _docsRequired.contains(key);
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => setState(() {
+                                if (checked) {
+                                  _docsRequired.remove(key);
+                                } else {
+                                  _docsRequired.add(key);
+                                }
+                              }),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 6, horizontal: 2),
+                                child: Row(
+                                  children: [
+                                    AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 180),
+                                      width: 22,
+                                      height: 22,
+                                      decoration: BoxDecoration(
+                                        color: checked
+                                            ? AppColors.primary
+                                            : Colors.transparent,
+                                        borderRadius:
+                                            BorderRadius.circular(5),
+                                        border: Border.all(
+                                          color: checked
+                                              ? AppColors.primary
+                                              : AppColors.textHint,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: checked
+                                          ? const Icon(Icons.check_rounded,
+                                              size: 15,
+                                              color: Colors.white)
+                                          : null,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Icon(icon,
+                                        size: 17,
+                                        color: checked
+                                            ? AppColors.primary
+                                            : AppColors.textHint),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      label,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: checked
+                                            ? FontWeight.w600
+                                            : FontWeight.normal,
+                                        color: checked
+                                            ? AppColors.textPrimary
+                                            : AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                          if (_docsRequired.isEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'Nenhum documento exigido — compra direta',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textHint,
+                                  fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // -- Status ativo/inativo (mantido) ----------------------
+                    const SizedBox(height: 0), // espaçamento já dado acima
+
                     const SizedBox(height: 24),
 
                     // Botão salvar

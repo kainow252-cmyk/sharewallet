@@ -97,5 +97,6 @@ class ProductService extends ChangeNotifier {
     'beneficios': r['beneficios'],
     'imagem_url': r['imagem_url'],
     'ativo': r['ativo'] == 1 || r['ativo'] == true,
+    'docs_required': r['docs_required'],
   };
 }

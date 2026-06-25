@@ -12,9 +12,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/web_utils.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
+import '../../services/cf_api_service.dart';
 import '../../services/woovi_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html show FileUploadInputElement, FileReader;
 
 // --- Chaves para auto-fill ----------------------------------------------------
 const _kNome     = 'buyer_nome';
@@ -93,6 +96,11 @@ class _BuyScreenState extends State<BuyScreen> {
   // true = mostra landing page com botões; false = mostra formulário de compra
   bool _showBanner = true;
 
+  // -- Etapa de upload de documentos (antes do pagamento) -------------------
+  bool _showDocUpload = false;
+  Map<String, String> _uploadedDocs = {}; // tipo -> base64
+  String? _saleDocId; // ID do registro salvo na API
+
   @override
   void initState() {
     super.initState();
@@ -112,7 +120,17 @@ class _BuyScreenState extends State<BuyScreen> {
     super.dispose();
   }
 
-  // -- Auto-fill: carrega dados salvos --------------------------------------
+  // -- Avança da landing page para a próxima etapa --------------------------
+  void _onLandingContinue() {
+    final product = _product;
+    if (product == null) return;
+    if (product.requiresDocs) {
+      setState(() { _showDocUpload = true; _showBanner = false; });
+    } else {
+      setState(() { _showBanner = false; });
+    }
+  }
+
   Future<void> _carregarDadosSalvos() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -416,19 +434,34 @@ class _BuyScreenState extends State<BuyScreen> {
     if (_showBanner) {
       return _ProductLandingPage(
         product: product,
-        onAssinar: product.isPixRecorrente ? () {
-          setState(() { _showBanner = false; });
-        } : null,
-        onComprar: product.isPixAvulso ? () {
-          setState(() { _showBanner = false; });
-        } : null,
+        onAssinar: product.isPixRecorrente ? _onLandingContinue : null,
+        onComprar: product.isPixAvulso ? _onLandingContinue : null,
         // Produto que tem os dois tipos de cobrança
-        onAssinarRecorrente: product.isPixRecorrente ? () {
-          setState(() { _showBanner = false; });
-        } : null,
-        onComprarAvulso: product.isPixAvulso ? () {
-          setState(() { _showBanner = false; });
-        } : null,
+        onAssinarRecorrente: product.isPixRecorrente ? _onLandingContinue : null,
+        onComprarAvulso: product.isPixAvulso ? _onLandingContinue : null,
+      );
+    }
+
+    // -- Etapa de upload de documentos --------------------------------------
+    if (_showDocUpload) {
+      return _DocUploadStep(
+        product: product,
+        onBack: () => setState(() { _showDocUpload = false; _showBanner = true; }),
+        onContinue: (docs) async {
+          setState(() { _uploadedDocs = docs; _showDocUpload = false; });
+          // Salva os docs na API com ID provisório
+          final saleId = 'pre_${DateTime.now().millisecondsSinceEpoch}';
+          final affiliateCode = widget.affiliateCode;
+          final docId = await CfApiService.uploadSaleDocs(
+            saleId: saleId,
+            productId: product.id,
+            affiliateCode: affiliateCode,
+            clienteNome: _nomeCtrl.text.trim(),
+            clienteEmail: _emailCtrl.text.trim(),
+            docsData: docs,
+          );
+          if (mounted) setState(() { _saleDocId = docId; });
+        },
       );
     }
 
@@ -2817,3 +2850,314 @@ class _PixQrCardState extends State<_PixQrCard> {
 // ---------------------------------------------------------------------------
 // FIM DO ARQUIVO — todo código abaixo foi removido (classes MP legadas)
 // ---------------------------------------------------------------------------
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Widget de upload de documentos obrigatórios
+// ─────────────────────────────────────────────────────────────────────────────
+class _DocUploadStep extends StatefulWidget {
+  final ProductModel product;
+  final VoidCallback onBack;
+  final Future<void> Function(Map<String, String> docs) onContinue;
+
+  const _DocUploadStep({
+    required this.product,
+    required this.onBack,
+    required this.onContinue,
+  });
+
+  @override
+  State<_DocUploadStep> createState() => _DocUploadStepState();
+}
+
+class _DocUploadStepState extends State<_DocUploadStep> {
+  final Map<String, String> _docs = {}; // chave → base64 da imagem
+  bool _isSubmitting = false;
+
+  // Mapa de labels e ícones para cada tipo de documento
+  static const _docInfo = {
+    'cnh':             ('CNH (Carteira de Habilitação)', Icons.badge_rounded),
+    'selfie':          ('Selfie / Foto com documento',   Icons.face_rounded),
+    'comp_residencia': ('Comprovante de Residência',     Icons.home_rounded),
+    'comp_renda':      ('Comprovante de Renda',          Icons.attach_money_rounded),
+    'geolocalizacao':  ('Geolocalização',                Icons.location_on_rounded),
+    'certidao':        ('Certidão de Nascimento',        Icons.article_rounded),
+  };
+
+  Future<void> _pickImage(String docKey) async {
+    try {
+      // Na web usamos input[type=file] via dart:html
+      if (kIsWeb) {
+        await _pickImageWeb(docKey);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao selecionar imagem: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickImageWeb(String docKey) async {
+    // Trigger de input file via JS interop (web only)
+    // Como não usamos dart:html diretamente, usamos um workaround com
+    // um elemento de formulário disparado via click
+    try {
+      // ignore: undefined_prefixed_name
+      final input = html.FileUploadInputElement()..accept = 'image/*';
+      input.click();
+      await input.onChange.first;
+      if (input.files == null || input.files!.isEmpty) return;
+      final file = input.files![0];
+      final reader = html.FileReader();
+      reader.readAsDataUrl(file);
+      await reader.onLoad.first;
+      final result = reader.result as String;
+      if (mounted) setState(() => _docs[docKey] = result);
+    } catch (_) {
+      // Fallback: mostra aviso
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Para enviar documentos, por favor use o aplicativo móvel ou um browser desktop.')),
+        );
+      }
+    }
+  }
+
+  bool get _allUploaded =>
+      widget.product.docsRequired.every((k) => _docs.containsKey(k));
+
+  Future<void> _submit() async {
+    if (!_allUploaded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Envie todos os documentos obrigatórios para continuar.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    setState(() => _isSubmitting = true);
+    try {
+      await widget.onContinue(_docs);
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final docs = widget.product.docsRequired;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Cabeçalho
+          Row(
+            children: [
+              GestureDetector(
+                onTap: widget.onBack,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.arrow_back_rounded,
+                      color: AppColors.textPrimary, size: 20),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Documentos Obrigatórios',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                    Text('Envie os documentos antes de pagar',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Card informativo
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    color: AppColors.primary, size: 20),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Para finalizar sua compra, precisamos verificar alguns documentos. Tire fotos nítidas e legíveis.',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Lista de documentos
+          ...docs.map((docKey) {
+            final info = _docInfo[docKey];
+            final label = info?.$1 ?? docKey;
+            final icon = info?.$2 ?? Icons.upload_file_rounded;
+            final uploaded = _docs.containsKey(docKey);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _pickImage(docKey),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: uploaded
+                        ? AppColors.success.withValues(alpha: 0.07)
+                        : AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: uploaded
+                          ? AppColors.success
+                          : AppColors.cardBorder,
+                      width: uploaded ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: uploaded
+                              ? AppColors.success.withValues(alpha: 0.1)
+                              : AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: uploaded
+                            ? Icon(Icons.check_circle_rounded,
+                                color: AppColors.success, size: 24)
+                            : Icon(icon,
+                                color: AppColors.primary, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(label,
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: uploaded
+                                        ? AppColors.success
+                                        : AppColors.textPrimary)),
+                            const SizedBox(height: 2),
+                            Text(
+                              uploaded
+                                  ? 'Enviado ✓  Toque para trocar'
+                                  : 'Toque para enviar foto',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: uploaded
+                                      ? AppColors.success
+                                          .withValues(alpha: 0.8)
+                                      : AppColors.textHint),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        uploaded
+                            ? Icons.check_rounded
+                            : Icons.camera_alt_rounded,
+                        color: uploaded
+                            ? AppColors.success
+                            : AppColors.textHint,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+
+          const SizedBox(height: 8),
+
+          // Progresso
+          LinearProgressIndicator(
+            value: docs.isEmpty
+                ? 1.0
+                : _docs.length / docs.length,
+            backgroundColor: AppColors.cardBorder,
+            valueColor:
+                AlwaysStoppedAnimation<Color>(AppColors.success),
+            borderRadius: BorderRadius.circular(4),
+            minHeight: 6,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${_docs.length} de ${docs.length} documentos enviados',
+            style: const TextStyle(
+                fontSize: 11, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 24),
+
+          // Botão continuar
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: _isSubmitting
+                  ? null
+                  : (_allUploaded ? _submit : null),
+              icon: _isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.arrow_forward_rounded),
+              label: Text(_isSubmitting
+                  ? 'Salvando...'
+                  : _allUploaded
+                      ? 'Continuar para Pagamento'
+                      : 'Envie todos os documentos'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _allUploaded
+                    ? AppColors.primary
+                    : AppColors.textHint,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}

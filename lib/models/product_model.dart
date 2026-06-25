@@ -19,6 +19,7 @@ class ProductModel {
   final String? periodicidade; // mensal, anual, etc.
   final int? diaCobranca;      // dia do mês para débito (ex: 5 = todo dia 5)
   final String? beneficios;    // lista de benefícios separada por '|'
+  final List<String> docsRequired; // documentos obrigatórios antes do pagamento
 
   ProductModel({
     required this.id,
@@ -33,9 +34,11 @@ class ProductModel {
     this.periodicidade,
     this.diaCobranca,
     this.beneficios,
+    this.docsRequired = const [],
   });
 
   // Atalhos
+  bool get requiresDocs => docsRequired.isNotEmpty;
   bool get recorrente => chargeType == ChargeType.pixRecorrente;
   bool get isPixRecorrente => chargeType == ChargeType.pixRecorrente;
   bool get isPixAvulso => chargeType == ChargeType.pixAvulso;
@@ -86,9 +89,15 @@ class ProductModel {
       ativo: (json['ativo'] ?? true) as bool,
       chargeType: ct,
       periodicidade: json['periodicidade'] as String?,
-      diaCobranca: json['diaCobranca'] as int?,
+      diaCobranca: (json['dia_cobranca'] ?? json['diaCobranca']) as int?,
       beneficios: json['beneficios'] as String?,
+      docsRequired: _parseDocsRequired(json['docs_required'] ?? json['docsRequired']),
     );
+  }
+
+  static List<String> _parseDocsRequired(dynamic raw) {
+    if (raw == null || raw.toString().isEmpty) return [];
+    return raw.toString().split('|').where((s) => s.isNotEmpty).toList();
   }
 
   double get valorComissao => valor * comissao;
@@ -136,6 +145,9 @@ class ProductModel {
     }
   }
 
+  /// Converte docsRequired em string '|'-separada para salvar na API
+  String get docsRequiredRaw => docsRequired.join('|');
+
   List<String> get beneficiosList =>
       beneficios?.split('|').where((b) => b.isNotEmpty).toList() ?? [];
 
@@ -152,6 +164,7 @@ class ProductModel {
         'periodicidade': periodicidade,
         'diaCobranca': diaCobranca,
         'beneficios': beneficios,
+        'docs_required': docsRequired.isEmpty ? null : docsRequired.join('|'),
       };
 
   // -- Produtos mock - todos somente Pix -------------------------------------

@@ -351,4 +351,51 @@ class CfApiService {
   static Future<Map<String, dynamic>?> getPaymentStatus(String paymentId) async {
     return await _get('/api/payment-status/$paymentId');
   }
+
+  // ── Documentos de venda ────────────────────────────────────────────────────
+
+  /// Envia os documentos coletados na tela de compra para a API
+  /// [saleId]       : ID provisório gerado antes do pagamento (ex: "pre_TIMESTAMP")
+  /// [productId]    : ID do produto
+  /// [affiliateCode]: código do afiliado
+  /// [clienteNome]  : nome do comprador
+  /// [clienteEmail] : email do comprador
+  /// [docsData]     : mapa { tipo: base64String } ex: {'cnh': 'data:image/...'}
+  static Future<String?> uploadSaleDocs({
+    required String saleId,
+    required String productId,
+    required String affiliateCode,
+    required String clienteNome,
+    required String clienteEmail,
+    required Map<String, String> docsData,
+  }) async {
+    try {
+      final result = await _post('/api/sale-docs', {
+        'sale_id': saleId,
+        'product_id': productId,
+        'affiliate_code': affiliateCode,
+        'cliente_nome': clienteNome,
+        'cliente_email': clienteEmail,
+        'docs_data': docsData,
+      });
+      return result?['id'] as String?;
+    } catch (e) {
+      debugPrint('[CfApiService] uploadSaleDocs error: $e');
+      return null;
+    }
+  }
+
+  /// Busca os documentos de uma venda pelo sale_id
+  static Future<Map<String, dynamic>?> getSaleDocs(String saleId) async {
+    return await _get('/api/sale-docs/$saleId');
+  }
+
+  /// Busca todos os documentos de vendas de um afiliado
+  static Future<List<Map<String, dynamic>>> getSaleDocsByAffiliate(String code) async {
+    final result = await _get('/api/sale-docs/by-affiliate/$code');
+    if (result == null) return [];
+    final list = result['result'] as List?;
+    if (list == null) return [];
+    return list.cast<Map<String, dynamic>>();
+  }
 }
