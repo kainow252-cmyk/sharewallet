@@ -126,7 +126,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     );
     if (confirm == true && mounted) {
       context.read<AdminService>().adminLogout();
-      Navigator.pushReplacementNamed(context, '/admin/login');
+      Navigator.pushReplacementNamed(context, '/landing');
     }
   }
 
