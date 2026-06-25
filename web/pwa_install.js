@@ -1,11 +1,10 @@
 /**
- * pwa_install.js — ShareWallet PWA Install v4
+ * pwa_install.js — ShareWallet PWA Install v5
  * Lógica:
  *   1. App já instalado (standalone)  → silêncio total
- *   2. beforeinstallprompt disparou   → banner automático bonito
- *   3. Prompt bloqueado / Android sem prompt → silêncio total
- *   4. iOS Safari                     → silêncio total
- *   (guia de passos removido — confundia o usuário)
+ *   2. Rota /admin                    → troca manifest para manifest-admin.json
+ *   3. beforeinstallprompt disparou   → banner automático bonito
+ *   4. Prompt bloqueado / sem prompt  → silêncio total
  */
 (function () {
   'use strict';
@@ -181,10 +180,16 @@
     };
   }
 
-  /* ── Guia manual — Android/iOS REMOVIDO ─────────────────────
-   * Não mostrar mais passos manuais: confunde o usuário.
-   * Só o banner automático quando o Chrome oferecer o prompt.
-   * ─────────────────────────────────────────────────────────── */
+  /* ── Troca manifest para admin quando na rota #/admin ─────── */
+  function swapManifestIfAdmin() {
+    var hash = window.location.hash || '';
+    if (hash.indexOf('/admin') === -1) return;
+    var link = document.querySelector('link[rel="manifest"]');
+    if (!link) return;
+    var current = link.getAttribute('href') || '';
+    if (current.indexOf('manifest-admin') !== -1) return; // já trocou
+    link.setAttribute('href', current.replace('manifest.json', 'manifest-admin.json'));
+  }
 
   /* ── SW registration ─────────────────────────────────────── */
   function registerSW() {
@@ -228,6 +233,12 @@
   function init() {
     injectCSS();
     registerSW();
+
+    // Troca manifest se for rota admin
+    swapManifestIfAdmin();
+
+    // Observa mudanças de hash (SPA navigation admin ↔ app)
+    window.addEventListener('hashchange', swapManifestIfAdmin);
 
     // Já está como PWA → silêncio total
     if (isStandalone()) { markInstalled(); return; }

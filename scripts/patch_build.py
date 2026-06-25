@@ -116,6 +116,17 @@ def copy_pwa_install():
         print('SKIP: web/pwa_install.js não encontrado')
 
 
+def copy_admin_manifest():
+    """Copia manifest-admin.json para o build (PWA admin instalável)."""
+    src = os.path.join(WEB_DIR, 'manifest-admin.json')
+    dst = os.path.join(BUILD_DIR, 'manifest-admin.json')
+    if os.path.exists(src):
+        shutil.copy2(src, dst)
+        print('OK: manifest-admin.json copiado para build/web/')
+    else:
+        print('SKIP: web/manifest-admin.json não encontrado')
+
+
 def deploy_version_sw():
     """
     Copia sw_version.js para build/web/ e injeta a APP_VERSION real.
@@ -146,5 +157,6 @@ if __name__ == '__main__':
     deploy_kill_switch_sw()
     copy_headers()
     copy_pwa_install()
+    copy_admin_manifest()
     deploy_version_sw()
     print('Patches aplicados com sucesso.')

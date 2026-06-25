@@ -13,29 +13,42 @@ import 'admin_sales_screen.dart';
 import 'admin_reports_screen.dart';
 import 'admin_reset_screen.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Cores do tema admin (verde escuro profissional)
+// ─────────────────────────────────────────────────────────────────────────────
+class _AdminColors {
+  static const bg        = Color(0xFF071A10);  // fundo sidebar
+  static const border    = Color(0xFF163424);  // divisores
+  static const accent    = Color(0xFFC9A84C);  // dourado ativo
+  static const accentBg  = Color(0x22C9A84C);  // fundo item ativo
+  static const textOn    = Colors.white;
+  static const textOff   = Color(0xFF7AAE90);  // verde-acinzentado inativo
+  static const resetRed  = Color(0xFFFF5252);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 class AdminNavScreen extends StatefulWidget {
   const AdminNavScreen({super.key});
-
   @override
   State<AdminNavScreen> createState() => _AdminNavScreenState();
 }
 
 class _AdminNavScreenState extends State<AdminNavScreen> {
   int _selectedIndex = 0;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   static const List<_NavItem> _items = [
-    _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
-    _NavItem(icon: Icons.inventory_2_rounded, label: 'Produtos'),
-    _NavItem(icon: Icons.people_rounded, label: 'Afiliados'),
-    _NavItem(icon: Icons.repeat_rounded, label: 'Assinaturas'),
-    _NavItem(icon: Icons.account_balance_wallet_rounded, label: 'Saques'),
-    _NavItem(icon: Icons.receipt_long_rounded, label: 'Vendas'),
-    _NavItem(icon: Icons.payment_rounded, label: 'Pagamentos'),
-    _NavItem(icon: Icons.assessment_rounded, label: 'Relatórios'),
-    _NavItem(icon: Icons.delete_sweep_rounded, label: 'Reset'),
+    _NavItem(icon: Icons.dashboard_rounded,               label: 'Dashboard'),
+    _NavItem(icon: Icons.inventory_2_rounded,             label: 'Produtos'),
+    _NavItem(icon: Icons.people_rounded,                  label: 'Afiliados'),
+    _NavItem(icon: Icons.repeat_rounded,                  label: 'Assinaturas'),
+    _NavItem(icon: Icons.account_balance_wallet_rounded,  label: 'Saques'),
+    _NavItem(icon: Icons.receipt_long_rounded,            label: 'Vendas'),
+    _NavItem(icon: Icons.payment_rounded,                 label: 'Pagamentos'),
+    _NavItem(icon: Icons.assessment_rounded,              label: 'Relatórios'),
+    _NavItem(icon: Icons.delete_sweep_rounded,            label: 'Reset', isReset: true),
   ];
 
-  // Não pode ser const pois AdminDashboardScreen recebe callback
   List<Widget> get _screens => [
     AdminDashboardScreen(onNavigateTo: _onDestinationSelected),
     const AdminProductsScreen(),
@@ -53,386 +66,401 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
 
   void _onDestinationSelected(int idx) {
     setState(() => _selectedIndex = idx);
+    // Fecha o drawer se estiver aberto (mobile)
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      Navigator.of(context).pop();
+    }
   }
 
-  Future<void> _logout(BuildContext context) async {
+  void _refresh() {
+    final s = context.read<AdminService>();
+    switch (_selectedIndex) {
+      case 1: s.loadProducts(); break;
+      case 2: s.loadAffiliates(); break;
+      case 3: s.loadSubscriptions(); break;
+      case 4: s.loadWithdrawals(); break;
+      case 5: s.loadSales(); break;
+      case 8: break;
+      default: s.loadAll(); break;
+    }
+  }
+
+  Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Sair do Painel Admin'),
-        content: const Text('Tem certeza que deseja sair?'),
+        backgroundColor: const Color(0xFF0D2518),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Sair do Painel',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: const Text('Tem certeza que deseja sair?',
+            style: TextStyle(color: _AdminColors.textOff)),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar',
+                style: TextStyle(color: _AdminColors.textOff)),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Sair'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Sair',
+                style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
     );
-    if (confirm == true && context.mounted) {
+    if (confirm == true && mounted) {
       context.read<AdminService>().adminLogout();
       Navigator.pushReplacementNamed(context, '/admin/login');
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final svc = context.watch<AdminService>();
-    final pending = svc.withdrawals.where((w) => w.status == 'pendente').length;
-    final isWide = MediaQuery.of(context).size.width >= 800;
+  // ── Drawer / Sidebar (compartilhado entre mobile e desktop) ─────────────
+  Widget _buildSidebar({bool isDrawer = false}) {
+    final pending = context.watch<AdminService>()
+        .withdrawals
+        .where((w) => w.status == 'pendente')
+        .length;
 
-    // -- Layout Desktop (NavigationRail) --------------------------------------
-    if (isWide) {
-      return Scaffold(
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF071A10),
-          automaticallyImplyLeading: false,
-          title: Row(
-            children: [
-              const Icon(Icons.admin_panel_settings_rounded,
-                  color: AppColors.gold, size: 22),
-              const SizedBox(width: 8),
-              Text(
-                _items[_selectedIndex].label,
-                style: const TextStyle(color: Colors.white, fontSize: 18),
-              ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
-              tooltip: 'Atualizar dados',
-              onPressed: () {
-                final s = context.read<AdminService>();
-                switch (_selectedIndex) {
-                  case 1: s.loadProducts(); break;
-                  case 2: s.loadAffiliates(); break;
-                  case 3: s.loadSubscriptions(); break;
-                  case 4: s.loadWithdrawals(); break;
-                  case 5: s.loadSales(); break;
-                  case 8: break; // Reset — sem refresh automático
-                  default: s.loadAll(); break;
-                }
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.logout_rounded, color: Colors.white70),
-              tooltip: 'Sair',
-              onPressed: () => _logout(context),
-            ),
-          ],
-        ),
-        body: Row(
-          children: [
-            // Sidebar
-            Container(
-              width: 220,
-              color: const Color(0xFF071A10),
-              child: Column(
+    return Container(
+      width: 240,
+      color: _AdminColors.bg,
+      child: Column(
+        children: [
+          // ── Cabeçalho ─────────────────────────────────────────────────────
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
+              child: Row(
                 children: [
-                  const SizedBox(height: 40),
-                  // Logo
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            gradient: AppColors.greenGradient,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.admin_panel_settings_rounded,
-                              color: Colors.white, size: 22),
-                        ),
-                        const SizedBox(width: 10),
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Admin',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 16)),
-                            Text('ShareWallet',
-                                style: TextStyle(
-                                    color: Color(0xFF6DBF9A), fontSize: 11)),
-                          ],
+                  Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      gradient: AppColors.greenGradient,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                          blurRadius: 12, offset: const Offset(0, 4),
                         ),
                       ],
                     ),
+                    child: const Icon(Icons.admin_panel_settings_rounded,
+                        color: Colors.white, size: 22),
                   ),
-                  const SizedBox(height: 32),
-
-                  // Nav items
-                  ..._items.asMap().entries.map((entry) {
-                    final i = entry.key;
-                    final item = entry.value;
-                    final isSelected = _selectedIndex == i;
-                    // Badge de saques pendentes
-                    final showBadge = i == 4 && pending > 0;
-                    return _SidebarItem(
-                      icon: item.icon,
-                      label: item.label,
-                      isSelected: isSelected,
-                      badge: showBadge ? pending : null,
-                      // Item Reset (último) aparece em vermelho como alerta
-                      isLogout: i == _items.length - 1,
-                      onTap: () => _onDestinationSelected(i),
-                    );
-                  }),
-
-                  const Spacer(),
-                  const Divider(color: Color(0xFF1A3A28), height: 1),
-                  const SizedBox(height: 8),
-                  _SidebarItem(
-                    icon: Icons.logout_rounded,
-                    label: 'Sair',
-                    isSelected: false,
-                    onTap: () => _logout(context),
-                    isLogout: true,
+                  const SizedBox(width: 12),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Admin Panel',
+                          style: TextStyle(
+                              color: _AdminColors.textOn,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              letterSpacing: 0.3)),
+                      Text('ShareWallet',
+                          style: TextStyle(
+                              color: _AdminColors.accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600)),
+                    ],
                   ),
-                  const SizedBox(height: 24),
+                  if (isDrawer) ...[
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded,
+                          color: _AdminColors.textOff, size: 20),
+                      onPressed: () => Navigator.of(context).pop(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ],
               ),
             ),
+          ),
 
-            // Conteúdo
-            Expanded(
-              child: IndexedStack(
-                index: _selectedIndex,
-                children: _screens,
-              ),
+          const SizedBox(height: 8),
+
+          // Linha divisória dourada fina
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [
+                Colors.transparent,
+                _AdminColors.accent.withValues(alpha: 0.5),
+                Colors.transparent,
+              ]),
             ),
+          ),
+
+          // ── Itens de navegação ────────────────────────────────────────────
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+              children: [
+                ..._items.asMap().entries.map((e) {
+                  final i    = e.key;
+                  final item = e.value;
+                  return _SidebarItem(
+                    icon: item.icon,
+                    label: item.label,
+                    isSelected: _selectedIndex == i,
+                    isReset: item.isReset,
+                    badge: i == 4 && pending > 0 ? pending : null,
+                    onTap: () => _onDestinationSelected(i),
+                  );
+                }),
+              ],
+            ),
+          ),
+
+          // ── Rodapé: Sair ──────────────────────────────────────────────────
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            height: 1,
+            color: _AdminColors.border,
+          ),
+          const SizedBox(height: 4),
+          _SidebarItem(
+            icon: Icons.logout_rounded,
+            label: 'Sair',
+            isSelected: false,
+            isReset: true,
+            onTap: _logout,
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  // ── AppBar compartilhada ─────────────────────────────────────────────────
+  AppBar _buildAppBar({required bool isMobile}) {
+    return AppBar(
+      backgroundColor: _AdminColors.bg,
+      elevation: 0,
+      automaticallyImplyLeading: false,
+
+      // Hambúrguer apenas no mobile
+      leading: isMobile
+          ? IconButton(
+              icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              tooltip: 'Menu',
+            )
+          : null,
+
+      title: Row(
+        children: [
+          if (!isMobile) ...[
+            const Icon(Icons.admin_panel_settings_rounded,
+                color: _AdminColors.accent, size: 20),
+            const SizedBox(width: 8),
+          ],
+          Text(
+            _items[_selectedIndex].label,
+            style: const TextStyle(
+                color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700),
+          ),
+          if (_items[_selectedIndex].isReset) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.4)),
+              ),
+              child: const Text('PERIGO',
+                  style: TextStyle(
+                      color: AppColors.error,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1)),
+            ),
+          ],
+        ],
+      ),
+
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
+          tooltip: 'Atualizar',
+          onPressed: _refresh,
+        ),
+        IconButton(
+          icon: const Icon(Icons.logout_rounded, color: Colors.white70),
+          tooltip: 'Sair',
+          onPressed: _logout,
+        ),
+        const SizedBox(width: 4),
+      ],
+
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(height: 1, color: _AdminColors.border),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width >= 800;
+    final content = IndexedStack(index: _selectedIndex, children: _screens);
+
+    // ── Desktop: sidebar fixa à esquerda ────────────────────────────────────
+    if (isWide) {
+      return Scaffold(
+        appBar: _buildAppBar(isMobile: false),
+        body: Row(
+          children: [
+            _buildSidebar(isDrawer: false),
+            Container(width: 1, color: _AdminColors.border),
+            Expanded(child: content),
           ],
         ),
       );
     }
 
-    // -- Layout Mobile (BottomNavigationBar) ----------------------------------
+    // ── Mobile: hambúrguer → Drawer (igual ao sidebar web) ──────────────────
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF071A10),
-        title: Row(
-          children: [
-            const Icon(Icons.admin_panel_settings_rounded,
-                color: AppColors.gold, size: 22),
-            const SizedBox(width: 8),
-            Text(
-              _items[_selectedIndex].label,
-              style: const TextStyle(color: Colors.white, fontSize: 18),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
-            tooltip: 'Atualizar',
-            onPressed: () {
-              final svc = context.read<AdminService>();
-              switch (_selectedIndex) {
-                case 0: svc.loadAll(); break;
-                case 1: svc.loadProducts(); break;
-                case 2: svc.loadAffiliates(); break;
-                case 3: svc.loadSubscriptions(); break;
-                case 4: svc.loadWithdrawals(); break;
-                case 5: svc.loadSales(); break;
-                case 7: svc.loadAll(); break; // Relatórios usa dados já carregados
-                case 8: break; // Reset — sem refresh automático
-                default: svc.loadAll(); break;
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Colors.white70),
-            tooltip: 'Sair',
-            onPressed: () => _logout(context),
-          ),
-        ],
+      key: _scaffoldKey,
+      appBar: _buildAppBar(isMobile: true),
+      drawer: Drawer(
+        width: 240,
+        backgroundColor: _AdminColors.bg,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+        child: _buildSidebar(isDrawer: true),
       ),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
-      ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF071A10),
-          border: Border(
-              top: BorderSide(color: Color(0xFF1A3A28), width: 1)),
-        ),
-        child: SafeArea(
-          child: Row(
-            children: _items.asMap().entries.map((entry) {
-              final i = entry.key;
-              final item = entry.value;
-              final isSelected = _selectedIndex == i;
-              final showBadge = i == 4 && pending > 0;
-              return Expanded(
-                child: InkWell(
-                  onTap: () => _onDestinationSelected(i),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Icon(
-                              item.icon,
-                              // Item Reset (último) fica vermelho
-                              color: isSelected
-                                  ? (i == _items.length - 1
-                                      ? AppColors.error
-                                      : AppColors.gold)
-                                  : (i == _items.length - 1
-                                      ? AppColors.error.withValues(alpha: 0.45)
-                                      : Colors.white30),
-                              size: 22,
-                            ),
-                            if (showBadge)
-                              Positioned(
-                                right: -6,
-                                top: -4,
-                                child: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.error,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    '$pending',
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          item.label,
-                          style: TextStyle(
-                            color: isSelected
-                                ? (i == _items.length - 1
-                                    ? AppColors.error
-                                    : AppColors.gold)
-                                : (i == _items.length - 1
-                                    ? AppColors.error.withValues(alpha: 0.45)
-                                    : Colors.white30),
-                            fontSize: 9,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ),
+      body: content,
     );
   }
 }
 
-// -- Sidebar item --------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
+// Widget item da sidebar
+// ─────────────────────────────────────────────────────────────────────────────
 class _SidebarItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
-  final VoidCallback onTap;
+  final bool isReset;
   final int? badge;
-  final bool isLogout;
+  final VoidCallback onTap;
 
   const _SidebarItem({
     required this.icon,
     required this.label,
     required this.isSelected,
     required this.onTap,
+    this.isReset = false,
     this.badge,
-    this.isLogout = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isLogout
-        ? Colors.red[300]!
-        : isSelected
-            ? AppColors.gold
-            : Colors.white54;
+    final color = isReset
+        ? (isSelected ? _AdminColors.resetRed : _AdminColors.resetRed.withValues(alpha: 0.6))
+        : (isSelected ? _AdminColors.accent : _AdminColors.textOff);
 
-    return InkWell(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isLogout
-                  ? AppColors.error.withValues(alpha: 0.15)
-                  : AppColors.gold.withValues(alpha: 0.15))
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(icon, color: color, size: 20),
-                if (badge != null)
-                  Positioned(
-                    right: -8,
-                    top: -4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '$badge',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700),
+    final bgColor = isSelected
+        ? (isReset
+            ? AppColors.error.withValues(alpha: 0.12)
+            : _AdminColors.accentBg)
+        : Colors.transparent;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+        border: isSelected
+            ? Border.all(
+                color: isReset
+                    ? AppColors.error.withValues(alpha: 0.3)
+                    : _AdminColors.accent.withValues(alpha: 0.35),
+                width: 1,
+              )
+            : null,
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        splashColor: _AdminColors.accent.withValues(alpha: 0.1),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: [
+              // Ícone com badge
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(icon, color: color, size: 19),
+                  if (badge != null)
+                    Positioned(
+                      right: -8, top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: AppColors.error,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text('$badge',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800)),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 14,
-                fontWeight:
-                    isSelected ? FontWeight.w700 : FontWeight.normal,
+                ],
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              // Label
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 13.5,
+                    fontWeight:
+                        isSelected ? FontWeight.w700 : FontWeight.w400,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ),
+              // Indicador ativo
+              if (isSelected)
+                Container(
+                  width: 4, height: 4,
+                  decoration: BoxDecoration(
+                    color: isReset ? _AdminColors.resetRed : _AdminColors.accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 class _NavItem {
   final IconData icon;
   final String label;
-  const _NavItem({required this.icon, required this.label});
+  final bool isReset;
+  const _NavItem(
+      {required this.icon, required this.label, this.isReset = false});
 }
