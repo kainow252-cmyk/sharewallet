@@ -347,17 +347,20 @@ class _BuyScreenState extends State<BuyScreen> {
     if (!mounted) return;
     setState(() { _isSubmitting = false; _preapprovalResult = result; });
 
-    if (result != null && result.hasQrCode) {
+    if (result != null) {
+      // Salva dados do cliente em qualquer cenário (com ou sem QR)
       _salvarDadosCliente().catchError((_) {});
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.easeInOut,
-          );
-        }
-      });
+      if (result.hasQrCode) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeInOut,
+            );
+          }
+        });
+      }
     }
   }
 
@@ -380,25 +383,33 @@ class _BuyScreenState extends State<BuyScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: const Row(
-          children: [
-            Icon(Icons.account_balance_wallet_rounded,
-                color: AppColors.primary, size: 22),
-            SizedBox(width: 8),
-            Text('ShareWallet',
-                style: TextStyle(fontWeight: FontWeight.w800)),
-          ],
+    // PopScope: bloqueia navegação para trás quando a tela é aberta
+    // via link direto de produto (evita cair no login do afiliado).
+    return PopScope(
+      canPop: false, // desabilita o botão Voltar do sistema
+      onPopInvokedWithResult: (didPop, _) {
+        // não faz nada — impede saída acidental para o login
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: const Row(
+            children: [
+              Icon(Icons.account_balance_wallet_rounded,
+                  color: AppColors.primary, size: 22),
+              SizedBox(width: 8),
+              Text('ShareWallet',
+                  style: TextStyle(fontWeight: FontWeight.w800)),
+            ],
+          ),
         ),
+        body: _loadingProduct
+            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            : _loadError != null
+                ? _buildError()
+                : _buildBody(),
       ),
-      body: _loadingProduct
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : _loadError != null
-              ? _buildError()
-              : _buildBody(),
     );
   }
 
@@ -617,9 +628,9 @@ class _BuyScreenState extends State<BuyScreen> {
                 onPressed: _isSubmitting ? null : _gerarPix,
               ),
 
-            // Pix Recorrente: mostrar botão enquanto não há assinatura gerada
-            if (product.isPixRecorrente &&
-                (_preapprovalResult == null || !_preapprovalResult!.hasQrCode))
+            // Pix Recorrente: mostrar botão apenas quando não há resultado ainda
+            // (quando result existe — mesmo sem QR Code, ACTIVE — o botão some)
+            if (product.isPixRecorrente && _preapprovalResult == null)
               PrimaryButton(
                 label: 'Assinar agora  -  ${product.valorFormatado}/mês',
                 icon: Icons.autorenew_rounded,
