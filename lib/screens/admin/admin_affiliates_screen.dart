@@ -127,7 +127,7 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
                     ? const Center(
                         child: Text('Nenhum afiliado encontrado'))
                     : ListView.builder(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 20),
                         itemCount: afiliados.length,
                         itemBuilder: (ctx, i) => _AffiliateCard(
                           affiliate: afiliados[i],
@@ -765,7 +765,7 @@ class _StatusOption extends StatelessWidget {
   }
 }
 
-// -- Card do afiliado ----------------------------------------------------------
+// -- Tile compacto do afiliado (mesmo padrão de Produtos/Assinaturas) ----------
 class _AffiliateCard extends StatelessWidget {
   final AdminAffiliate affiliate;
   final VoidCallback onToggle;
@@ -785,145 +785,142 @@ class _AffiliateCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
     final isActive = affiliate.status == 'ativo';
+    final statusColor = isActive ? AppColors.success : AppColors.error;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
             color: isActive
                 ? AppColors.cardBorder
-                : AppColors.error.withValues(alpha: 0.25)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
+                : AppColors.error.withValues(alpha: 0.25),
+            width: 1),
       ),
-      child: InkWell(
-        onTap: onDetails,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          childrenPadding: EdgeInsets.zero,
+          // ── Linha compacta ────────────────────────────────────────────────
+          leading: _AvatarCircle(nome: affiliate.nome, status: affiliate.status, size: 32),
+          title: Row(
             children: [
-              // -- Linha principal: avatar + info + saldo + menu -------------
-              Row(
-                children: [
-                  _AvatarCircle(
-                      nome: affiliate.nome, status: affiliate.status),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(affiliate.nome,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 15)),
-                        Text(affiliate.email,
-                            style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 12),
-                            overflow: TextOverflow.ellipsis),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary
-                                    .withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                affiliate.affiliateCode,
-                                style: const TextStyle(
-                                    color: AppColors.primary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            _StatusBadge(status: affiliate.status),
-                          ],
-                        ),
-                      ],
-                    ),
+              Expanded(
+                child: Text(
+                  affiliate.nome,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Badge status
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  isActive ? 'Ativo' : 'Suspenso',
+                  style: TextStyle(
+                      color: statusColor,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 2),
+            child: Row(
+              children: [
+                // Código afiliado
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
                   ),
-                  // Saldo + menu de ações
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  child: Text(affiliate.affiliateCode,
+                      style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 6),
+                // Stats inline: assinaturas · saldo
+                Text(
+                  '${affiliate.totalAssinaturas} assin. · ',
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary),
+                ),
+                Text(
+                  fmt.format(affiliate.saldoDisponivel),
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.success),
+                ),
+              ],
+            ),
+          ),
+          trailing: const Icon(Icons.expand_more_rounded,
+              size: 18, color: AppColors.textHint),
+          // ── Detalhes expandidos ────────────────────────────────────────────
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(
+                    top: BorderSide(color: AppColors.cardBorder, width: 1)),
+              ),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Email
+                  Row(
                     children: [
-                      Text(
-                        fmt.format(affiliate.saldoDisponivel),
-                        style: const TextStyle(
-                            color: AppColors.success,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16),
-                      ),
-                      const Text('saldo',
-                          style: TextStyle(
-                              color: AppColors.textHint, fontSize: 11)),
-                      const SizedBox(height: 4),
-                      // Menu 3 pontos
-                      _ActionMenu(
-                        onEdit: onEdit,
-                        onDelete: onDelete,
-                        onToggle: onToggle,
-                        isActive: isActive,
+                      const Icon(Icons.email_rounded,
+                          size: 13, color: AppColors.textHint),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(affiliate.email,
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary),
+                            overflow: TextOverflow.ellipsis),
                       ),
                     ],
                   ),
-                ],
-              ),
-
-              const Divider(height: 16),
-
-              // -- Linha de stats --------------------------------------------
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _MiniStat(
-                      icon: Icons.people_rounded,
-                      value: '${affiliate.totalIndicados}',
-                      label: 'indicados'),
-                  _MiniStat(
-                      icon: Icons.repeat_rounded,
-                      value: '${affiliate.totalAssinaturas}',
-                      label: 'assinaturas'),
-                  _MiniStat(
-                      icon: Icons.attach_money_rounded,
-                      value: fmt.format(affiliate.totalComissoes),
-                      label: 'comissões'),
-                  // Botão suspender/ativar compacto
-                  OutlinedButton(
-                    onPressed: onToggle,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor:
-                          isActive ? AppColors.error : AppColors.success,
-                      side: BorderSide(
-                          color: isActive
-                              ? AppColors.error.withValues(alpha: 0.5)
-                              : AppColors.success.withValues(alpha: 0.5)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      textStyle: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w700),
-                      minimumSize: Size.zero,
-                    ),
-                    child: Text(isActive ? 'Suspender' : 'Ativar'),
+                  const SizedBox(height: 8),
+                  // Stats row
+                  Row(
+                    children: [
+                      _MiniStat(
+                          icon: Icons.people_rounded,
+                          value: '${affiliate.totalIndicados}',
+                          label: 'indicados'),
+                      const SizedBox(width: 16),
+                      _MiniStat(
+                          icon: Icons.repeat_rounded,
+                          value: '${affiliate.totalAssinaturas}',
+                          label: 'assinaturas'),
+                      const SizedBox(width: 16),
+                      _MiniStat(
+                          icon: Icons.attach_money_rounded,
+                          value: fmt.format(affiliate.totalComissoes),
+                          label: 'comissões'),
+                    ],
                   ),
-                ],
-              ),
-
-              // -- Badge saque mínimo (só mostra se configurado) ------------
-              if (affiliate.saqueMinimo > 0) ...[
-                const SizedBox(height: 6),
-                Row(
-                  children: [
+                  // Badge saque mínimo
+                  if (affiliate.saqueMinimo > 0) ...[
+                    const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
@@ -950,83 +947,81 @@ class _AffiliateCard extends StatelessWidget {
                       ),
                     ),
                   ],
-                ),
-              ],
-            ],
-          ),
+                  // Ações
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      // Ver detalhes completos
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: onDetails,
+                          icon: const Icon(Icons.person_search_rounded, size: 15),
+                          label: const Text('Detalhes'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 7),
+                            textStyle: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Editar
+                      IconButton(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_rounded,
+                            color: AppColors.primary, size: 19),
+                        tooltip: 'Editar',
+                        style: IconButton.styleFrom(
+                          backgroundColor:
+                              AppColors.primary.withValues(alpha: 0.08),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          minimumSize: const Size(36, 36),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      // Suspender/Ativar
+                      IconButton(
+                        onPressed: onToggle,
+                        icon: Icon(
+                          isActive
+                              ? Icons.block_rounded
+                              : Icons.check_circle_rounded,
+                          color: isActive ? AppColors.warning : AppColors.success,
+                          size: 19,
+                        ),
+                        tooltip: isActive ? 'Suspender' : 'Ativar',
+                        style: IconButton.styleFrom(
+                          backgroundColor: (isActive
+                                  ? AppColors.warning
+                                  : AppColors.success)
+                              .withValues(alpha: 0.08),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          minimumSize: const Size(36, 36),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      // Excluir
+                      IconButton(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            color: AppColors.error, size: 19),
+                        tooltip: 'Excluir',
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(36, 36),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-    );
-  }
-}
-
-// -- Menu de ações (3 pontos) --------------------------------------------------
-class _ActionMenu extends StatelessWidget {
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  final VoidCallback onToggle;
-  final bool isActive;
-
-  const _ActionMenu({
-    required this.onEdit,
-    required this.onDelete,
-    required this.onToggle,
-    required this.isActive,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      onSelected: (v) {
-        if (v == 'edit') onEdit();
-        if (v == 'delete') onDelete();
-        if (v == 'toggle') onToggle();
-      },
-      icon: const Icon(Icons.more_vert_rounded,
-          color: AppColors.textHint, size: 18),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      itemBuilder: (_) => [
-        const PopupMenuItem(
-          value: 'edit',
-          child: Row(
-            children: [
-              Icon(Icons.edit_rounded, size: 16, color: AppColors.primary),
-              SizedBox(width: 10),
-              Text('Editar dados',
-                  style: TextStyle(fontSize: 13)),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'toggle',
-          child: Row(
-            children: [
-              Icon(
-                isActive ? Icons.block_rounded : Icons.check_circle_rounded,
-                size: 16,
-                color: isActive ? AppColors.warning : AppColors.success,
-              ),
-              const SizedBox(width: 10),
-              Text(
-                isActive ? 'Suspender' : 'Ativar',
-                style: const TextStyle(fontSize: 13),
-              ),
-            ],
-          ),
-        ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(
-          value: 'delete',
-          child: Row(
-            children: [
-              Icon(Icons.delete_rounded, size: 16, color: AppColors.error),
-              SizedBox(width: 10),
-              Text('Excluir afiliado',
-                  style: TextStyle(fontSize: 13, color: AppColors.error)),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1035,14 +1030,15 @@ class _ActionMenu extends StatelessWidget {
 class _AvatarCircle extends StatelessWidget {
   final String nome;
   final String status;
-  const _AvatarCircle({required this.nome, required this.status});
+  final double size;
+  const _AvatarCircle({required this.nome, required this.status, this.size = 44});
 
   @override
   Widget build(BuildContext context) {
     final isActive = status == 'ativo';
     return Container(
-      width: 44,
-      height: 44,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         gradient: isActive
             ? AppColors.greenGradient
@@ -1053,9 +1049,9 @@ class _AvatarCircle extends StatelessWidget {
       child: Center(
         child: Text(
           nome.isNotEmpty ? nome[0].toUpperCase() : '?',
-          style: const TextStyle(
+          style: TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: size * 0.4,
               fontWeight: FontWeight.w800),
         ),
       ),
