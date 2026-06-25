@@ -27,6 +27,7 @@ class WithdrawResult {
   final double value;
   final String? pixKey;
   final String? message;
+  final String? status; // 'aprovado' | 'processando' | 'pendente'
 
   const WithdrawResult({
     required this.success,
@@ -34,6 +35,7 @@ class WithdrawResult {
     this.value = 0,
     this.pixKey,
     this.message,
+    this.status,
   });
 }
 

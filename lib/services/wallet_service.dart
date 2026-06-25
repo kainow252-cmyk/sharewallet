@@ -98,20 +98,28 @@ class WalletService extends ChangeNotifier {
   }
 
 
-  // -- Solicitar Saque via Woovi (subconta → Pix para chave do afiliado) -----
+  // -- Solicitar Saque via Woovi — endpoint unificado (sem subconta) -----------
+  // Usa POST /api/wallet/:userId/withdraw que:
+  // 1. Valida saldo disponível
+  // 2. Usa a chave Pix já cadastrada em affiliates.pix_key
+  // 3. Chama POST /api/v1/payment (destinationAlias) + POST /api/v1/payment/approve
+  // Para cadastrar/atualizar chave Pix: use salvarChavePix() abaixo.
   Future<WithdrawResult> solicitarSaque({
     required double valor,
-    required String pixKey,
+    String? pixKey,          // se null, usa a chave cadastrada no perfil
     String? pixKeyType,
     double? saldoAtual,
     String affiliateCode = '',
     String affiliateNome = '',
   }) async {
-    if ((saldoAtual ?? _saldoCarteira) < 10.0) {
-      return WithdrawResult(success: false, message: 'Saldo insuficiente. Mínimo R\$10,00');
+    if ((saldoAtual ?? _saldoCarteira) < 1.0) {
+      return WithdrawResult(success: false, message: 'Saldo insuficiente.');
     }
     if (valor > (saldoAtual ?? _saldoCarteira)) {
-      return WithdrawResult(success: false, message: 'Valor maior que o saldo disponível');
+      return WithdrawResult(success: false, message: 'Valor maior que o saldo disponível.');
+    }
+    if (valor <= 0) {
+      return WithdrawResult(success: false, message: 'Valor de saque inválido.');
     }
 
     _isLoading = true;
@@ -119,102 +127,111 @@ class WalletService extends ChangeNotifier {
 
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-
-      // 1. Registra o saque no D1 com status 'pendente'
-      final result = await CfApiService.createWithdrawal({
-        'userId': uid,
-        'valor': valor,
-        'pixKey': pixKey,
-        'pixKeyType': pixKeyType ?? 'EMAIL',
-        'affiliateCode': affiliateCode,
-        'affiliateNome': affiliateNome,
-      });
-
-      if (result == null) {
+      if (uid.isEmpty) {
         _isLoading = false;
         notifyListeners();
-        return WithdrawResult(success: false, message: 'Erro ao registrar saque. Tente novamente.');
+        return WithdrawResult(success: false, message: 'Usuário não autenticado.');
       }
 
-      final withdrawalId = result['id']?.toString() ?? '';
+      // Endpoint unificado: valida + cria withdrawal + chama Woovi em 1 passo
+      final uri = Uri.parse('https://api.sharewallet.com.br/api/wallet/$uid/withdraw');
+      final body = <String, dynamic>{'valor': valor};
+      // pixKey opcional — se informado, é ignorado pelo worker (usa o cadastrado no perfil)
+      // mas enviamos para log/auditoria
+      if (pixKey != null && pixKey.isNotEmpty) body['pixKey'] = pixKey;
 
-      // 2. Dispara Pix Out via Woovi (Worker chama /api/v1/subaccount/{pixKey}/withdraw)
-      final wooviResult = await _enviarPixWoovi(withdrawalId: withdrawalId, valor: valor);
-
-      if (wooviResult.success) {
-        _saldoCarteira -= valor;
-        _totalSacado += valor;
-        final wd = WithdrawModel.fromD1({
-          ...result,
-          'status': wooviResult.status == 'processando' ? 'processando' : 'aprovado',
-          'tx_id': wooviResult.txId,
-        });
-        _withdraws.insert(0, wd);
-        _isLoading = false;
-        notifyListeners();
-        return WithdrawResult(
-          success: true,
-          message: 'PIX enviado! Em instantes o valor chegará na sua conta.',
-          value: valor,
-          pixKey: pixKey,
-        );
-      } else {
-        // Woovi falhou: saque fica pendente, admin pode reprocessar
-        _saldoCarteira -= valor;
-        _saldoPendente += valor;
-        final wd = WithdrawModel.fromD1(result);
-        _withdraws.insert(0, wd);
-        _isLoading = false;
-        notifyListeners();
-        if (kDebugMode) debugPrint('[WalletService] Woovi saque falhou: ${wooviResult.error}');
-        return WithdrawResult(
-          success: true,
-          message: 'Saque solicitado! Será processado em até 1 hora útil.',
-          value: valor,
-          pixKey: pixKey,
-        );
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('[WalletService] Erro saque: $e');
-    }
-
-    _isLoading = false;
-    notifyListeners();
-    return WithdrawResult(success: false, message: 'Erro ao solicitar saque. Tente novamente.');
-  }
-
-  // -- Chama o Worker que processa o Pix Out via Woovi ----------------------
-  Future<_WooviPixResult> _enviarPixWoovi({
-    required String withdrawalId,
-    required double valor,
-  }) async {
-    try {
-      final uri = Uri.parse(
-          'https://api.sharewallet.com.br/api/withdrawals/$withdrawalId/pay');
       final res = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({}), // Worker usa apenas o withdrawalId — pixKey vem do D1
-      ).timeout(const Duration(seconds: 30));
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 35));
 
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      if (kDebugMode) debugPrint('[WalletService] Woovi /pay (${res.statusCode}): $body');
+      final respData = jsonDecode(res.body) as Map<String, dynamic>;
+      if (kDebugMode) debugPrint('[WalletService] /withdraw (${res.statusCode}): $respData');
 
-      if (res.statusCode == 200 && body['status'] != null) {
-        return _WooviPixResult(
+      if (res.statusCode == 200) {
+        final status      = respData['status']?.toString() ?? 'processando';
+        final destAlias   = respData['destinationAlias']?.toString() ?? pixKey ?? '';
+        final destType    = respData['destinationType']?.toString() ?? '';
+        final msgWoovi    = respData['message']?.toString() ?? 'Saque enviado!';
+        final wdData      = respData['withdrawal'] as Map<String, dynamic>? ?? {};
+
+        // Atualiza saldo local imediatamente (otimistic update)
+        _saldoCarteira -= valor;
+        if (status == 'aprovado') {
+          _totalSacado += valor;
+        } else {
+          _saldoPendente += valor;
+        }
+
+        final wd = WithdrawModel.fromD1({
+          'id': respData['id'] ?? wdData['id'] ?? '',
+          'user_id': uid,
+          'valor': valor,
+          'pix_key': destAlias,
+          'status': status,
+          'affiliate_nome': affiliateNome,
+          'affiliate_code': affiliateCode,
+          'solicitado_em': DateTime.now().toIso8601String(),
+          'processado_em': status == 'aprovado' ? DateTime.now().toIso8601String() : null,
+          'tx_id': respData['id'] ?? '',
+          'motivo': destType.isNotEmpty ? '$destType: $destAlias' : destAlias,
+        });
+        _withdraws.insert(0, wd);
+
+        _isLoading = false;
+        notifyListeners();
+        return WithdrawResult(
           success: true,
-          status: body['status'] as String? ?? 'aprovado',
-          txId: body['id']?.toString() ?? withdrawalId,
+          message: msgWoovi,
+          value: valor,
+          pixKey: destAlias,
+          status: status,
         );
+
+      } else {
+        // Erro retornado pelo worker (validação, saldo insuficiente, chave inválida, etc.)
+        final errorMsg = respData['error']?.toString()
+            ?? respData['message']?.toString()
+            ?? 'Erro ao processar saque (${res.statusCode})';
+        _isLoading = false;
+        notifyListeners();
+        return WithdrawResult(success: false, message: errorMsg);
       }
 
-      return _WooviPixResult(
-        success: false,
-        error: body['error']?.toString() ?? 'Erro Woovi (${res.statusCode})',
-      );
     } catch (e) {
-      if (kDebugMode) debugPrint('[WalletService] Erro Woovi /pay: $e');
-      return _WooviPixResult(success: false, error: e.toString());
+      if (kDebugMode) debugPrint('[WalletService] Erro saque: $e');
+      _isLoading = false;
+      notifyListeners();
+      return WithdrawResult(success: false, message: 'Erro de conexão. Verifique sua internet e tente novamente.');
+    }
+  }
+
+  // -- Cadastrar/atualizar chave Pix do afiliado ------------------------------
+  // Chama PATCH /api/wallet/:userId/pix-key
+  // Retorna null se sucesso, ou mensagem de erro
+  Future<String?> salvarChavePix(String pixKey) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (uid.isEmpty) return 'Usuário não autenticado.';
+    if (pixKey.trim().isEmpty) return 'Informe a chave Pix.';
+
+    try {
+      final uri = Uri.parse('https://api.sharewallet.com.br/api/wallet/$uid/pix-key');
+      final res = await http.patch(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'pixKey': pixKey.trim()}),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode == 200 && data['success'] == true) {
+        if (kDebugMode) debugPrint('[WalletService] Chave Pix salva: $pixKey');
+        return null; // sucesso
+      }
+      return data['error']?.toString() ?? 'Erro ao salvar chave Pix (${res.statusCode})';
+    } catch (e) {
+      if (kDebugMode) debugPrint('[WalletService] Erro salvarChavePix: $e');
+      return 'Erro de conexão ao salvar chave Pix.';
     }
   }
 
@@ -264,17 +281,4 @@ class WalletService extends ChangeNotifier {
   }
 }
 
-// -- Resultado interno do Pix Woovi ------------------------------------------
-class _WooviPixResult {
-  final bool success;
-  final String status;  // 'aprovado' | 'processando'
-  final String? txId;
-  final String? error;
-  const _WooviPixResult({
-    required this.success,
-    this.status = 'aprovado',
-    this.txId,
-    this.error,
-  });
-}
 
