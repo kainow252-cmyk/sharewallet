@@ -72,6 +72,40 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // ── Fluxo Admin: autenticar direto no Firebase sem buscar perfil afiliado
+      const adminEmail = 'admin@affiliatewallet.com';
+      if (email.trim().toLowerCase() == adminEmail) {
+        try {
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: email.trim(),
+            password: senha,
+          );
+          // Cria UserModel mínimo para o admin (não existe no Firestore de afiliados)
+          _currentUser = UserModel(
+            id: 'admin',
+            nome: 'Administrador',
+            email: email.trim(),
+            cpf: '',
+            telefone: '',
+            affiliateCode: 'ADMIN',
+            createdAt: DateTime.now(),
+          );
+          await _saveLocalFlag();
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        } on FirebaseAuthException catch (e) {
+          _error = e.code == 'wrong-password' || e.code == 'invalid-credential'
+              ? 'Senha incorreta para o admin'
+              : e.code == 'user-not-found'
+                  ? 'Conta admin não encontrada no Firebase'
+                  : 'E-mail ou senha inválidos';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+      }
+
       // Modo Firebase (padrão quando Firebase está disponível)
       if (_isFirebaseMode) {
         final result = await FirebaseUserService.login(

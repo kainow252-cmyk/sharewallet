@@ -259,7 +259,7 @@ class _SubList extends StatelessWidget {
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 20),
       itemCount: subs.length,
       itemBuilder: (ctx, i) => _SubCard(
         sub: subs[i],
@@ -271,7 +271,7 @@ class _SubList extends StatelessWidget {
   }
 }
 
-// -- Card da assinatura --------------------------------------------------------
+// -- Tile compacto da assinatura (com expansão) --------------------------------
 class _SubCard extends StatelessWidget {
   final SubscriptionModel sub;
   final VoidCallback? onCancel;
@@ -280,192 +280,209 @@ class _SubCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
-    final dtFmt = DateFormat('dd/MM/yyyy');
+    final dtFmt = DateFormat('dd/MM/yy');
     final statusColor = _statusColor(sub.status);
     final statusLabel = _statusLabel(sub.status);
+    final chargeColor = _chargeColor(sub.chargeType);
+    final isMensal = sub.chargeType == ChargeType.pixRecorrente;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: statusColor.withValues(alpha: 0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
+            color: statusColor.withValues(alpha: 0.2), width: 1),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          childrenPadding: EdgeInsets.zero,
+          // ── Linha compacta ────────────────────────────────────────────
+          leading: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: chargeColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              isMensal
+                  ? Icons.autorenew_rounded
+                  : Icons.pix_rounded,
+              color: chargeColor,
+              size: 17,
+            ),
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  sub.productNome,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Status badge
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                      color: statusColor.withValues(alpha: 0.3)),
+                ),
+                child: Text(statusLabel,
+                    style: TextStyle(
+                        color: statusColor,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 2),
+            child: Row(
               children: [
-                // Ícone tipo de cobrança
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: _chargeColor(sub.chargeType)
-                        .withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    sub.chargeType == ChargeType.pixRecorrente
-                        ? Icons.autorenew_rounded
-                        : sub.chargeType == ChargeType.pixAvulso
-                            ? Icons.pix_rounded
-                            : Icons.shopping_bag_rounded,
-                    color: _chargeColor(sub.chargeType),
-                    size: 18,
+                // Nome afiliado
+                Icon(Icons.person_rounded,
+                    size: 11, color: AppColors.textHint),
+                const SizedBox(width: 3),
+                Expanded(
+                  child: Text(
+                    (sub.affiliateNome != null &&
+                            sub.affiliateNome!.isNotEmpty)
+                        ? sub.affiliateNome!
+                        : sub.affiliateCode,
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(width: 6),
+                Text(
+                  fmt.format(sub.valor),
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  isMensal ? '/mês' : 'único',
+                  style: const TextStyle(
+                      fontSize: 10, color: AppColors.textHint),
+                ),
+              ],
+            ),
+          ),
+          trailing: const Icon(Icons.expand_more_rounded,
+              size: 18, color: AppColors.textHint),
+          // ── Detalhes expandidos ──────────────────────────────────────
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(
+                    top: BorderSide(
+                        color: AppColors.cardBorder, width: 1)),
+              ),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Pills de info
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 5,
                     children: [
-                      Text(sub.productNome,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 14)),
-                      Row(
+                      _InfoPill(
+                          icon: isMensal
+                              ? Icons.autorenew_rounded
+                              : Icons.pix_rounded,
+                          label: isMensal ? 'Mensal' : 'Valor Único',
+                          color: chargeColor),
+                      _InfoPill(
+                          icon: Icons.attach_money_rounded,
+                          label: fmt.format(sub.valor),
+                          color: AppColors.primary),
+                      _InfoPill(
+                          icon: Icons.handshake_rounded,
+                          label: fmt.format(sub.valorComissao),
+                          color: AppColors.success),
+                      _InfoPill(
+                          icon: Icons.calendar_today_rounded,
+                          label: 'Início: ${dtFmt.format(sub.dataInicio)}',
+                          color: AppColors.textSecondary),
+                      if (isMensal)
+                        _InfoPill(
+                            icon: Icons.event_repeat_rounded,
+                            label: 'Dia ${sub.diaCobranca}',
+                            color: AppColors.info),
+                      // Código afiliado
+                      _InfoPill(
+                          icon: Icons.badge_rounded,
+                          label: sub.affiliateCode,
+                          color: AppColors.primary),
+                    ],
+                  ),
+                  // Motivo de cancelamento
+                  if (sub.motivo != null && sub.motivo!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color:
+                            AppColors.warning.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
                         children: [
-                          const Icon(Icons.person_rounded,
-                              size: 12,
-                              color: AppColors.textSecondary),
-                          const SizedBox(width: 3),
-                          Text(
-                            (sub.affiliateNome != null && sub.affiliateNome!.isNotEmpty)
-                                ? sub.affiliateNome!
-                                : sub.affiliateCode,
-                            style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 12),
-                          ),
+                          const Icon(Icons.info_outline_rounded,
+                              size: 13, color: AppColors.warning),
                           const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 5, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary
-                                  .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              sub.affiliateCode,
-                              style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600),
-                            ),
+                          Expanded(
+                            child: Text(sub.motivo!,
+                                style: const TextStyle(
+                                    color: AppColors.warning,
+                                    fontSize: 12)),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                // Status
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: statusColor.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(statusLabel,
-                      style: TextStyle(
-                          color: statusColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // Valores e datas
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                // -- Tipo de cobrança bem visível ----------------------------
-                _InfoPill(
-                    icon: sub.chargeType == ChargeType.pixRecorrente
-                        ? Icons.autorenew_rounded
-                        : Icons.pix_rounded,
-                    label: sub.chargeType == ChargeType.pixRecorrente
-                        ? 'Mensal'
-                        : 'Valor Único',
-                    color: sub.chargeType == ChargeType.pixRecorrente
-                        ? const Color(0xFF0D7A5A)
-                        : AppColors.info),
-                _InfoPill(
-                    icon: Icons.attach_money_rounded,
-                    label: fmt.format(sub.valor),
-                    color: AppColors.primary),
-                _InfoPill(
-                    icon: Icons.handshake_rounded,
-                    label: fmt.format(sub.valorComissao),
-                    color: AppColors.success),
-                _InfoPill(
-                    icon: Icons.calendar_today_rounded,
-                    label: 'Início: ${dtFmt.format(sub.dataInicio)}',
-                    color: AppColors.textSecondary),
-                if (sub.chargeType == ChargeType.pixRecorrente)
-                  _InfoPill(
-                        icon: Icons.event_repeat_rounded,
-                        label: 'Dia ${sub.diaCobranca}',
-                        color: AppColors.info),
-              ],
-            ),
-
-            if (sub.motivo != null && sub.motivo!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline_rounded,
-                        size: 13, color: AppColors.warning),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(sub.motivo!,
-                          style: const TextStyle(
-                              color: AppColors.warning,
-                              fontSize: 12)),
                     ),
                   ],
-                ),
+                  // Botão cancelar
+                  if (onCancel != null) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: OutlinedButton.icon(
+                        onPressed: onCancel,
+                        icon: const Icon(Icons.cancel_rounded, size: 13),
+                        label: const Text('Cancelar assinatura',
+                            style: TextStyle(fontSize: 11)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.error,
+                          side: const BorderSide(color: AppColors.error),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          minimumSize: Size.zero,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-
-            if (onCancel != null) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: onCancel,
-                  icon: const Icon(Icons.cancel_rounded, size: 14),
-                  label: const Text('Cancelar', style: TextStyle(fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: const BorderSide(color: AppColors.error),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    minimumSize: Size.zero,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ],
         ),
       ),

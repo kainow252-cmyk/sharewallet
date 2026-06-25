@@ -97,7 +97,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 : produtos.isEmpty
                     ? const Center(child: Text('Nenhum produto encontrado'))
                     : ListView.builder(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 80),
                         itemCount: produtos.length,
                         itemBuilder: (ctx, i) => _ProductCard(
                           product: produtos[i],
@@ -186,7 +186,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
   }
 }
 
-// -- Card do produto -----------------------------------------------------------
+// -- Tile compacto do produto (com expansão) -----------------------------------
 class _ProductCard extends StatelessWidget {
   final ProductModel product;
   final VoidCallback onEdit;
@@ -203,166 +203,187 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    final typeColor = product.chargeTypeColor;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
             color: product.ativo
                 ? AppColors.cardBorder
-                : AppColors.error.withValues(alpha: 0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
+                : AppColors.error.withValues(alpha: 0.25),
+            width: 1),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                // Ícone do tipo
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: product.chargeTypeColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(product.chargeTypeIcon,
-                      color: product.chargeTypeColor, size: 20),
+      child: Theme(
+        // Remove o divider padrão do ExpansionTile
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          childrenPadding: EdgeInsets.zero,
+          // ── Linha principal (compacta) ──────────────────────────────────
+          leading: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: typeColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(product.chargeTypeIcon, color: typeColor, size: 17),
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  product.nome,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              const SizedBox(width: 6),
+              // Badge tipo
+              _ChargeBadge(product: product),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 2),
+            child: Row(
+              children: [
+                Text(
+                  fmt.format(product.valor),
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '· ${product.comissaoPercent}% → ${fmt.format(product.valorComissao)}',
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary),
+                ),
+                if (!product.ativo) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text('INATIVO',
+                        style: TextStyle(
+                            color: AppColors.error,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Switch no trailing (substituindo seta padrão)
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Switch.adaptive(
+                value: product.ativo,
+                activeThumbColor: AppColors.primary,
+                activeTrackColor: AppColors.primaryLight,
+                onChanged: (_) => onToggle(),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              const Icon(Icons.expand_more_rounded,
+                  size: 18, color: AppColors.textHint),
+            ],
+          ),
+          // ── Detalhes expandidos ──────────────────────────────────────────
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(
+                    top: BorderSide(color: AppColors.cardBorder, width: 1)),
+              ),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Descrição
+                  if (product.descricao.isNotEmpty) ...[
+                    Text(
+                      product.descricao,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  // Cobrança recorrente
+                  if (product.diaCobranca != null)
+                    Row(
+                      children: [
+                        const Icon(Icons.event_repeat_rounded,
+                            size: 13, color: AppColors.textHint),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Cobrança todo dia ${product.diaCobranca}',
+                          style: const TextStyle(
+                              color: AppColors.textHint, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  // Ações
+                  const SizedBox(height: 10),
+                  Row(
                     children: [
-                      Text(
-                        product.nome,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: AppColors.textPrimary,
+                      // Copiar link
+                      IconButton(
+                        onPressed: onCopyLink,
+                        icon: const Icon(Icons.link_rounded,
+                            color: AppColors.primary, size: 20),
+                        tooltip: 'Copiar link do produto',
+                        style: IconButton.styleFrom(
+                          backgroundColor:
+                              AppColors.primary.withValues(alpha: 0.08),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          minimumSize: const Size(36, 36),
+                          padding: EdgeInsets.zero,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          _ChargeBadge(product: product),
-                          const SizedBox(width: 6),
-                          if (!product.ativo)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.error.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text('INATIVO',
-                                  style: TextStyle(
-                                      color: AppColors.error,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700)),
-                            ),
-                        ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: onEdit,
+                          icon: const Icon(Icons.edit_rounded, size: 15),
+                          label: const Text('Editar'),
+                          style: OutlinedButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 7),
+                            textStyle: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            color: AppColors.error, size: 20),
+                        tooltip: 'Excluir',
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(36, 36),
+                          padding: EdgeInsets.zero,
+                        ),
                       ),
                     ],
                   ),
-                ),
-                // Switch ativo
-                Switch.adaptive(
-                  value: product.ativo,
-                  activeThumbColor: AppColors.primary,
-                  activeTrackColor: AppColors.primaryLight,
-                  onChanged: (_) => onToggle(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // Valores
-            Row(
-              children: [
-                _InfoChip(
-                    label: 'Valor',
-                    value: fmt.format(product.valor),
-                    color: AppColors.primary),
-                const SizedBox(width: 8),
-                _InfoChip(
-                    label: 'Comissão',
-                    value: '${product.comissaoPercent}%',
-                    color: AppColors.success),
-                const SizedBox(width: 8),
-                _InfoChip(
-                    label: 'Para afiliado',
-                    value: fmt.format(product.valorComissao),
-                    color: AppColors.gold),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              product.descricao,
-              style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 12),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (product.diaCobranca != null) ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  const Icon(Icons.event_repeat_rounded,
-                      size: 13, color: AppColors.textHint),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Cobrança todo dia ${product.diaCobranca}',
-                    style: const TextStyle(
-                        color: AppColors.textHint, fontSize: 12),
-                  ),
                 ],
               ),
-            ],
-
-            const Divider(height: 16),
-            Row(
-              children: [
-                // Botão copiar link
-                IconButton(
-                  onPressed: onCopyLink,
-                  icon: const Icon(Icons.link_rounded,
-                      color: AppColors.primary),
-                  tooltip: 'Copiar link do produto',
-                  style: IconButton.styleFrom(
-                    backgroundColor:
-                        AppColors.primary.withValues(alpha: 0.08),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_rounded, size: 16),
-                    label: const Text('Editar'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      textStyle: const TextStyle(fontSize: 13),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline_rounded,
-                      color: AppColors.error),
-                  tooltip: 'Excluir',
-                ),
-              ],
             ),
           ],
         ),
@@ -1383,37 +1404,6 @@ class _ChargeBadge extends StatelessWidget {
                 fontSize: 10,
                 fontWeight: FontWeight.w600),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  const _InfoChip(
-      {required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        children: [
-          Text(label,
-              style: TextStyle(
-                  color: color.withValues(alpha: 0.7), fontSize: 9)),
-          Text(value,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
         ],
       ),
     );
