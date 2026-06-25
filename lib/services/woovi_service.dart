@@ -259,7 +259,8 @@ class ChargeResult {
 class SubscriptionResult {
   final String subscriptionId;         // ID local (D1)
   final String wooviSubscriptionId;    // recurrencyId da Woovi
-  final String brCode;                 // QR Code EMV para o cliente escanear
+  final String brCode;                 // QR Code EMV (copia e cola)
+  final String qrCodeImage;            // URL imagem QR da 1ª parcela
   final String paymentLinkUrl;         // Link de pagamento Woovi
   final String status;                 // CREATED | APPROVED | REJECTED
   final String globalID;
@@ -268,6 +269,7 @@ class SubscriptionResult {
     required this.subscriptionId,
     required this.wooviSubscriptionId,
     required this.brCode,
+    required this.qrCodeImage,
     required this.paymentLinkUrl,
     required this.status,
     required this.globalID,
@@ -277,12 +279,13 @@ class SubscriptionResult {
     subscriptionId:       j['subscriptionId']      as String? ?? '',
     wooviSubscriptionId:  j['wooviSubscriptionId'] as String? ?? '',
     brCode:               j['brCode']              as String? ?? '',
-    paymentLinkUrl:       j['paymentLinkUrl']       as String? ?? '',
+    qrCodeImage:          j['qrCodeImage']         as String? ?? '',
+    paymentLinkUrl:       j['paymentLinkUrl']      as String? ?? '',
     status:               j['status']              as String? ?? 'CREATED',
     globalID:             j['globalID']            as String? ?? '',
   );
 
-  bool get hasQrCode => brCode.isNotEmpty;
+  bool get hasQrCode => brCode.isNotEmpty || qrCodeImage.isNotEmpty;
   bool get isApproved => status == 'APPROVED';
 }
 

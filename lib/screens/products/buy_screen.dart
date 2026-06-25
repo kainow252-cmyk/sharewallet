@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/web_utils.dart';
 import '../../models/product_model.dart';
@@ -2107,6 +2108,42 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
                   ),
                 ),
                 const SizedBox(height: 20),
+
+                // QR Code visual gerado localmente a partir do brCode (EMV)
+                // A Woovi não expõe endpoint público de imagem para Pix Automático,
+                // então geramos o QR diretamente com qr_flutter.
+                if (r.brCode.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.cardBorder),
+                    ),
+                    child: QrImageView(
+                      data: r.brCode,
+                      version: QrVersions.auto,
+                      size: 200,
+                      backgroundColor: Colors.white,
+                      errorCorrectionLevel: QrErrorCorrectLevel.M,
+                      errorStateBuilder: (_, __) => const Icon(
+                        Icons.qr_code_2_rounded, size: 160, color: AppColors.textHint),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Escaneie com o app do seu banco',
+                      style: TextStyle(fontSize: 12, color: AppColors.textHint)),
+                  const SizedBox(height: 16),
+                  const Row(children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('ou', style: TextStyle(color: AppColors.textHint)),
+                    ),
+                    Expanded(child: Divider()),
+                  ]),
+                  const SizedBox(height: 16),
+                ],
 
                 // Código Pix Copia e Cola
                 if (r.brCode.isNotEmpty) ...[
