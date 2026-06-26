@@ -75,6 +75,12 @@ class _BuyScreenState extends State<BuyScreen> {
   final _estadoCtrl   = TextEditingController();
 
   // PIX Recorrente
+  // -- Campos personalizados do produto (texto e foto) ----------------------
+  // Texto: Map<key, TextEditingController>
+  final Map<String, TextEditingController> _customTextCtrls = {};
+  // Foto: Map<key, base64String>
+  final Map<String, String> _customPhotoData = {};
+
   // -- Estado de submissão ---------------------------------------------------
   bool _isSubmitting = false;
 
@@ -117,6 +123,7 @@ class _BuyScreenState extends State<BuyScreen> {
     _ruaCtrl.dispose();     _numeroCtrl.dispose();
     _compCtrl.dispose();    _bairroCtrl.dispose();
     _cidadeCtrl.dispose();  _estadoCtrl.dispose();
+    for (final c in _customTextCtrls.values) { c.dispose(); }
     super.dispose();
   }
 
@@ -184,6 +191,12 @@ class _BuyScreenState extends State<BuyScreen> {
       if (found == null) {
         setState(() { _loadError = 'Produto não encontrado.'; _loadingProduct = false; });
       } else {
+        // Inicializa controllers para campos de texto personalizados
+        for (final f in found.activeCustomFields) {
+          if (f.isText && !_customTextCtrls.containsKey(f.key)) {
+            _customTextCtrls[f.key] = TextEditingController();
+          }
+        }
         setState(() { _product = found; _loadingProduct = false; });
       }
     } catch (_) {
@@ -611,7 +624,70 @@ class _BuyScreenState extends State<BuyScreen> {
             ]),
             const SizedBox(height: 24),
 
-            const SizedBox(height: 24),
+            // -- Campos Personalizados do produto (texto + foto) ---------------
+            if (product.activeCustomFields.isNotEmpty) ...[
+              _sectionTitle(Icons.assignment_rounded, 'Informações Adicionais'),
+              const SizedBox(height: 4),
+              Text(
+                'Preencha os campos abaixo antes de prosseguir',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 14),
+              ...product.activeCustomFields.map((f) {
+                if (f.isText) {
+                  // Campo de texto livre
+                  final ctrl = _customTextCtrls.putIfAbsent(
+                      f.key, () => TextEditingController());
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: TextFormField(
+                      controller: ctrl,
+                      decoration: InputDecoration(
+                        labelText: '${f.label} *',
+                        hintText: 'Informe: ${f.label}',
+                        prefixIcon: const Icon(Icons.text_fields_rounded,
+                            color: AppColors.primary, size: 20),
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14, horizontal: 14),
+                      ),
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Campo obrigatório: ${f.label}'
+                          : null,
+                    ),
+                  );
+                } else {
+                  // Botão de anexar foto/documento
+                  final hasPhoto = _customPhotoData.containsKey(f.key);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _CustomPhotoField(
+                      label: f.label,
+                      hasPhoto: hasPhoto,
+                      onPickPhoto: () async {
+                        try {
+                          final input = html.FileUploadInputElement()
+                            ..accept = 'image/*,application/pdf'
+                            ..click();
+                          await input.onChange.first;
+                          final file = input.files?.first;
+                          if (file == null) return;
+                          final reader = html.FileReader();
+                          reader.readAsDataUrl(file);
+                          await reader.onLoad.first;
+                          final result = reader.result as String?;
+                          if (result != null && mounted) {
+                            setState(() => _customPhotoData[f.key] = result);
+                          }
+                        } catch (_) {}
+                      },
+                      onRemove: () =>
+                          setState(() => _customPhotoData.remove(f.key)),
+                    ),
+                  );
+                }
+              }),
+              const SizedBox(height: 10),
+            ],
 
             // -- Como funciona -------------------------------------------------
             _HowItWorks(product: product),
@@ -765,6 +841,146 @@ class _BuyScreenState extends State<BuyScreen> {
         ),
         validator: validator,
       );
+}
+
+// --- Campo de foto/documento personalizado -----------------------------------
+class _CustomPhotoField extends StatelessWidget {
+  final String label;
+  final bool hasPhoto;
+  final VoidCallback onPickPhoto;
+  final VoidCallback onRemove;
+
+  const _CustomPhotoField({
+    required this.label,
+    required this.hasPhoto,
+    required this.onPickPhoto,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const photoColor = Color(0xFF7B3FF6); // roxo igual ao admin
+
+    return Container(
+      decoration: BoxDecoration(
+        color: hasPhoto
+            ? photoColor.withValues(alpha: 0.06)
+            : AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: hasPhoto
+              ? photoColor.withValues(alpha: 0.35)
+              : AppColors.cardBorder,
+          width: hasPhoto ? 1.5 : 1,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: hasPhoto ? null : onPickPhoto,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              // Ícone câmera
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: hasPhoto
+                      ? photoColor.withValues(alpha: 0.14)
+                      : AppColors.cardBorder.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  hasPhoto ? Icons.check_circle_rounded : Icons.add_a_photo_rounded,
+                  color: hasPhoto ? photoColor : AppColors.textHint,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Texto
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: hasPhoto ? photoColor : AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasPhoto ? 'Arquivo anexado ✓' : 'Toque para anexar foto ou PDF',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: hasPhoto
+                            ? photoColor.withValues(alpha: 0.8)
+                            : AppColors.textHint,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Botão de ação
+              if (hasPhoto)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: onPickPhoto,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: photoColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.swap_horiz_rounded,
+                            size: 16, color: photoColor),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: onRemove,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.close_rounded,
+                            size: 16, color: AppColors.error),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: photoColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: photoColor.withValues(alpha: 0.3), width: 1),
+                  ),
+                  child: Text(
+                    'Anexar',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: photoColor,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // --- Banner de auto-fill -----------------------------------------------------

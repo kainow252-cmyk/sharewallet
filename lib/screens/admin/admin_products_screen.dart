@@ -1080,6 +1080,7 @@ class _CustomFieldsEditor extends StatefulWidget {
 class _CustomFieldsEditorState extends State<_CustomFieldsEditor> {
   final _labelCtrl = TextEditingController();
   bool _showInput = false;
+  CustomFieldType _selectedType = CustomFieldType.text; // tipo selecionado no input
 
   @override
   void dispose() {
@@ -1117,10 +1118,18 @@ class _CustomFieldsEditorState extends State<_CustomFieldsEditor> {
       );
       return;
     }
-    final newField = CustomField(key: key, label: label, enabled: true);
+    final newField = CustomField(
+      key: key,
+      label: label,
+      enabled: true,
+      fieldType: _selectedType,
+    );
     widget.onChanged([...widget.fields, newField]);
     _labelCtrl.clear();
-    setState(() => _showInput = false);
+    setState(() {
+      _showInput = false;
+      _selectedType = CustomFieldType.text; // reset para próxima vez
+    });
   }
 
   void _toggle(int index, bool value) {
@@ -1165,8 +1174,7 @@ class _CustomFieldsEditorState extends State<_CustomFieldsEditor> {
               ),
               if (enabledCount > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
@@ -1183,26 +1191,30 @@ class _CustomFieldsEditorState extends State<_CustomFieldsEditor> {
           ),
           const SizedBox(height: 3),
           Text(
-            'O comprador deve preencher estes campos antes de pagar',
+            'O comprador preenche texto ou anexa foto/documento antes de pagar',
             style: TextStyle(fontSize: 11, color: AppColors.textHint),
           ),
           const SizedBox(height: 14),
 
-          // ── Lista de campos (checkbox style) ─────────────────────────
+          // ── Lista de campos existentes ────────────────────────────────
           if (widget.fields.isNotEmpty)
             ...widget.fields.asMap().entries.map((e) {
               final i = e.key;
               final f = e.value;
+              final isPhoto = f.fieldType == CustomFieldType.photo;
+              final activeColor = isPhoto
+                  ? const Color(0xFF7B3FF6)   // roxo para foto
+                  : AppColors.primary;        // verde para texto
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(
                   color: f.enabled
-                      ? AppColors.primary.withValues(alpha: 0.06)
+                      ? activeColor.withValues(alpha: 0.06)
                       : AppColors.surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: f.enabled
-                        ? AppColors.primary.withValues(alpha: 0.25)
+                        ? activeColor.withValues(alpha: 0.3)
                         : AppColors.cardBorder,
                     width: 1.5,
                   ),
@@ -1214,34 +1226,59 @@ class _CustomFieldsEditorState extends State<_CustomFieldsEditor> {
                       child: Checkbox(
                         value: f.enabled,
                         onChanged: (v) => _toggle(i, v ?? false),
-                        activeColor: AppColors.primary,
+                        activeColor: activeColor,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(4)),
-                        materialTapTargetSize:
-                            MaterialTapTargetSize.shrinkWrap,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
-                    Icon(Icons.text_fields_rounded,
-                        size: 16,
+                    // Ícone indicando o tipo
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
                         color: f.enabled
-                            ? AppColors.primary
-                            : AppColors.textHint),
+                            ? activeColor.withValues(alpha: 0.12)
+                            : AppColors.cardBorder.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        isPhoto
+                            ? Icons.add_a_photo_rounded
+                            : Icons.text_fields_rounded,
+                        size: 14,
+                        color: f.enabled ? activeColor : AppColors.textHint,
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: GestureDetector(
                         onTap: () => _toggle(i, !f.enabled),
-                        child: Text(
-                          f.label,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: f.enabled
-                                ? AppColors.textPrimary
-                                : AppColors.textHint,
-                            decoration: f.enabled
-                                ? null
-                                : TextDecoration.lineThrough,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              f.label,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: f.enabled
+                                    ? AppColors.textPrimary
+                                    : AppColors.textHint,
+                                decoration: f.enabled
+                                    ? null
+                                    : TextDecoration.lineThrough,
+                              ),
+                            ),
+                            Text(
+                              isPhoto ? 'Anexar foto/doc' : 'Campo de texto',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: f.enabled
+                                    ? activeColor.withValues(alpha: 0.8)
+                                    : AppColors.textHint,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -1251,89 +1288,221 @@ class _CustomFieldsEditorState extends State<_CustomFieldsEditor> {
                           size: 17, color: AppColors.textHint),
                       tooltip: 'Excluir campo',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                          minWidth: 36, minHeight: 36),
+                      constraints:
+                          const BoxConstraints(minWidth: 36, minHeight: 36),
                     ),
                   ],
                 ),
               );
             }),
 
-          // ── Adicionar novo campo ──────────────────────────────────────
+          // ── Painel de adição de novo campo ────────────────────────────
           if (_showInput) ...[
             if (widget.fields.isNotEmpty) const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _labelCtrl,
-                    autofocus: true,
-                    style: const TextStyle(
-                        color: AppColors.textPrimary, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Ex: Ano da moto, IMEI do celular...',
-                      hintStyle: TextStyle(
-                          color: AppColors.textHint, fontSize: 12),
-                      filled: true,
-                      fillColor: AppColors.surface,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide.none),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                              color: AppColors.cardBorder, width: 1)),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                              color: AppColors.primary, width: 1.5)),
-                    ),
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _add(),
+
+            // Seletor de tipo: Texto ou Foto
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.cardBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tipo do campo:',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary),
                   ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _add,
-                  child: Container(
-                    height: 42,
-                    width: 42,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.check_rounded,
-                        color: Colors.white, size: 22),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      // Opção Texto
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(
+                              () => _selectedType = CustomFieldType.text),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: _selectedType == CustomFieldType.text
+                                  ? AppColors.primary.withValues(alpha: 0.1)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _selectedType == CustomFieldType.text
+                                    ? AppColors.primary
+                                    : AppColors.cardBorder,
+                                width:
+                                    _selectedType == CustomFieldType.text ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.text_fields_rounded,
+                                    size: 16,
+                                    color:
+                                        _selectedType == CustomFieldType.text
+                                            ? AppColors.primary
+                                            : AppColors.textHint),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Texto',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color:
+                                        _selectedType == CustomFieldType.text
+                                            ? AppColors.primary
+                                            : AppColors.textHint,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Opção Foto
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(
+                              () => _selectedType = CustomFieldType.photo),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: _selectedType == CustomFieldType.photo
+                                  ? const Color(0xFF7B3FF6)
+                                      .withValues(alpha: 0.1)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _selectedType == CustomFieldType.photo
+                                    ? const Color(0xFF7B3FF6)
+                                    : AppColors.cardBorder,
+                                width: _selectedType == CustomFieldType.photo
+                                    ? 1.5
+                                    : 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_a_photo_rounded,
+                                    size: 16,
+                                    color: _selectedType == CustomFieldType.photo
+                                        ? const Color(0xFF7B3FF6)
+                                        : AppColors.textHint),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Foto/Doc',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color:
+                                        _selectedType == CustomFieldType.photo
+                                            ? const Color(0xFF7B3FF6)
+                                            : AppColors.textHint,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () {
-                    _labelCtrl.clear();
-                    setState(() => _showInput = false);
-                  },
-                  child: Container(
-                    height: 42,
-                    width: 42,
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBorder,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.close_rounded,
-                        color: AppColors.textSecondary, size: 20),
+                  const SizedBox(height: 10),
+                  // Campo de texto para o nome
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _labelCtrl,
+                          autofocus: true,
+                          style: const TextStyle(
+                              color: AppColors.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: _selectedType == CustomFieldType.photo
+                                ? 'Ex: Foto da CNH, Print do IMEI...'
+                                : 'Ex: Ano da moto, Cor do veículo...',
+                            hintStyle: TextStyle(
+                                color: AppColors.textHint, fontSize: 12),
+                            filled: true,
+                            fillColor: AppColors.surfaceVariant,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none),
+                            enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                    color: AppColors.cardBorder, width: 1)),
+                            focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                    color: AppColors.primary, width: 1.5)),
+                          ),
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _add(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _add,
+                        child: Container(
+                          height: 42,
+                          width: 42,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.check_rounded,
+                              color: Colors.white, size: 22),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () {
+                          _labelCtrl.clear();
+                          setState(() {
+                            _showInput = false;
+                            _selectedType = CustomFieldType.text;
+                          });
+                        },
+                        child: Container(
+                          height: 42,
+                          width: 42,
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBorder,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.close_rounded,
+                              color: AppColors.textSecondary, size: 20),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ] else ...[
             if (widget.fields.isNotEmpty) const SizedBox(height: 8),
             GestureDetector(
               onTap: () => setState(() => _showInput = true),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(10),
@@ -1345,8 +1514,7 @@ class _CustomFieldsEditorState extends State<_CustomFieldsEditor> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.add_rounded,
-                        size: 16, color: AppColors.primary),
+                    Icon(Icons.add_rounded, size: 16, color: AppColors.primary),
                     const SizedBox(width: 6),
                     Text(
                       'Adicionar campo personalizado',

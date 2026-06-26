@@ -1,39 +1,60 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 
-// Representa um campo de texto livre exigido pelo admin antes do pagamento
+/// Tipo do campo personalizado definido pelo admin
+enum CustomFieldType {
+  text,   // campo de texto livre (ex: "Ano da moto", "IMEI do celular")
+  photo,  // botão de anexar foto/documento
+}
+
+// Representa um campo personalizado exigido pelo admin antes do pagamento
 class CustomField {
-  final String key;     // identificador único (ex: 'ano_moto_1234')
-  final String label;   // texto exibido ao comprador (ex: 'Ano da moto')
-  final bool enabled;   // se marcado, aparece no fluxo do comprador
+  final String key;           // identificador único (ex: 'ano_moto_1234')
+  final String label;         // texto exibido ao comprador (ex: 'Ano da moto')
+  final bool enabled;         // se marcado, aparece no fluxo do comprador
+  final CustomFieldType fieldType; // tipo: texto ou foto
 
   const CustomField({
     required this.key,
     required this.label,
     this.enabled = true,
+    this.fieldType = CustomFieldType.text,
   });
 
-  CustomField copyWith({String? key, String? label, bool? enabled}) =>
+  CustomField copyWith({
+    String? key,
+    String? label,
+    bool? enabled,
+    CustomFieldType? fieldType,
+  }) =>
       CustomField(
         key: key ?? this.key,
         label: label ?? this.label,
         enabled: enabled ?? this.enabled,
+        fieldType: fieldType ?? this.fieldType,
       );
 
   Map<String, dynamic> toMap() => {
         'key': key,
         'label': label,
         'enabled': enabled,
+        'field_type': fieldType == CustomFieldType.photo ? 'photo' : 'text',
       };
 
   factory CustomField.fromMap(Map<String, dynamic> m) => CustomField(
         key: m['key']?.toString() ?? '',
         label: m['label']?.toString() ?? '',
-        enabled: m['enabled'] != false, // default true se ausente (retrocompat)
+        enabled: m['enabled'] != false,
+        fieldType: m['field_type'] == 'photo'
+            ? CustomFieldType.photo
+            : CustomFieldType.text,
       );
 
+  bool get isPhoto => fieldType == CustomFieldType.photo;
+  bool get isText  => fieldType == CustomFieldType.text;
+
   @override
-  String toString() => 'CustomField($key: $label, enabled=$enabled)';
+  String toString() => 'CustomField($key: $label, type=$fieldType, enabled=$enabled)';
 }
 
 // -- Tipo de cobrança - somente Pix --------------------------------------------
