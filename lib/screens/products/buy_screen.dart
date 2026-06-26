@@ -489,9 +489,10 @@ class _BuyScreenState extends State<BuyScreen> {
       );
     }
 
+    final bottomInset = MediaQuery.of(context).padding.bottom;
     return SingleChildScrollView(
       controller: _scrollController,
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset + 16),
       child: Form(
         key: _formKey,
         child: Column(
@@ -794,7 +795,7 @@ class _BuyScreenState extends State<BuyScreen> {
                 textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 48),
           ],
         ),
       ),
