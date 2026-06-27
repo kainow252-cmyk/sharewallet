@@ -5,6 +5,7 @@ import '../../services/product_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/product_model.dart';
 import '../../theme/app_theme.dart';
+import '../dashboard/main_nav_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -40,9 +41,21 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Widget build(BuildContext context) {
     final ps = context.watch<ProductService>();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
+    // PopScope: intercepta botão Voltar do sistema (Android/iOS) quando esta
+    // tela está dentro do MainNavScreen (IndexedStack). Sem isso, Navigator.pop()
+    // destrói o MainNavScreen inteiro e cai na tela de login.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          // Volta para a aba Home (índice 0) em vez de sair do app
+          MainNavController().goHome();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
         title: Row(
           children: [
             const Text('Produtos'),
@@ -243,6 +256,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ],
             ),
           ),
+      ),
     );
   }
 
