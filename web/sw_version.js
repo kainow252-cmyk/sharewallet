@@ -38,10 +38,10 @@ self.addEventListener('activate', function(e) {
 });
 
 /* ── Fetch: OBRIGATÓRIO para Chrome disparar beforeinstallprompt ── */
+/* NUNCA intercepta: não cacheia, não retorna 503, passa tudo direto para a rede. */
+/* Anteriormente o catch retornava Response(503) que bloqueava arquivos .wasm grandes. */
 self.addEventListener('fetch', function(e) {
-  if (!e.request.url.startsWith(self.location.origin)) return;
-  // Network-first: passa tudo para a rede, sem cache próprio
-  e.respondWith(fetch(e.request).catch(function() {
-    return new Response('Offline', { status: 503 });
-  }));
+  // Passthrough total — não intercepta nem altera nada.
+  // O Chrome só dispara beforeinstallprompt se houver um fetch handler registrado.
+  // Mas NÃO usamos e.respondWith() para não atrasar nem causar 503 em recursos grandes.
 });
