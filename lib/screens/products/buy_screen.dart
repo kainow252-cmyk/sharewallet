@@ -81,6 +81,11 @@ class _BuyScreenState extends State<BuyScreen> {
   // Foto: Map<key, base64String>
   final Map<String, String> _customPhotoData = {};
 
+  // -- Busca de cliente no banco --------------------------------------------
+  bool _buscandoCliente = false;      // spinner de busca
+  bool _clienteEncontrado = false;    // cliente foi encontrado no banco
+  String _clienteNomeBanco = '';      // nome retornado pelo banco (para exibir no banner)
+
   // -- Estado de submissão ---------------------------------------------------
   bool _isSubmitting = false;
 
@@ -203,6 +208,99 @@ class _BuyScreenState extends State<BuyScreen> {
       if (!mounted) return;
       setState(() { _loadError = 'Erro ao carregar produto. Tente novamente.'; _loadingProduct = false; });
     }
+  }
+
+  // -- Busca cliente no banco por CPF + data nascimento ----------------------
+  Future<void> _buscarClienteBanco() async {
+    final cpf  = _cpfCtrl.text.replaceAll(RegExp(r'\D'), '');
+    final nasc = _nascCtrl.text.trim();
+
+    // Só busca se CPF válido (11 dígitos + dígito verificador) E data no formato correto
+    if (!_cpfValido(cpf)) return;
+    if (!RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(nasc)) return;
+
+    setState(() { _buscandoCliente = true; });
+    try {
+      final nascEnc = Uri.encodeComponent(nasc);
+      final resp = await http
+          .get(Uri.parse('$_workerBase/api/customer?cpf=$cpf&nasc=$nascEnc'))
+          .timeout(const Duration(seconds: 8));
+
+      if (!mounted) return;
+
+      if (resp.statusCode == 200) {
+        final body = jsonDecode(resp.body) as Map<String, dynamic>;
+        if (body['found'] == true) {
+          final c = body['customer'] as Map<String, dynamic>;
+          setState(() {
+            _clienteEncontrado  = true;
+            _clienteNomeBanco   = c['nome'] as String? ?? '';
+            // Preenche apenas os campos que estiverem vazios ou com dados do banco
+            if (_nomeCtrl.text.trim().isEmpty)    _nomeCtrl.text    = c['nome']     as String? ?? '';
+            if (_emailCtrl.text.trim().isEmpty)   _emailCtrl.text   = c['email']    as String? ?? '';
+            if (_celularCtrl.text.trim().isEmpty) _celularCtrl.text = _formatarTel(c['telefone'] as String? ?? '');
+            if (_cepCtrl.text.trim().isEmpty)     _cepCtrl.text     = _formatarCep(c['cep']      as String? ?? '');
+            if (_ruaCtrl.text.trim().isEmpty)     _ruaCtrl.text     = c['rua']      as String? ?? '';
+            if (_bairroCtrl.text.trim().isEmpty)  _bairroCtrl.text  = c['bairro']   as String? ?? '';
+            if (_cidadeCtrl.text.trim().isEmpty)  _cidadeCtrl.text  = c['cidade']   as String? ?? '';
+            if (_estadoCtrl.text.trim().isEmpty)  _estadoCtrl.text  = (c['estado']  as String? ?? '').toUpperCase();
+          });
+          // Disparar busca de CEP se rua veio vazia mas CEP veio preenchido
+          if (_ruaCtrl.text.trim().isEmpty && _cepCtrl.text.replaceAll(RegExp(r'\D'), '').length == 8) {
+            _buscarCep();
+          }
+        } else {
+          setState(() { _clienteEncontrado = false; _clienteNomeBanco = ''; });
+        }
+      }
+    } catch (_) {
+      // Silencia erros de rede — busca é opcional
+    } finally {
+      if (mounted) setState(() { _buscandoCliente = false; });
+    }
+  }
+
+  // -- Salva cliente no banco após compra bem-sucedida ----------------------
+  Future<void> _salvarClienteBanco() async {
+    try {
+      final cpf  = _cpfCtrl.text.replaceAll(RegExp(r'\D'), '');
+      final nasc = _nascCtrl.text.trim();
+      if (cpf.length != 11 || !RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(nasc)) return;
+      await http.post(
+        Uri.parse('$_workerBase/api/customer'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'cpf':            cpf,
+          'data_nascimento': nasc,
+          'nome':       _nomeCtrl.text.trim(),
+          'email':      _emailCtrl.text.trim(),
+          'telefone':   _celularCtrl.text.replaceAll(RegExp(r'\D'), ''),
+          'cep':        _cepCtrl.text.replaceAll(RegExp(r'\D'), ''),
+          'rua':        _ruaCtrl.text.trim(),
+          'numero':     _numeroCtrl.text.trim(),
+          'complemento': _compCtrl.text.trim(),
+          'bairro':     _bairroCtrl.text.trim(),
+          'cidade':     _cidadeCtrl.text.trim(),
+          'estado':     _estadoCtrl.text.trim().toUpperCase(),
+          'origem':     'compra',
+        }),
+      ).timeout(const Duration(seconds: 8));
+    } catch (_) {}
+  }
+
+  // -- Formata telefone para exibição (xx) xxxxx-xxxx ----------------------
+  static String _formatarTel(String t) {
+    final d = t.replaceAll(RegExp(r'\D'), '');
+    if (d.length == 11) return '(${d.substring(0,2)}) ${d.substring(2,7)}-${d.substring(7)}';
+    if (d.length == 10) return '(${d.substring(0,2)}) ${d.substring(2,6)}-${d.substring(6)}';
+    return t;
+  }
+
+  // -- Formata CEP para exibição 00000-000 ---------------------------------
+  static String _formatarCep(String c) {
+    final d = c.replaceAll(RegExp(r'\D'), '');
+    if (d.length == 8) return '${d.substring(0,5)}-${d.substring(5)}';
+    return c;
   }
 
   // -- Validação de CPF (dígito verificador) ----------------------------------
@@ -331,6 +429,7 @@ class _BuyScreenState extends State<BuyScreen> {
       setState(() { _isSubmitting = false; _pixResult = result; });
 
       if (result != null && result.hasQrCode) {
+        _salvarClienteBanco().catchError((_) {});  // salva no banco central de clientes
         _iniciarPolling(result.saleId);
         Future.delayed(const Duration(milliseconds: 300), () {
           if (_scrollController.hasClients) {
@@ -380,6 +479,7 @@ class _BuyScreenState extends State<BuyScreen> {
     if (result != null) {
       // Salva dados do cliente em qualquer cenário (com ou sem QR)
       _salvarDadosCliente().catchError((_) {});
+      _salvarClienteBanco().catchError((_) {});  // salva no banco central de clientes
       if (result.hasQrCode) {
         Future.delayed(const Duration(milliseconds: 300), () {
           if (_scrollController.hasClients) {
@@ -543,8 +643,84 @@ class _BuyScreenState extends State<BuyScreen> {
             ),
             const SizedBox(height: 24),
 
-            // -- Banner auto-fill se há dados salvos --------------------------
-            if (_nomeCtrl.text.isNotEmpty) ...[
+            // -- Bloco de identificação (CPF + Nasc) com busca automática ----
+            _sectionTitle(Icons.manage_search_rounded, 'Identificação'),
+            const SizedBox(height: 8),
+            Text(
+              'Preencha CPF e data de nascimento — se você já é cliente, seus dados serão preenchidos automaticamente!',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                flex: 3,
+                child: _field(_cpfCtrl, 'CPF *', Icons.badge_rounded,
+                    hint: '000.000.000-00',
+                    keyboard: TextInputType.number,
+                    validator: (v) {
+                      final d = v!.replaceAll(RegExp(r'\D'), '');
+                      if (d.length < 11) return 'CPF inválido';
+                      if (!_cpfValido(d)) return 'CPF inválido';
+                      return null;
+                    },
+                    onChanged: (_) => _buscarClienteBanco()),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: _field(_nascCtrl, 'Nascimento *', Icons.cake_rounded,
+                    hint: 'DD/MM/AAAA',
+                    keyboard: TextInputType.datetime,
+                    validator: (v) => v!.trim().isEmpty ? 'Obrigatório' : null,
+                    onChanged: (_) => _buscarClienteBanco()),
+              ),
+              if (_buscandoCliente) ...[                          // spinner enquanto busca
+                const SizedBox(width: 10),
+                const SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                ),
+              ],
+            ]),
+            const SizedBox(height: 10),
+
+            // Banner: cliente encontrado no banco
+            if (_clienteEncontrado && _clienteNomeBanco.isNotEmpty) ...[         
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B5E20).withValues(alpha: 0.12),
+                  border: Border.all(color: const Color(0xFF2E7D32), width: 1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Cliente encontrado!',
+                            style: const TextStyle(fontWeight: FontWeight.bold,
+                                color: Color(0xFF1B5E20), fontSize: 13),
+                          ),
+                          Text(
+                            'Olá, $_clienteNomeBanco! Seus dados foram preenchidos automaticamente.',
+                            style: const TextStyle(color: Color(0xFF2E7D32), fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
+
+            // Banner auto-fill local (SharedPreferences)
+            if (!_clienteEncontrado && _nomeCtrl.text.isNotEmpty) ...[              
               _AutoFillBanner(nome: _nomeCtrl.text),
               const SizedBox(height: 16),
             ],
@@ -553,25 +729,8 @@ class _BuyScreenState extends State<BuyScreen> {
             _sectionTitle(Icons.person_rounded, 'Dados Pessoais'),
             const SizedBox(height: 12),
             _field(_nomeCtrl, 'Nome completo *', Icons.person_outline_rounded,
-                validator: (v) => v!.trim().split('').length < 2
+                validator: (v) => v!.trim().split(' ').where((s) => s.isNotEmpty).length < 2
                     ? 'Informe nome e sobrenome' : null),
-            const SizedBox(height: 10),
-            Row(children: [
-              Expanded(child: _field(_cpfCtrl, 'CPF *', Icons.badge_rounded,
-                  hint: '000.000.000-00',
-                  keyboard: TextInputType.number,
-                  validator: (v) {
-                    final d = v!.replaceAll(RegExp(r'\D'), '');
-                    if (d.length < 11) return 'CPF inválido';
-                    if (!_cpfValido(d)) return 'CPF inválido';
-                    return null;
-                  })),
-              const SizedBox(width: 10),
-              Expanded(child: _field(_nascCtrl, 'Nascimento *', Icons.cake_rounded,
-                  hint: 'DD/MM/AAAA',
-                  keyboard: TextInputType.datetime,
-                  validator: (v) => v!.trim().isEmpty ? 'Obrigatório' : null)),
-            ]),
             const SizedBox(height: 10),
             _field(_emailCtrl, 'E-mail *', Icons.email_rounded,
                 hint: 'seu@email.com',
