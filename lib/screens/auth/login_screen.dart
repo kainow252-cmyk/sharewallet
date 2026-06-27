@@ -128,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (err == 'UNAUTHORIZED_DOMAIN') {
         _showDomainError();
       } else if (err.startsWith('FIREBASE_ERR:') || err.startsWith('ERR:')) {
-        _showError(err);
+        _showError(_translateFirebaseErrString(err));
       } else if (err.isNotEmpty && err != 'Login com Google cancelado.') {
         _showError(err);
       }
@@ -179,7 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (err == 'FACEBOOK_DOMAIN_ERROR') {
         _showFacebookDomainError();
       } else if (err.isNotEmpty && err != 'Login com Facebook cancelado.') {
-        _showError(err);
+        _showError(_translateFirebaseErrString(err));
       }
     }
   }
@@ -209,6 +209,62 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: AppColors.error),
     );
+  }
+
+  /// Converte strings brutas de erro Firebase (ex: "FIREBASE_ERR:network-request-failed|msg")
+  /// em mensagens amigáveis em português para exibição ao usuário.
+  String _translateFirebaseErrString(String err) {
+    // Extrai o código: "FIREBASE_ERR:network-request-failed|msg" -> "network-request-failed"
+    String code = err;
+    if (err.startsWith('FIREBASE_ERR:') || err.startsWith('FACEBOOK_ERR:')) {
+      code = err.replaceFirst(RegExp(r'^(FIREBASE_ERR|FACEBOOK_ERR):'), '');
+      // Remove tudo após o pipe (mensagem técnica)
+      final pipeIdx = code.indexOf('|');
+      if (pipeIdx != -1) code = code.substring(0, pipeIdx);
+    } else if (err.startsWith('ERR:')) {
+      code = err.replaceFirst('ERR:', '');
+    }
+    code = code.trim().toLowerCase();
+
+    switch (code) {
+      case 'network-request-failed':
+        return 'Sem conexão com a internet. Verifique sua rede e tente novamente.';
+      case 'user-not-found':
+        return 'Nenhuma conta encontrada com este e-mail.';
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'E-mail ou senha inválidos.';
+      case 'user-disabled':
+        return 'Esta conta foi desativada. Entre em contato com o suporte.';
+      case 'too-many-requests':
+        return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+      case 'email-already-in-use':
+        return 'Este e-mail já está cadastrado. Faça login ou use outro e-mail.';
+      case 'invalid-email':
+        return 'E-mail inválido. Verifique o formato.';
+      case 'weak-password':
+        return 'Senha muito fraca. Use pelo menos 6 caracteres.';
+      case 'operation-not-allowed':
+        return 'Este método de login não está habilitado.';
+      case 'popup-blocked':
+        return 'Popup bloqueado pelo navegador. Permita popups e tente novamente.';
+      case 'unauthorized-domain':
+        return 'Domínio não autorizado para este login.';
+      case 'internal-error':
+        return 'Erro interno. Tente novamente em instantes.';
+      case 'timeout':
+        return 'Tempo de conexão esgotado. Verifique sua internet.';
+      default:
+        // Verifica se parece mensagem de rede no texto completo
+        final lower = err.toLowerCase();
+        if (lower.contains('network') || lower.contains('internet') ||
+            lower.contains('connection') || lower.contains('timeout') ||
+            lower.contains('unreachable') || lower.contains('fetch')) {
+          return 'Erro de conexão. Verifique sua internet e tente novamente.';
+        }
+        // Mensagem genérica amigável para erros desconhecidos
+        return 'Erro ao entrar com Google. Verifique sua conexão e tente novamente.';
+    }
   }
 
   // -- Dialog: Facebook não configurado -----------------------------------------

@@ -188,9 +188,23 @@
     // em vez de fonts.gstatic.com, evitando requests externos e erros de CORS.
     // O servidor local retorna NotoColorEmoji.ttf para qualquer path solicitado,
     // garantindo cobertura maxima de glyphs sem dependencia de CDN externo.
-    window.flutterConfiguration = {
-      fontFallbackBaseUrl: window.location.origin + '/assets/fonts/'
-    };
+    // Usa document.baseURI para respeitar o --base-href (/app/) do Flutter build.
+    (function() {
+      try {
+        // document.baseURI inclui o base href correto (ex: "https://host/app/")
+        // Isso garante que a URL inclua o prefixo /app/ em produção.
+        var base = document.baseURI || (window.location.origin + '/app/');
+        // Normaliza: garante que termine com /
+        if (!base.endsWith('/')) base += '/';
+        window.flutterConfiguration = {
+          fontFallbackBaseUrl: base + 'assets/fonts/'
+        };
+      } catch(e) {
+        window.flutterConfiguration = {
+          fontFallbackBaseUrl: window.location.origin + '/app/assets/fonts/'
+        };
+      }
+    })();
   </script>
 </head>
 <body>

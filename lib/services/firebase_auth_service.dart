@@ -284,6 +284,18 @@ class FirebaseAuthService {
         );
       }
 
+      // Erro de rede: sem internet ou Google services inacessíveis
+      if (code == 'network-request-failed' ||
+          msg.contains('network') ||
+          msg.contains('timeout') ||
+          msg.contains('unreachable') ||
+          msg.contains('failed to fetch')) {
+        return FirebaseAuthResult.failure(
+          'Sem conexão com a internet. Verifique sua rede e tente novamente.',
+          provider: FirebaseAuthProvider.google,
+        );
+      }
+
       // Qualquer problema com popup (bloqueado, COOP, dominio) -> redirect
       if (code == 'popup-blocked' ||
           code == 'unauthorized-domain' ||
@@ -312,6 +324,15 @@ class FirebaseAuthService {
         await _auth.signInWithRedirect(gp2);
         return FirebaseAuthResult.failure(
           'REDIRECT_INITIATED',
+          provider: FirebaseAuthProvider.google,
+        );
+      }
+      // Erro de rede genérico (fetch failed, XMLHttpRequest failed, etc.)
+      if (s.contains('network') || s.contains('fetch') ||
+          s.contains('xmlhttp') || s.contains('timeout') ||
+          s.contains('unreachable') || s.contains('internet')) {
+        return FirebaseAuthResult.failure(
+          'Sem conexão com a internet. Verifique sua rede e tente novamente.',
           provider: FirebaseAuthProvider.google,
         );
       }
