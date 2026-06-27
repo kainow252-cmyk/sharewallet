@@ -84,15 +84,21 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
           (s, r) => s + ((r['comissao'] as num?)?.toDouble() ?? 0));
 
       // Adapta ao formato esperado pelo widget _ReferralTile
-      final list = subs.map((s) => {
-            'id': s['id'],
-            'referred_id': s['affiliate_nome'] ?? 'Cliente',
-            'status': (s['status']?.toString() ?? 'ativa') == 'ativa'
-                ? 'ATIVO'
-                : 'INATIVO',
-            // CORREÇÃO: comissao no D1 já é R$ - usar diretamente
-            'comissao_mensal': (s['comissao'] as num?)?.toDouble() ?? 0,
-            'meses_ativos': 1,
+      final list = subs.map((s) {
+            // cliente_nome = nome de quem comprou (comprador)
+            // affiliate_nome = nome do afiliado (quem indicou) — NÃO usar aqui
+            final clienteNome = (s['cliente_nome']?.toString() ?? '').trim();
+            final displayNome = clienteNome.isNotEmpty ? clienteNome : 'Comprador';
+            return {
+              'id': s['id'],
+              'referred_id': displayNome,
+              'status': (s['status']?.toString() ?? 'ativa') == 'ativa'
+                  ? 'ATIVO'
+                  : 'INATIVO',
+              // CORREÇÃO: comissao no D1 já é R$ - usar diretamente
+              'comissao_mensal': (s['comissao'] as num?)?.toDouble() ?? 0,
+              'meses_ativos': 1,
+            };
           }).toList();
 
       setState(() {
