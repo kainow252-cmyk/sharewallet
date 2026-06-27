@@ -88,10 +88,13 @@ class _IndicacoesScreenState extends State<IndicacoesScreen> {
             // cliente_nome = nome de quem comprou (comprador)
             // affiliate_nome = nome do afiliado (quem indicou) — NÃO usar aqui
             final clienteNome = (s['cliente_nome']?.toString() ?? '').trim();
-            final displayNome = clienteNome.isNotEmpty ? clienteNome : 'Comprador';
+            final productNome = (s['product_nome']?.toString() ?? '').trim();
+            final hasNome = clienteNome.isNotEmpty;
             return {
               'id': s['id'],
-              'referred_id': displayNome,
+              'referred_id': hasNome ? clienteNome : 'Comprador',
+              'product_nome': productNome,
+              'nome_desconhecido': !hasNome,
               'status': (s['status']?.toString() ?? 'ativa') == 'ativa'
                   ? 'ATIVO'
                   : 'INATIVO',
@@ -518,6 +521,8 @@ class _ReferralTile extends StatelessWidget {
     final comissao = (referral['comissao_mensal'] as num?)?.toDouble() ?? 0;
     final meses = (referral['meses_ativos'] as num?)?.toInt() ?? 0;
     final referred = referral['referred_id']?.toString() ?? 'Usuário';
+    final nomeDesconhecido = referral['nome_desconhecido'] == true;
+    final productNome = referral['product_nome']?.toString() ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -533,7 +538,7 @@ class _ReferralTile extends StatelessWidget {
             radius: 20,
             backgroundColor: AppColors.primary.withValues(alpha: 0.1),
             child: Text(
-              referred.isNotEmpty ? referred[0].toUpperCase() : 'U',
+              nomeDesconhecido ? '?' : (referred.isNotEmpty ? referred[0].toUpperCase() : 'U'),
               style: const TextStyle(
                   color: AppColors.primary, fontWeight: FontWeight.w700),
             ),
@@ -543,11 +548,23 @@ class _ReferralTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(referred,
-                    style: const TextStyle(
+                Text(
+                    nomeDesconhecido ? 'Comprador' : referred,
+                    style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
-                        color: AppColors.textPrimary)),
+                        color: nomeDesconhecido
+                            ? AppColors.textHint
+                            : AppColors.textPrimary)),
+                if (nomeDesconhecido && productNome.isNotEmpty)
+                  Text(
+                    productNome,
+                    style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 Text('$meses ${ meses == 1 ?'mês':'meses'} ativo',
                     style: const TextStyle(
                         color: AppColors.textHint, fontSize: 11)),
