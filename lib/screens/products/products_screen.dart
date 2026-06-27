@@ -893,7 +893,7 @@ class _ProductCard extends StatelessWidget {
   void _showShareSheet(
       BuildContext context, ProductModel product, String affiliateCode) {
     final link =
-        'https://sharewallet.com.br/app/#/produto/${product.id}?ref=$affiliateCode';
+        'https://payment.sharewallet.com.br/app/#/produto/${product.id}?ref=$affiliateCode';
 
     // Textos específicos por tipo de produto
     final isRecorrente = product.isPixRecorrente;

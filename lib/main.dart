@@ -156,10 +156,19 @@ class ShareWalletApp extends StatelessWidget {
         title: 'ShareWallet',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.theme,
-        // Se veio pelo link de produto, a rota inicial é a tela do comprador
-        initialRoute: hasProduto
-            ? '/produto/$initialProductId?ref=${initialAffiliateCode ?? ""}'
-            : '/',
+        // Deep link de produto: usa `home:` com BuyScreen diretamente.
+        // Motivo: MaterialApp.initialRoute com querystring ('/produto/ID?ref=CODE')
+        // não é processado corretamente quando há `routes:` registradas —
+        // o Navigator faz lookup exato e não encontra '/produto/ID?ref=CODE',
+        // caindo no fallback '/' (SplashScreen) que redireciona para login.
+        // Com `home:` a BuyScreen é exibida diretamente, sem passar pelo router.
+        home: hasProduto
+            ? BuyScreen(
+                productId: initialProductId!,
+                affiliateCode: initialAffiliateCode ?? '',
+              )
+            : null,
+        initialRoute: hasProduto ? null : '/',
         routes: {
           '/': (_) => const SplashScreen(),
           '/landing': (_) => const LandingScreen(),
@@ -189,11 +198,13 @@ class ShareWalletApp extends StatelessWidget {
             );
           }
 
-          // /produto/ID?ref=CODE -> tela pública do comprador (sem login)
+          // /produto/ID?ref=CODE -> tela pública do comprador (sem login).
+          // Também captura navegação interna via pushNamed('/produto/...').
           if (name.startsWith('/produto/')) {
             final withoutPrefix = name.replaceFirst('/produto/', '');
             final parts = withoutPrefix.split('?');
             final productId = parts[0];
+            // Prioridade: ref da URL > ref do deep link original
             String affiliateCode = initialAffiliateCode ?? '';
             if (parts.length > 1) {
               final query = Uri.splitQueryString(parts[1]);

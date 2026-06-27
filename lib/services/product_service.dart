@@ -76,7 +76,7 @@ class ProductService extends ChangeNotifier {
     return {
       'success': true,
       'charge_id': 'charge_${DateTime.now().millisecondsSinceEpoch}',
-      'link': 'https://sharewallet.com.br/app/#/produto/$productId?ref=$affiliateCode',
+      'link': 'https://payment.sharewallet.com.br/app/#/produto/$productId?ref=$affiliateCode',
       'pix_code': '00020101021226990014br.gov.bcb.pix...',
       'valor': product.valor,
       'comissao': product.valorComissao,

@@ -116,7 +116,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
   }
 
   Future<void> _copyProductLink(BuildContext context, String productId) async {
-    const baseUrl = 'https://sharewallet.com.br/app/#/produto';
+    const baseUrl = 'https://payment.sharewallet.com.br/app/#/produto';
     final link = '$baseUrl/$productId';
     await Clipboard.setData(ClipboardData(text: link));
     if (!context.mounted) return;
