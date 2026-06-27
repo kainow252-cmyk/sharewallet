@@ -89,7 +89,10 @@ class WooviAdminService extends ChangeNotifier {
         databaseId: _databaseId,
       );
       if (kIsWeb) {
-        _dbInst!.settings = const Settings(persistenceEnabled: false);
+        _dbInst!.settings = const Settings(
+          persistenceEnabled: false,
+          webExperimentalForceLongPolling: true,
+        );
       } else {
         _dbInst!.settings = const Settings(
           persistenceEnabled: true,

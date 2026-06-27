@@ -29,11 +29,22 @@ class FirestoreService {
         databaseId: _databaseId,
       );
 
-      // Habilita cache offline - próximas visitas carregam do cache instantaneamente
-      _instance!.settings = const Settings(
-        persistenceEnabled: true,
-        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-      );
+      // Web: NUNCA usar persistenceEnabled:true no web — causa IndexedDB lock loop.
+      // Usar webExperimentalForceLongPolling:true em vez de AutoDetect:
+      //   AutoDetect faz GET repetidos ao Listen/channel quando falha → loop infinito no console.
+      //   ForceLongPolling usa long-polling desde o início → estável para bancos não-default.
+      if (kIsWeb) {
+        _instance!.settings = const Settings(
+          persistenceEnabled: false,
+          webExperimentalForceLongPolling: true,
+        );
+      } else {
+        // Mobile: cache offline habilitado — carregamento instantâneo na próxima visita
+        _instance!.settings = const Settings(
+          persistenceEnabled: true,
+          cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+        );
+      }
 
       if (kDebugMode) {
         debugPrint('[FirestoreService] Conectado ao banco: $_databaseId (cache offline ON)');

@@ -216,11 +216,12 @@ class MercadoPagoService extends ChangeNotifier {
         app: Firebase.app(),
         databaseId: _databaseId,
       );
-      // Desabilita persistência offline no web para evitar conflitos de cache
-      // que podem causar leituras de dados obsoletos em produção.
+      // Desabilita persistência + força long-polling no web
+      // para evitar o loop de WebChannel no banco não-default.
       if (kIsWeb) {
         _dbInst!.settings = const Settings(
           persistenceEnabled: false,
+          webExperimentalForceLongPolling: true,
         );
       } else {
         _dbInst!.settings = const Settings(

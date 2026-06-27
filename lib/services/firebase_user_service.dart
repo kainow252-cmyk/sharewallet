@@ -661,14 +661,17 @@ class FirebaseUserService {
         app: FirebaseFirestore.instance.app,
         databaseId: _databaseId,
       );
-      // Web: persistenceEnabled:false evita o IndexedDB lock loop que causa
-      // backoff exponencial (~50s de login). No mobile mantemos true para offline.
-      // webExperimentalAutoDetectLongPolling: fallback automático para long-polling
-      // quando WebChannel falha (resolve o GET Listen/channel loop em redes restritivas).
+      // Web: configuração crítica para evitar o loop de WebChannel
+      // - persistenceEnabled: false → sem IndexedDB lock (evita backoff exponencial)
+      // - webExperimentalAutoDetectLongPolling: REMOVIDO → era a causa do loop
+      //   O autoDetect faz GET repetidos ao Listen/channel quando detecta falha,
+      //   causando centenas de requests em loop visível no console.
+      // - webExperimentalForceLongPolling: true → usa long-polling direto
+      //   Mais estável que WebChannel para bancos não-default em produção.
       if (kIsWeb) {
         _dbInstance!.settings = const Settings(
           persistenceEnabled: false,
-          webExperimentalAutoDetectLongPolling: true,
+          webExperimentalForceLongPolling: true,
         );
       } else {
         _dbInstance!.settings = const Settings(

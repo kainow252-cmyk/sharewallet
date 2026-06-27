@@ -32,7 +32,19 @@ class AuthService extends ChangeNotifier {
         if (kDebugMode) {
           debugPrint('[AuthService] Sessão Firebase: ${firebaseUser.email}');
         }
-        final user = await FirebaseUserService.carregarUsuarioAtual();
+        // TIMEOUT DE SEGURANÇA: se o Firestore travar (loop WebChannel),
+        // não bloqueia a splash indefinidamente. Máximo 8s para carregar perfil.
+        // Se der timeout, retorna null → usuário vê a landing page e faz login manual.
+        final user = await FirebaseUserService.carregarUsuarioAtual()
+            .timeout(
+              const Duration(seconds: 8),
+              onTimeout: () {
+                if (kDebugMode) {
+                  debugPrint('[AuthService] Timeout ao carregar perfil — continuando sem usuário');
+                }
+                return null;
+              },
+            );
         if (user != null) {
           _currentUser = user;
           _isLoading = false;

@@ -61,14 +61,28 @@ void main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
-    // Web: desabilita persistência para evitar o IndexedDB lock loop
-    // Com persistenceEnabled:true no Web, múltiplas abas / reloads causam
-    // falhas repetidas no GET Listen/channel -> backoff exponencial ~50s de login.
-    // Referência: https://firebase.google.com/docs/firestore/manage-data/enable-offline
+    // Web: configuração crítica para evitar loop de WebChannel no Firestore.
+    // PROBLEMA: webExperimentalAutoDetectLongPolling faz GET repetidos ao
+    // Listen/channel → loop infinito de requests → splash travada 2+ minutos.
+    // SOLUÇÃO: webExperimentalForceLongPolling → protocolo estável desde o início.
+    // Aplica em AMBOS os bancos: (default) e affiliatewalletwallet.
     if (kIsWeb) {
+      // Banco padrão (default) — usado por firebase_auth, etc.
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: false,
+        webExperimentalForceLongPolling: true,
       );
+      // Banco customizado (affiliatewalletwallet) — usado por todos os serviços
+      // Configura aqui para garantir que o SDK use long-polling antes de qualquer query.
+      try {
+        FirebaseFirestore.instanceFor(
+          app: Firebase.app(),
+          databaseId: 'affiliatewalletwallet',
+        ).settings = const Settings(
+          persistenceEnabled: false,
+          webExperimentalForceLongPolling: true,
+        );
+      } catch (_) {}
     }
   } catch (e) {
     debugPrint('[Firebase] Erro ao inicializar: $e');
