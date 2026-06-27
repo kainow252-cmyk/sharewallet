@@ -212,10 +212,10 @@ class FirebaseAuthService {
   /// Retorna true se o ambiente tem COOP restritivo (same-origin),
   /// o que bloqueia window.closed no popup OAuth e gera o warning
   /// "Cross-Origin-Opener-Policy policy would block the window.closed call".
-  /// Nesse caso, signInWithRedirect e mais confiavel que signInWithPopup.
+  /// OTIMIZAÇÃO: sharewallet.com.br agora tenta popup primeiro (mais rápido).
+  /// Redirect só é usado se popup for explicitamente bloqueado pelo browser.
   static bool _hasCOOPRestriction() {
     try {
-      // ignore: avoid_web_libraries_in_flutter
       final meta = _getCoopHeader();
       return meta == 'same-origin';
     } catch (_) {
@@ -227,16 +227,15 @@ class FirebaseAuthService {
   static String _getCoopHeader() {
     try {
       final hostname = Uri.base.host;
-      // Usa redirect em todos os ambientes de produção/proxy conhecidos.
-      // Chrome bloqueia window.closed via COOP em sites HTTPS mesmo sem o header
-      // explícito — o signInWithRedirect é sempre mais confiável para web.
+      // Redirect forçado apenas em ambientes de sandbox/preview onde popup
+      // realmente não funciona (iframes, proxies, Cloudflare Pages preview).
+      // sharewallet.com.br REMOVIDO desta lista: o popup funciona em produção
+      // e é muito mais rápido que o ciclo de redirect (reload de página).
       if (hostname.contains('sandbox.novita') ||
           hostname.contains('genspark') ||
           hostname.contains('pages.dev') ||
           hostname.contains('netlify') ||
-          hostname.contains('vercel') ||
-          hostname.contains('sharewallet.com.br') ||
-          hostname.contains('sharewallet')) {
+          hostname.contains('vercel')) {
         return 'same-origin';
       }
       return '';

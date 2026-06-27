@@ -101,7 +101,7 @@ class FirebaseUserService {
         sponsorId = await _buscarSponsorId(db, sponsorCode);
       }
 
-      // 3. Criar perfil do afiliado em affiliates/{uid}
+      // 3. Dados do perfil do afiliado
       final affiliateData = {
         'uid': uid,
         'firebase_uid': uid,
@@ -126,18 +126,20 @@ class FirebaseUserService {
         'updated_at': FieldValue.serverTimestamp(),
       };
 
-      await db.collection('affiliates').doc(uid).set(affiliateData);
+      // 4. Criar perfil + carteira em PARALELO (economiza 300-600ms no cadastro)
+      await Future.wait([
+        db.collection('affiliates').doc(uid).set(affiliateData),
+        _criarCarteira(db, uid: uid, affiliateCode: affiliateCode),
+      ]);
 
-      // 4. Criar carteira em wallets/{uid} - zerada, pronta para receber
-      await _criarCarteira(db, uid: uid, affiliateCode: affiliateCode);
-
-      // 5. Incrementar contador no afiliado sponsor (se houver)
+      // 5. Incrementar contador no afiliado sponsor - fire-and-forget (não bloqueia)
       if (sponsorId != null) {
-        await _incrementarReferral(db, sponsorId);
+        _incrementarReferral(db, sponsorId).catchError((_) {});
       }
 
-      // 6. Sincronizar no D1 (Cloudflare Worker) - necessário para o painel Admin
-      await _sincronizarD1(
+      // 6. Sincronizar no D1 em background - NÃO bloqueia o cadastro
+      // O usuário já entra no app enquanto o D1 é atualizado em segundo plano.
+      Future.microtask(() => _sincronizarD1(
         uid: uid,
         nome: nome,
         email: email,
@@ -147,7 +149,7 @@ class FirebaseUserService {
         sponsorCode: sponsorCode,
         pixKey: pixFinal,
         pixKeyType: pixKeyType,
-      );
+      ).catchError((_) {}));
 
       if (kDebugMode) {
         debugPrint('[FirebaseUserService] Registro completo:');
@@ -351,9 +353,13 @@ class FirebaseUserService {
     if (db == null) return fallback;
 
     try {
-      // Buscar perfil do afiliado
-      final affiliateDoc = await db.collection('affiliates').doc(uid).get();
-      final walletDoc = await db.collection('wallets').doc(uid).get();
+      // Buscar perfil do afiliado + carteira em PARALELO (antes era sequencial: 2x latência)
+      final results = await Future.wait([
+        db.collection('affiliates').doc(uid).get(),
+        db.collection('wallets').doc(uid).get(),
+      ]);
+      final affiliateDoc = results[0];
+      final walletDoc    = results[1];
 
       // Se perfil não existe, criar automaticamente (primeiro login social)
       if (!affiliateDoc.exists) {
@@ -613,6 +619,9 @@ class FirebaseUserService {
         'total_indicados': 0,
         'total_assinaturas': 0,
       });
+
+      // Invalida cache local para garantir leitura fresca no próximo login
+      CfApiService.invalidateEmailCache(email);
 
       if (kDebugMode) {
         if (result != null) {

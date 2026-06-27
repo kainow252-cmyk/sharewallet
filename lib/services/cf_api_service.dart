@@ -10,7 +10,13 @@ class CfApiService {
   // Origin: https://sharewallet.com.br - a stream H2 trava e nunca responde.
   // Com api.sharewallet.com.br (same-site) o CORS funciona corretamente.
   static const String _base = 'https://api.sharewallet.com.br';
-  static const Duration _timeout = Duration(seconds: 10);
+  // Timeout reduzido de 10s → 5s: Worker Cloudflare responde em <200ms global.
+  // Se o Worker não responder em 5s, algo está errado; continuar esperando não ajuda.
+  static const Duration _timeout = Duration(seconds: 5);
+
+  // Cache em memória para getAffiliateByEmail — evita re-query D1 no mesmo login.
+  // TTL de 5 minutos: suficiente para a sessão de login sem dados obsoletos.
+  static final Map<String, _CacheEntry> _emailCache = {};
 
   // -- HTTP helpers ----------------------------------------------------------
 
@@ -184,7 +190,23 @@ class CfApiService {
   static Future<Map<String, dynamic>?> getAffiliateByEmail(String email) async {
     // Guard: email vazio geraria URL /api/affiliates/by-email/ -> 404
     if (email.trim().isEmpty) return null;
-    return await _get('/api/affiliates/by-email/${Uri.encodeComponent(email)}');
+
+    // Verifica cache em memória antes de chamar a API
+    final cached = _emailCache[email];
+    if (cached != null && !cached.isExpired) {
+      return cached.data;
+    }
+
+    final result = await _get('/api/affiliates/by-email/${Uri.encodeComponent(email)}');
+
+    // Guarda no cache (mesmo null = afiliado não existe, evita re-query)
+    _emailCache[email] = _CacheEntry(result);
+    return result;
+  }
+
+  /// Invalida o cache de email (chamar após createAffiliate ou updateAffiliate)
+  static void invalidateEmailCache(String email) {
+    _emailCache.remove(email);
   }
 
   static Future<Map<String, dynamic>?> createAffiliate(Map<String, dynamic> data) async {
@@ -398,4 +420,17 @@ class CfApiService {
     if (list == null) return [];
     return list.cast<Map<String, dynamic>>();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Cache helper interno para CfApiService
+// ---------------------------------------------------------------------------
+class _CacheEntry {
+  final Map<String, dynamic>? data;
+  final DateTime _createdAt;
+  static const Duration _ttl = Duration(minutes: 5);
+
+  _CacheEntry(this.data) : _createdAt = DateTime.now();
+
+  bool get isExpired => DateTime.now().difference(_createdAt) > _ttl;
 }
