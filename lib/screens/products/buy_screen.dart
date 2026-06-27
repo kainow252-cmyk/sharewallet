@@ -205,6 +205,23 @@ class _BuyScreenState extends State<BuyScreen> {
     }
   }
 
+  // -- Validação de CPF (dígito verificador) ----------------------------------
+  static bool _cpfValido(String cpf) {
+    final c = cpf.replaceAll(RegExp(r'\D'), '');
+    if (c.length != 11) return false;
+    if (RegExp(r'^(\d)\1{10}$').hasMatch(c)) return false; // todos iguais
+    int soma = 0;
+    for (int i = 0; i < 9; i++) soma += int.parse(c[i]) * (10 - i);
+    int r = (soma * 10) % 11;
+    if (r == 10 || r == 11) r = 0;
+    if (r != int.parse(c[9])) return false;
+    soma = 0;
+    for (int i = 0; i < 10; i++) soma += int.parse(c[i]) * (11 - i);
+    r = (soma * 10) % 11;
+    if (r == 10 || r == 11) r = 0;
+    return r == int.parse(c[10]);
+  }
+
   // -- Busca CEP via ViaCEP --------------------------------------------------
   Future<void> _buscarCep() async {
     final cep = _cepCtrl.text.replaceAll(RegExp(r'\D'), '');
@@ -304,7 +321,7 @@ class _BuyScreenState extends State<BuyScreen> {
         commissionCents:  comissaoCents,
         customerName:     _nomeCtrl.text.trim(),
         customerEmail:    _emailCtrl.text.trim(),
-        customerCpf:      _cpfCtrl.text.trim(),
+        customerCpf:      _cpfCtrl.text.replaceAll(RegExp(r'\D'), ''),
         customerPhone:    _celularCtrl.text.trim().isNotEmpty ? _celularCtrl.text.trim() : null,
         comment:          _product!.nome,
         onError:          mostrarErro,
@@ -543,9 +560,12 @@ class _BuyScreenState extends State<BuyScreen> {
               Expanded(child: _field(_cpfCtrl, 'CPF *', Icons.badge_rounded,
                   hint: '000.000.000-00',
                   keyboard: TextInputType.number,
-                  validator: (v) =>
-                      v!.replaceAll(RegExp(r'\D'), '').length < 11
-                          ? 'CPF inválido' : null)),
+                  validator: (v) {
+                    final d = v!.replaceAll(RegExp(r'\D'), '');
+                    if (d.length < 11) return 'CPF inválido';
+                    if (!_cpfValido(d)) return 'CPF inválido';
+                    return null;
+                  })),
               const SizedBox(width: 10),
               Expanded(child: _field(_nascCtrl, 'Nascimento *', Icons.cake_rounded,
                   hint: 'DD/MM/AAAA',
