@@ -61,28 +61,17 @@ void main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
-    // Web: configuração crítica para evitar loop de WebChannel no Firestore.
-    // PROBLEMA: webExperimentalAutoDetectLongPolling faz GET repetidos ao
-    // Listen/channel → loop infinito de requests → splash travada 2+ minutos.
-    // SOLUÇÃO: webExperimentalForceLongPolling → protocolo estável desde o início.
-    // Aplica em AMBOS os bancos: (default) e affiliatewalletwallet.
+    // Web: configura o banco (default) com long-polling.
+    // NÃO inicializa o banco 'affiliatewalletwallet' aqui pois abriria conexão
+    // antes do login → Firestore Rules rejeitaria (auth == null) →
+    // SDK reportaria "Backend didn't respond within 10 seconds".
+    // O banco customizado é inicializado lazily nos serviços quando necessário
+    // (após o usuário estar autenticado via FirebaseAuth).
     if (kIsWeb) {
-      // Banco padrão (default) — usado por firebase_auth, etc.
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: false,
         webExperimentalForceLongPolling: true,
       );
-      // Banco customizado (affiliatewalletwallet) — usado por todos os serviços
-      // Configura aqui para garantir que o SDK use long-polling antes de qualquer query.
-      try {
-        FirebaseFirestore.instanceFor(
-          app: Firebase.app(),
-          databaseId: 'affiliatewalletwallet',
-        ).settings = const Settings(
-          persistenceEnabled: false,
-          webExperimentalForceLongPolling: true,
-        );
-      } catch (_) {}
     }
   } catch (e) {
     debugPrint('[Firebase] Erro ao inicializar: $e');
