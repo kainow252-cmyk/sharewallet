@@ -16,8 +16,7 @@ import '../../services/cf_api_service.dart';
 import '../../services/woovi_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html show FileUploadInputElement, FileReader, window;
+import '../../utils/html_utils.dart';
 
 // --- Chaves para auto-fill ----------------------------------------------------
 const _kNome     = 'buyer_nome';
@@ -845,16 +844,8 @@ class _BuyScreenState extends State<BuyScreen> {
                       hasPhoto: hasPhoto,
                       onPickPhoto: () async {
                         try {
-                          final input = html.FileUploadInputElement()
-                            ..accept = 'image/*,application/pdf'
-                            ..click();
-                          await input.onChange.first;
-                          final file = input.files?.first;
-                          if (file == null) return;
-                          final reader = html.FileReader();
-                          reader.readAsDataUrl(file);
-                          await reader.onLoad.first;
-                          final result = reader.result as String?;
+                          final result = await pickFileAsDataUrl(
+                              accept: 'image/*,application/pdf');
                           if (result != null && mounted) {
                             setState(() => _customPhotoData[f.key] = result);
                           }
@@ -3479,27 +3470,8 @@ class _DocUploadStepState extends State<_DocUploadStep> {
   Future<void> _captureGeo() async {
     setState(() => _loading['geolocalizacao'] = true);
     try {
-      final completer = Completer<Map<String, dynamic>>();
-
-      // Usa JS interop para chamar navigator.geolocation.getCurrentPosition
-      // ignore: undefined_prefixed_name
-      html.window.navigator.geolocation.getCurrentPosition(
-        maximumAge: Duration.zero,
-        timeout: const Duration(seconds: 15),
-        enableHighAccuracy: true,
-      ).then((pos) {
-        completer.complete({
-          'lat': pos.coords!.latitude,
-          'lng': pos.coords!.longitude,
-          'acc': pos.coords!.accuracy,
-          'ts': DateTime.now().toIso8601String(),
-        });
-      }).catchError((dynamic e) {
-        // e é um GeolocationPositionError com código 1=PERMISSION_DENIED 2=UNAVAILABLE 3=TIMEOUT
-        completer.completeError(e);
-      });
-
-      final coords = await completer.future;
+      final coords = await getCurrentGeoPosition();
+      if (coords == null) throw Exception('Localização não disponível');
       final value = json.encode(coords);
       if (mounted) setState(() => _docs['geolocalizacao'] = value);
     } catch (e) {
@@ -3528,15 +3500,8 @@ class _DocUploadStepState extends State<_DocUploadStep> {
   Future<void> _pickImageWeb(String docKey) async {
     setState(() => _loading[docKey] = true);
     try {
-      final input = html.FileUploadInputElement()..accept = 'image/*';
-      input.click();
-      await input.onChange.first;
-      if (input.files == null || input.files!.isEmpty) return;
-      final file = input.files![0];
-      final reader = html.FileReader();
-      reader.readAsDataUrl(file);
-      await reader.onLoad.first;
-      final result = reader.result as String;
+      final result = await pickFileAsDataUrl(accept: 'image/*');
+      if (result == null) return;
       if (mounted) setState(() => _docs[docKey] = result);
     } catch (_) {
       if (mounted) {
