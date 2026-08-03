@@ -1,2 +1,20 @@
+# ── Arquivos estáticos Flutter — NÃO redirecionar ────────────────────────────
+# JS, JSON, CSS, assets e recursos do Flutter devem ser servidos diretamente
+/app/flutter_bootstrap.js         /app/flutter_bootstrap.js         200
+/app/flutter.js                   /app/flutter.js                   200
+/app/flutter_service_worker.js    /app/flutter_service_worker.js    200
+/app/main.dart.js                 /app/main.dart.js                 200
+/app/pwa_install.js               /app/pwa_install.js               200
+/app/sw_version.js                /app/sw_version.js                200
+/app/manifest.json                /app/manifest.json                200
+/app/manifest-admin.json          /app/manifest-admin.json          200
+/app/version.json                 /app/version.json                 200
+/app/favicon.ico                  /app/favicon.ico                  200
+/app/favicon.png                  /app/favicon.png                  200
+/app/assets/*                     /app/assets/:splat                200
+/app/canvaskit/*                  /app/canvaskit/:splat             200
+/app/icons/*                      /app/icons/:splat                 200
+
+# ── SPA fallback — apenas rotas de navegação ─────────────────────────────────
 /app/*  /app/index.html  200
 /*      /app/index.html  200
