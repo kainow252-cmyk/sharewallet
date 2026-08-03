@@ -1,22 +1,14 @@
-# ── Arquivos estáticos Flutter — servir DIRETAMENTE, sem redirecionar ──────────
-# IMPORTANTE: estas regras devem vir ANTES do fallback /app/*
-# O Cloudflare Pages processa regras de cima para baixo e para na primeira correspondência
+# Cloudflare Pages _redirects
+#
+# Estratégia:
+#  1. Raiz → redireciona para /app/
+#  2. /app/ sem extensão → SPA fallback para index.html (navegação Flutter)
+#  3. Arquivos com extensão (.js .json .png etc.) → servidos diretamente pelo Pages
+#     (NÃO precisam de regra — o Pages serve automaticamente)
 
-/app/flutter_bootstrap.js       /app/flutter_bootstrap.js       200
-/app/flutter.js                 /app/flutter.js                 200
-/app/flutter_service_worker.js  /app/flutter_service_worker.js  200
-/app/main.dart.js               /app/main.dart.js               200
-/app/pwa_install.js             /app/pwa_install.js             200
-/app/sw_version.js              /app/sw_version.js              200
-/app/manifest.json              /app/manifest.json              200
-/app/manifest-admin.json        /app/manifest-admin.json        200
-/app/version.json               /app/version.json               200
-/app/favicon.ico                /app/favicon.ico                200
-/app/favicon.png                /app/favicon.png                200
-/app/assets/*                   /app/assets/:splat              200
-/app/canvaskit/*                /app/canvaskit/:splat           200
-/app/icons/*                    /app/icons/:splat               200
+# Raiz → app
+/  /app/index.html  301
 
-# ── SPA fallback — SOMENTE para rotas de navegação (sem extensão) ──────────────
-/app/*  /app/index.html  200
-/       /app/index.html  301
+# SPA fallback para rotas de navegação Flutter (sem extensão de arquivo)
+# O Pages serve arquivos estáticos automaticamente antes de checar _redirects
+/app/  /app/index.html  200
