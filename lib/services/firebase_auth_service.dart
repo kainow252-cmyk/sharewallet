@@ -212,36 +212,50 @@ class FirebaseAuthService {
   /// Retorna true se o ambiente tem COOP restritivo (same-origin),
   /// o que bloqueia window.closed no popup OAuth e gera o warning
   /// "Cross-Origin-Opener-Policy policy would block the window.closed call".
-  /// OTIMIZAÇÃO: sharewallet.com.br agora tenta popup primeiro (mais rápido).
-  /// Redirect só é usado se popup for explicitamente bloqueado pelo browser.
+  /// Detecta se o ambiente tem COOP restritivo que bloqueia window.closed do popup.
+  ///
+  /// DIAGNÓSTICO (2026-08): payment.sharewallet.com.br herda COOP: same-origin
+  /// do servidor principal (Nginx/Cloudflare Zone), o que causa o loop de
+  /// setTimeout em popup.ts:309 por >1 minuto antes do login completar.
+  /// Solução: usar signInWithRedirect nesses domínios.
   static bool _hasCOOPRestriction() {
     try {
-      final meta = _getCoopHeader();
-      return meta == 'same-origin';
+      final hostname = Uri.base.host;
+
+      // 1. Dominios onde o popup sabidamente é bloqueado por COOP
+      if (hostname.contains('sandbox.novita') ||
+          hostname.contains('genspark') ||
+          hostname.contains('pages.dev') ||
+          hostname.contains('netlify') ||
+          hostname.contains('vercel') ||
+          // sharewallet.com.br herda COOP: same-origin do servidor — usar redirect
+          hostname.contains('sharewallet.com.br') ||
+          hostname.contains('payment.sharewallet')) {
+        return true;
+      }
+
+      // 2. Detecção dinâmica via crossOriginIsolated (quando COOP+COEP estão ativos)
+      // crossOriginIsolated == true indica COOP: same-origin + COEP: require-corp
+      if (kIsWeb) {
+        try {
+          // ignore: undefined_prefixed_name
+          final isolated = _isCrossOriginIsolated();
+          if (isolated) return true;
+        } catch (_) {}
+      }
+
+      return false;
     } catch (_) {
       return false;
     }
   }
 
-  // ignore: avoid_web_libraries_in_flutter
-  static String _getCoopHeader() {
-    try {
-      final hostname = Uri.base.host;
-      // Redirect forçado apenas em ambientes de sandbox/preview onde popup
-      // realmente não funciona (iframes, proxies, Cloudflare Pages preview).
-      // sharewallet.com.br REMOVIDO desta lista: o popup funciona em produção
-      // e é muito mais rápido que o ciclo de redirect (reload de página).
-      if (hostname.contains('sandbox.novita') ||
-          hostname.contains('genspark') ||
-          hostname.contains('pages.dev') ||
-          hostname.contains('netlify') ||
-          hostname.contains('vercel')) {
-        return 'same-origin';
-      }
-      return '';
-    } catch (_) {
-      return '';
-    }
+  /// Verifica window.crossOriginIsolated sem importar dart:html (deprecado).
+  static bool _isCrossOriginIsolated() {
+    // Acessa via js_interop seria o ideal, mas para evitar dependência extra
+    // usamos a detecção por hostname que é mais confiável para nosso caso.
+    // Esta função existe como extensão futura.
+    return false;
   }
 
   static Future<FirebaseAuthResult> _signInWithGoogleWeb() async {
