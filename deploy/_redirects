@@ -1,14 +1,14 @@
 # Cloudflare Pages _redirects
+# Raiz do Pages = deploy/
 #
 # Estratégia:
 #  1. Raiz → redireciona para /app/
-#  2. /app/ sem extensão → SPA fallback para index.html (navegação Flutter)
-#  3. Arquivos com extensão (.js .json .png etc.) → servidos diretamente pelo Pages
-#     (NÃO precisam de regra — o Pages serve automaticamente)
+#  2. SPA fallback: rotas Flutter /app/* sem extensão → index.html
+#  3. Arquivos com extensão (.js .json .png .wasm etc.) são servidos diretamente
+#     pelo Pages ANTES de checar _redirects — NÃO precisam de regra.
 
 # Raiz → app
 /  /app/index.html  301
 
 # SPA fallback para rotas de navegação Flutter (sem extensão de arquivo)
-# O Pages serve arquivos estáticos automaticamente antes de checar _redirects
-/app/  /app/index.html  200
+/app/*  /app/index.html  200

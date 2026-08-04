@@ -1,1 +1,11 @@
-/*  /app/index.html  200
+# Cloudflare Pages _redirects
+# Raiz do Pages = deploy/app/
+#
+# REGRA: arquivos com extensão (.js, .json, .png, .wasm, etc.) são servidos
+# diretamente pelo Pages ANTES de checar _redirects — NÃO precisam de regra aqui.
+#
+# Este fallback só é acionado para rotas SPA sem extensão de arquivo
+# (ex: /login, /dashboard, /profile — navegação interna do Flutter).
+
+# SPA fallback: rotas Flutter sem extensão → index.html
+/*  /index.html  200
