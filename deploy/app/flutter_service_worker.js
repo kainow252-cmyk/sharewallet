@@ -42,7 +42,6 @@ self.addEventListener('activate', function(event) {
   );
 });
 
-// Não intercepta fetch — deixa tudo passar direto para o servidor
-self.addEventListener('fetch', function(event) {
-  // Passthrough — não cacheia nada
-});
+// Sem listener 'fetch' — SW suicida não precisa interceptar requests.
+// Registrar um listener vazio causaria Chrome warning "No-op fetch handler"
+// e overhead desnecessário em todas as navegações.

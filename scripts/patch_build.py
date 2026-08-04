@@ -15,6 +15,9 @@ Patches aplicados:
   4. Copia web/pwa_install.js para build/web/pwa_install.js
   5. Copia web/sw_version.js para build/web/sw_version.js (com APP_VERSION injetada)
      → O SW de versão detecta novos deploys e exibe banner "Atualizar app"
+  6. Injeta redirect pages.dev → payment.sharewallet.com.br no index.html
+     → Impede usuários de usar a URL interna do Cloudflare Pages diretamente.
+     → Resolve problema de referer "pages.dev" no MercadoPago SDK.
 """
 
 import re
@@ -70,6 +73,61 @@ def patch_bootstrap():
         print('OK: flutter_bootstrap.js — serviceWorkerSettings removido')
     else:
         print('SKIP: flutter_bootstrap.js — já sem serviceWorkerSettings ou padrão não encontrado')
+
+
+def patch_index_redirect():
+    """
+    Injeta um script de redirect no index.html pós-build para redirecionar
+    acessos diretos ao domínio pages.dev para payment.sharewallet.com.br.
+
+    Por que isso é necessário:
+    - O Cloudflare Pages expõe automaticamente a URL *.pages.dev
+    - Usuários que acessam sharewallet-app.pages.dev diretamente ficam num
+      domínio "interno" — o MercadoPago SDK captura esse referer e pode
+      bloquear transações (referer não está na allowlist do MP)
+    - Redirect 301 via JS garante que qualquer acesso direto ao pages.dev
+      seja transparentemente redirecionado para o domínio de produção
+
+    O script é injetado ANTES do primeiro <script> existente para garantir
+    que execute antes de qualquer carregamento de SDK externo (MP, Firebase).
+    """
+    path = os.path.join(BUILD_DIR, 'index.html')
+    if not os.path.exists(path):
+        print(f'SKIP: {path} not found')
+        return
+
+    with open(path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Já foi injetado? Idempotente.
+    if 'sharewallet-app.pages.dev' in content:
+        print('SKIP: index.html — redirect pages.dev já presente')
+        return
+
+    redirect_script = '''\n  <script>
+    // Redireciona acessos diretos ao domínio pages.dev para o domínio de produção.
+    // Razão: o pages.dev é a URL interna do Cloudflare Pages — usuários devem usar
+    // payment.sharewallet.com.br (ou sharewallet.com.br/app/).
+    // Além disso, o MercadoPago SDK captura o referer, e "pages.dev" pode causar
+    // problemas de allowlist no MP. Redirect garante domínio correto sempre.
+    (function() {
+      var host = window.location.hostname;
+      if (host === 'sharewallet-app.pages.dev' || host.endsWith('.sharewallet-app.pages.dev')) {
+        var newUrl = 'https://payment.sharewallet.com.br' + window.location.pathname + window.location.search + window.location.hash;
+        window.location.replace(newUrl);
+      }
+    })();
+  </script>'''
+
+    # Injeta logo após a tag <head> (antes de qualquer outro script)
+    patched = content.replace('<head>', '<head>' + redirect_script, 1)
+
+    if patched != content:
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(patched)
+        print('OK: index.html — redirect pages.dev → payment.sharewallet.com.br injetado')
+    else:
+        print('SKIP: index.html — tag <head> não encontrada, redirect não injetado')
 
 
 def deploy_kill_switch_sw():
@@ -154,6 +212,7 @@ def deploy_version_sw():
 
 if __name__ == '__main__':
     patch_bootstrap()
+    patch_index_redirect()
     deploy_kill_switch_sw()
     copy_headers()
     copy_pwa_install()

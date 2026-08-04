@@ -7,7 +7,7 @@
  * APP_VERSION é injetada pelo patch_build.py a cada deploy.
  */
 
-var APP_VERSION   = '20260804-0127-02a8ae';
+var APP_VERSION   = '20260804-0136-02a8ae';
 var VERSION_CACHE = 'sw-ver-v1';
 
 /* ── Install: ativa imediatamente ─────────────────────────── */

@@ -2,6 +2,20 @@
 <html>
 <head>
   <script>
+    // Redireciona acessos diretos ao domínio pages.dev para o domínio de produção.
+    // Razão: o pages.dev é a URL interna do Cloudflare Pages — usuários devem usar
+    // payment.sharewallet.com.br (ou sharewallet.com.br/app/).
+    // Além disso, o MercadoPago SDK captura o referer, e "pages.dev" pode causar
+    // problemas de allowlist no MP. Redirect garante domínio correto sempre.
+    (function() {
+      var host = window.location.hostname;
+      if (host === 'sharewallet-app.pages.dev' || host.endsWith('.sharewallet-app.pages.dev')) {
+        var newUrl = 'https://payment.sharewallet.com.br' + window.location.pathname + window.location.search + window.location.hash;
+        window.location.replace(newUrl);
+      }
+    })();
+  </script>
+  <script>
     // Desregistra TODOS os Service Workers e limpa TODOS os caches do browser.
     // O Service Worker do Flutter causa "prepareServiceWorker took more than 4000ms"
     // quando uma nova versão do app é deployada (SW antigo ainda está ativo).
