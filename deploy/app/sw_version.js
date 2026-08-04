@@ -7,7 +7,7 @@
  * APP_VERSION é injetada pelo patch_build.py a cada deploy.
  */
 
-var APP_VERSION   = '20260804-0136-02a8ae';
+var APP_VERSION   = '20260804-0140-02a8ae';
 var VERSION_CACHE = 'sw-ver-v1';
 
 /* ── Install: ativa imediatamente ─────────────────────────── */
@@ -37,11 +37,10 @@ self.addEventListener('activate', function(e) {
   );
 });
 
-/* ── Fetch: OBRIGATÓRIO para Chrome disparar beforeinstallprompt ── */
-/* NUNCA intercepta: não cacheia, não retorna 503, passa tudo direto para a rede. */
-/* Anteriormente o catch retornava Response(503) que bloqueava arquivos .wasm grandes. */
-self.addEventListener('fetch', function(e) {
-  // Passthrough total — não intercepta nem altera nada.
-  // O Chrome só dispara beforeinstallprompt se houver um fetch handler registrado.
-  // Mas NÃO usamos e.respondWith() para não atrasar nem causar 503 em recursos grandes.
-});
+/* ── Fetch: NÃO registrado intencionalmente ───────────────── */
+// Chrome removeu em Dez/2023 a exigência de fetch handler para disparar
+// beforeinstallprompt. Manter um listener vazio apenas gera o warning:
+// "Fetch event handler is recognized as no-op. No-op fetch handler may
+// bring overhead during navigation."
+// Referência: https://developer.chrome.com/blog/update-install-criteria
+// O SW continua funcional para auto-update (install + activate acima).
