@@ -1,11 +1,38 @@
 # Cloudflare Pages _redirects
-# Raiz do Pages = deploy/app/
+# Raiz do Pages = deploy/app/ (arquivos Flutter em /)
 #
-# REGRA: arquivos com extensão (.js, .json, .png, .wasm, etc.) são servidos
-# diretamente pelo Pages ANTES de checar _redirects — NÃO precisam de regra aqui.
+# DNS: payment.sharewallet.com.br CNAME sharewallet-app.pages.dev (sem proxy)
+# Requests chegam como /app/arquivo.js → Pages não encontra (arquivo está em /)
 #
-# Este fallback só é acionado para rotas SPA sem extensão de arquivo
-# (ex: /login, /dashboard, /profile — navegação interna do Flutter).
-
+# SOLUÇÃO: redirecionar /app/* → /* para arquivos estáticos
 # SPA fallback: rotas Flutter sem extensão → index.html
-/*  /index.html  200
+
+# Redirecionar /app/assets/* → /assets/* (arquivos de assets)
+/app/assets/*  /assets/:splat  200
+
+# Redirecionar /app/canvaskit/* → /canvaskit/*
+/app/canvaskit/*  /canvaskit/:splat  200
+
+# Redirecionar /app/icons/* → /icons/*
+/app/icons/*  /icons/:splat  200
+
+# Redirecionar arquivos estáticos com extensão /app/*.js → /*.js etc
+/app/flutter_bootstrap.js  /flutter_bootstrap.js  200
+/app/main.dart.js  /main.dart.js  200
+/app/flutter.js  /flutter.js  200
+/app/flutter_service_worker.js  /flutter_service_worker.js  200
+/app/sw_version.js  /sw_version.js  200
+/app/pwa_install.js  /pwa_install.js  200
+/app/manifest.json  /manifest.json  200
+/app/manifest-admin.json  /manifest-admin.json  200
+/app/favicon.png  /favicon.png  200
+/app/favicon.ico  /favicon.ico  200
+/app/version.json  /version.json  200
+
+# SPA fallback: /app/ e rotas Flutter sem extensão → index.html
+/app  /index.html  200
+/app/  /index.html  200
+/app/*  /index.html  200
+
+# Raiz → /app/
+/  /index.html  301
