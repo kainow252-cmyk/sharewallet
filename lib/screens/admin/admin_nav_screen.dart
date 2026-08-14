@@ -12,6 +12,7 @@ import 'admin_woovi_settings_screen.dart';
 import 'admin_sales_screen.dart';
 import 'admin_reports_screen.dart';
 import 'admin_reset_screen.dart';
+import 'admin_chat_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cores do tema admin (verde escuro profissional)
@@ -56,6 +57,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     _NavItem(icon: Icons.receipt_long_rounded,            label: 'Vendas'),
     _NavItem(icon: Icons.payment_rounded,                 label: 'Pagamentos'),
     _NavItem(icon: Icons.assessment_rounded,              label: 'Relatórios'),
+    _NavItem(icon: Icons.chat_bubble_rounded,             label: 'Chat'),
     _NavItem(icon: Icons.delete_sweep_rounded,            label: 'Reset', isReset: true),
   ];
 
@@ -71,6 +73,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
       child: const AdminWooviSettingsScreen(),
     ),
     const AdminReportsScreen(),
+    const AdminChatScreen(),
     const AdminResetScreen(),
   ];
 
@@ -90,7 +93,8 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
       case 3: s.loadSubscriptions(); break;
       case 4: s.loadWithdrawals(); break;
       case 5: s.loadSales(); break;
-      case 8: break;
+      case 8: break; // Chat — sem refresh do AdminService
+      case 9: break; // Reset
       default: s.loadAll(); break;
     }
   }
@@ -276,7 +280,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
             const SizedBox(width: 8),
           ],
           Text(
-            _items[_selectedIndex].label,
+            _selectedIndex < _items.length ? _items[_selectedIndex].label : '',
             style: const TextStyle(
                 color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700),
           ),
