@@ -28,7 +28,6 @@ import 'screens/wallet/extrato_screen.dart';
 import 'screens/wallet/saque_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/indicacoes/indicacoes_screen.dart';
-import 'screens/ranking/ranking_screen.dart';
 import 'screens/products/products_screen.dart';
 import 'screens/products/my_subscriptions_screen.dart';
 import 'screens/admin/admin_login_screen.dart';
@@ -185,7 +184,6 @@ class ShareWalletApp extends StatelessWidget {
           '/products': (_) => const ProductsScreen(),
           '/carteira': (_) => const CarteiraScreen(),
           '/indicacoes': (_) => const IndicacoesScreen(),
-          '/ranking': (_) => const RankingScreen(),
           '/extrato': (_) => const ExtratoScreen(),
           '/saque': (_) => const SaqueScreen(),
           '/profile': (_) => const ProfileScreen(),

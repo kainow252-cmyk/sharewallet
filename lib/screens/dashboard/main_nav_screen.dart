@@ -7,7 +7,6 @@ import 'home_screen.dart';
 import '../products/products_screen.dart';
 import '../wallet/carteira_screen.dart';
 import '../indicacoes/indicacoes_screen.dart';
-import '../ranking/ranking_screen.dart';
 import '../chat/chat_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -53,9 +52,8 @@ class _MainNavScreenState extends State<MainNavScreen> {
     ProductsScreen(),   // 1
     CarteiraScreen(),   // 2
     IndicacoesScreen(), // 3
-    RankingScreen(),    // 4
-    ChatScreen(),       // 5
-    ProfileScreen(),    // 6
+    ChatScreen(),       // 4
+    ProfileScreen(),    // 5
   ];
 
   final List<_NavItem> _navItems = const [
@@ -165,7 +163,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
 class _BottomNavWithBadge extends StatelessWidget {
   final int currentIndex;
   final List<_NavItem> items;
-  final int chatBadge;   // contagem de mensagens não lidas (índice 5)
+  final int chatBadge;   // contagem de mensagens não lidas (índice 4)
   final void Function(int) onTap;
 
   const _BottomNavWithBadge({
@@ -199,15 +197,13 @@ class _BottomNavWithBadge extends StatelessWidget {
               final isActive = currentIndex == i;
 
               // Cores por aba:
-              // 4 = Ranking (amarelo), 5 = Chat (azul claro), demais = primary
+              // 4 = Chat (azul claro), demais = primary
               final Color activeColor = i == 4
-                  ? const Color(0xFFFFD740)
-                  : i == 5
-                      ? const Color(0xFF29B6F6)
-                      : AppColors.primary;
+                  ? const Color(0xFF29B6F6)
+                  : AppColors.primary;
 
-              // Badge de não lidas somente no Chat (índice 5)
-              final bool showBadge = i == 5 && chatBadge > 0;
+              // Badge de não lidas somente no Chat (índice 4)
+              final bool showBadge = i == 4 && chatBadge > 0;
 
               return Expanded(
                 child: GestureDetector(
