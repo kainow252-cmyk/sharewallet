@@ -209,43 +209,53 @@ class _BuyScreenState extends State<BuyScreen> {
     }
   }
 
-  // -- Busca cliente no banco por CPF + data nascimento ----------------------
+  // -- Busca cliente no banco por CPF (somente CPF — sem exigir data nascimento) --
   Future<void> _buscarClienteBanco() async {
-    final cpf  = _cpfCtrl.text.replaceAll(RegExp(r'\D'), '');
-    final nasc = _nascCtrl.text.trim();
+    final cpf = _cpfCtrl.text.replaceAll(RegExp(r'\D'), '');
 
-    // Só busca se CPF válido (11 dígitos + dígito verificador) E data no formato correto
-    if (!_cpfValido(cpf)) return;
-    if (!RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(nasc)) return;
+    // Só busca quando CPF tiver 11 dígitos válidos
+    if (!_cpfValido(cpf)) {
+      if (_clienteEncontrado) {
+        setState(() { _clienteEncontrado = false; _clienteNomeBanco = ''; });
+      }
+      return;
+    }
+
+    // Evita busca duplicada se já encontrou com esse CPF
+    if (_clienteEncontrado && _clienteNomeBanco.isNotEmpty) return;
 
     setState(() { _buscandoCliente = true; });
     try {
-      final nascEnc = Uri.encodeComponent(nasc);
       final resp = await http
-          .get(Uri.parse('$_workerBase/api/customer?cpf=$cpf&nasc=$nascEnc'))
+          .get(Uri.parse('$_workerBase/api/customer?cpf=$cpf'))
           .timeout(const Duration(seconds: 8));
 
       if (!mounted) return;
 
       if (resp.statusCode == 200) {
         final body = jsonDecode(resp.body) as Map<String, dynamic>;
-        if (body['found'] == true) {
-          final c = body['customer'] as Map<String, dynamic>;
+        // Suporta tanto { found, customer } quanto { success, result: { found, customer } }
+        final data = (body['result'] as Map<String, dynamic>?) ?? body;
+        if (data['found'] == true) {
+          final c = data['customer'] as Map<String, dynamic>? ?? {};
           setState(() {
-            _clienteEncontrado  = true;
-            _clienteNomeBanco   = c['nome'] as String? ?? '';
-            // Preenche apenas os campos que estiverem vazios ou com dados do banco
+            _clienteEncontrado = true;
+            _clienteNomeBanco  = c['nome'] as String? ?? '';
+            // Preenche todos os campos — sobrescreve só se o campo estiver vazio
             if (_nomeCtrl.text.trim().isEmpty)    _nomeCtrl.text    = c['nome']     as String? ?? '';
             if (_emailCtrl.text.trim().isEmpty)   _emailCtrl.text   = c['email']    as String? ?? '';
             if (_celularCtrl.text.trim().isEmpty) _celularCtrl.text = _formatarTel(c['telefone'] as String? ?? '');
             if (_cepCtrl.text.trim().isEmpty)     _cepCtrl.text     = _formatarCep(c['cep']      as String? ?? '');
             if (_ruaCtrl.text.trim().isEmpty)     _ruaCtrl.text     = c['rua']      as String? ?? '';
+            if (_numeroCtrl.text.trim().isEmpty)  _numeroCtrl.text  = c['numero']   as String? ?? '';
+            if (_compCtrl.text.trim().isEmpty)    _compCtrl.text    = c['complemento'] as String? ?? '';
             if (_bairroCtrl.text.trim().isEmpty)  _bairroCtrl.text  = c['bairro']   as String? ?? '';
             if (_cidadeCtrl.text.trim().isEmpty)  _cidadeCtrl.text  = c['cidade']   as String? ?? '';
             if (_estadoCtrl.text.trim().isEmpty)  _estadoCtrl.text  = (c['estado']  as String? ?? '').toUpperCase();
           });
-          // Disparar busca de CEP se rua veio vazia mas CEP veio preenchido
-          if (_ruaCtrl.text.trim().isEmpty && _cepCtrl.text.replaceAll(RegExp(r'\D'), '').length == 8) {
+          // Se endereço veio incompleto mas CEP veio — busca via ViaCEP
+          final cepDigits = _cepCtrl.text.replaceAll(RegExp(r'\D'), '');
+          if (_ruaCtrl.text.trim().isEmpty && cepDigits.length == 8) {
             _buscarCep();
           }
         } else {
@@ -258,6 +268,7 @@ class _BuyScreenState extends State<BuyScreen> {
       if (mounted) setState(() { _buscandoCliente = false; });
     }
   }
+
 
   // -- Salva cliente no banco após compra bem-sucedida ----------------------
   Future<void> _salvarClienteBanco() async {
@@ -646,7 +657,7 @@ class _BuyScreenState extends State<BuyScreen> {
             _sectionTitle(Icons.manage_search_rounded, 'Identificação'),
             const SizedBox(height: 8),
             Text(
-              'Preencha CPF e data de nascimento — se você já é cliente, seus dados serão preenchidos automaticamente!',
+              'Digite o CPF — se você já é cliente, seus dados serão preenchidos automaticamente!',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 12),
@@ -670,8 +681,7 @@ class _BuyScreenState extends State<BuyScreen> {
                 child: _field(_nascCtrl, 'Nascimento *', Icons.cake_rounded,
                     hint: 'DD/MM/AAAA',
                     keyboard: TextInputType.datetime,
-                    validator: (v) => v!.trim().isEmpty ? 'Obrigatório' : null,
-                    onChanged: (_) => _buscarClienteBanco()),
+                    validator: (v) => v!.trim().isEmpty ? 'Obrigatório' : null),
               ),
               if (_buscandoCliente) ...[                          // spinner enquanto busca
                 const SizedBox(width: 10),
