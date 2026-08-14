@@ -5,6 +5,7 @@ import '../models/user_model.dart';
 import 'firebase_user_service.dart';
 import 'firebase_auth_service.dart';
 import 'api_service.dart';
+import '../utils/web_utils.dart';
 
 class AuthService extends ChangeNotifier {
   UserModel? _currentUser;
@@ -26,6 +27,37 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // ── FIX 3: localStorage UID ──────────────────────────────────────────────────
+      // O IndexedDB do Firebase pode demorar até 2s para hidratar na abertura
+      // da PWA. Durante esse período, authStateChanges() emite null primeiro.
+      // Guardamos o UID no localStorage como "hint" — se está lá, significa
+      // que o usuário JÁ estava logado, e podemos montar um UserModel mínimo
+      // IMEDIATAMENTE enquanto aguardamos a hidratação real do Firebase.
+      final cachedUid = kIsWeb ? getLocalStorageValue(_kUidKey) : null;
+      final cachedEmail = kIsWeb ? getLocalStorageValue(_kEmailKey) : null;
+      final cachedNome = kIsWeb ? getLocalStorageValue(_kNomeKey) : null;
+
+      if (cachedUid != null && cachedUid.isNotEmpty) {
+        if (kDebugMode) {
+          debugPrint('[AuthService] PWA: UID cached no localStorage — acesso instantâneo');
+        }
+        // Monta UserModel mínimo ANTES do Firebase hidratar — UI não trava na splash
+        _currentUser = UserModel(
+          id: cachedUid,
+          nome: cachedNome ?? cachedEmail?.split('@').first ?? 'Usuário',
+          cpf: '',
+          email: cachedEmail ?? '',
+          telefone: '',
+          affiliateCode: '',
+          saldo: 0.0,
+          createdAt: DateTime.now(),
+        );
+        _isLoading = false;
+        notifyListeners();
+        // Não retorna — continua para carregar perfil real em background abaixo
+      }
+      // ───────────────────────────────────────────────────────────────────
+
       // 1. Restaurar sessão Firebase via authStateChanges (CORRETO para Web)
       //
       // PROBLEMA com currentUser síncrono no Web:
@@ -49,22 +81,32 @@ class AuthService extends ChangeNotifier {
           debugPrint('[AuthService] Sessão restaurada via authStateChanges: ${firebaseUser.email}');
         }
 
-        // INSTANTÂNEO: monta UserModel mínimo com dados do Firebase Auth
-        // e retorna imediatamente — sem bloquear na splash esperando Firestore.
-        // Perfil completo (saldo, CPF, código afiliado) carrega em background
-        // e atualiza a UI via notifyListeners() quando chegar.
-        _currentUser = UserModel(
-          id: firebaseUser.uid,
-          nome: firebaseUser.displayName ?? firebaseUser.email!.split('@').first,
-          cpf: '',
-          email: firebaseUser.email ?? '',
-          telefone: '',
-          affiliateCode: '',
-          saldo: 0.0,
-          createdAt: DateTime.now(),
-        );
-        _isLoading = false;
-        notifyListeners();
+        // Grava/atualiza o UID no localStorage (FIX 3 — persiste para próxima abertura da PWA)
+        if (kIsWeb) {
+          setLocalStorageValue(_kUidKey, firebaseUser.uid);
+          if (firebaseUser.email != null) {
+            setLocalStorageValue(_kEmailKey, firebaseUser.email!);
+          }
+          if (firebaseUser.displayName != null) {
+            setLocalStorageValue(_kNomeKey, firebaseUser.displayName!);
+          }
+        }
+
+        // Se ainda não tem UserModel (cache miss), monta agora
+        if (_currentUser == null) {
+          _currentUser = UserModel(
+            id: firebaseUser.uid,
+            nome: firebaseUser.displayName ?? firebaseUser.email!.split('@').first,
+            cpf: '',
+            email: firebaseUser.email ?? '',
+            telefone: '',
+            affiliateCode: '',
+            saldo: 0.0,
+            createdAt: DateTime.now(),
+          );
+          _isLoading = false;
+          notifyListeners();
+        }
 
         // Background: carrega perfil completo do Firestore sem bloquear navegação
         FirebaseUserService.carregarUsuarioAtual()
@@ -72,12 +114,28 @@ class AuthService extends ChangeNotifier {
             .then((user) {
               if (user != null) {
                 _currentUser = user;
+                // Atualiza nome no localStorage com o nome real do Firestore
+                if (kIsWeb && user.nome.isNotEmpty) {
+                  setLocalStorageValue(_kNomeKey, user.nome);
+                }
                 notifyListeners();
               }
             })
             .catchError((_) {});
 
         return;
+      } else {
+        // Firebase confirmou: sem sessão válida — limpa cache local
+        if (kIsWeb && cachedUid != null) {
+          if (kDebugMode) {
+            debugPrint('[AuthService] Firebase: sem sessão — limpando localStorage UID');
+          }
+          removeLocalStorageValue(_kUidKey);
+          removeLocalStorageValue(_kEmailKey);
+          removeLocalStorageValue(_kNomeKey);
+          _currentUser = null;
+          notifyListeners();
+        }
       }
 
       // 2. Fallback: token local (apenas quando Firebase NÃO está ativo)
@@ -321,6 +379,12 @@ class AuthService extends ChangeNotifier {
     await FirebaseUserService.signOut();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_logged_in', false);
+    // FIX 3: limpa UID do localStorage ao fazer logout explicitamente
+    if (kIsWeb) {
+      removeLocalStorageValue(_kUidKey);
+      removeLocalStorageValue(_kEmailKey);
+      removeLocalStorageValue(_kNomeKey);
+    }
     notifyListeners();
   }
 
@@ -378,6 +442,11 @@ class AuthService extends ChangeNotifier {
 
   // -- Helpers privados ------------------------------------------------------
 
+  // Chaves do localStorage para persistência de UID entre aberturas da PWA
+  static const String _kUidKey = 'sw_auth_uid';
+  static const String _kEmailKey = 'sw_auth_email';
+  static const String _kNomeKey = 'sw_auth_nome';
+
   /// Firebase disponível quando o app está configurado com google-services.json.
   static bool get _isFirebaseMode {
     try {
@@ -390,6 +459,14 @@ class AuthService extends ChangeNotifier {
   Future<void> _saveLocalFlag() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_logged_in', true);
+    // FIX 3: persiste UID no localStorage para acelerar PWA na próxima abertura
+    if (kIsWeb && _currentUser != null) {
+      setLocalStorageValue(_kUidKey, _currentUser!.id);
+      setLocalStorageValue(_kEmailKey, _currentUser!.email);
+      if (_currentUser!.nome.isNotEmpty) {
+        setLocalStorageValue(_kNomeKey, _currentUser!.nome);
+      }
+    }
   }
 
   String _gerarCodigo(String seed) {

@@ -1,9 +1,21 @@
 /// Stub para plataformas não-web (Android, iOS, Desktop)
 /// Todas as funções retornam no-op ou null
 
+// ── sessionStorage ────────────────────────────────────────────────────────────
+
 String? getSessionStorageValue(String key) => null;
 
 void removeSessionStorageValue(String key) {}
+
+// ── localStorage (stub — no-op em mobile/desktop) ──────────────────────────
+
+String? getLocalStorageValue(String key) => null;
+
+void setLocalStorageValue(String key, String value) {}
+
+void removeLocalStorageValue(String key) {}
+
+// ── Utilitários de janela ─────────────────────────────────────────────────────
 
 void openUrlInNewTab(String url) {}
 

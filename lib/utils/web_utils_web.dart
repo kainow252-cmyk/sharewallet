@@ -3,6 +3,8 @@ import 'dart:html' as html;
 
 /// Implementação Web — usa dart:html
 
+// ── sessionStorage ────────────────────────────────────────────────────────────
+
 String? getSessionStorageValue(String key) {
   return html.window.sessionStorage[key];
 }
@@ -10,6 +12,35 @@ String? getSessionStorageValue(String key) {
 void removeSessionStorageValue(String key) {
   html.window.sessionStorage.remove(key);
 }
+
+// ── localStorage (persiste entre sessões / PWA relaunches) ───────────────────
+
+/// Lê um valor do localStorage. Retorna null se não existir ou em caso de erro.
+String? getLocalStorageValue(String key) {
+  try {
+    return html.window.localStorage[key];
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Grava um valor no localStorage.
+void setLocalStorageValue(String key, String value) {
+  try {
+    html.window.localStorage[key] = value;
+  } catch (_) {
+    // Ignora erros de storage cheio ou modo privado sem localStorage
+  }
+}
+
+/// Remove uma chave do localStorage.
+void removeLocalStorageValue(String key) {
+  try {
+    html.window.localStorage.remove(key);
+  } catch (_) {}
+}
+
+// ── Utilitários de janela ─────────────────────────────────────────────────────
 
 void openUrlInNewTab(String url) {
   html.window.open(url, '_blank');

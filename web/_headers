@@ -2,78 +2,80 @@
   X-Frame-Options: ALLOWALL
   Access-Control-Allow-Origin: *
 
+# index.html: sempre revalidar (nunca servir stale — contém versão do app)
 /index.html
   Content-Type: text/html; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Cache-Control: no-cache, must-revalidate
   Pragma: no-cache
-  Surrogate-Control: no-store
 
-/*.js
-  Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
-  Surrogate-Control: no-store
+# manifest.json: revalidar sempre (PWA precisa de versão fresca)
+/manifest.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: no-cache, must-revalidate
 
-/flutter_bootstrap.js
-  Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
-  Surrogate-Control: no-store
-
+# sw_version.js: sem cache (SW precisa checar atualização)
 /sw_version.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
+  Cache-Control: no-cache, must-revalidate
   Service-Worker-Allowed: /app/
 
+# flutter_service_worker.js (kill-switch): sem cache
 /flutter_service_worker.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
-  Surrogate-Control: no-store
+  Cache-Control: no-cache, must-revalidate
 
+# flutter_bootstrap.js: revalidar (ponto de entrada, muda a cada build)
+/flutter_bootstrap.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-cache, must-revalidate
+
+# flutter.js: revalidar (muda entre versões do Flutter SDK)
 /flutter.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
-  Surrogate-Control: no-store
+  Cache-Control: no-cache, must-revalidate
 
+# main.dart.js: CACHE LONGO — Flutter adiciona fingerprint hash no nome.
+# O arquivo NUNCA muda de conteúdo com o mesmo nome; a cada build o nome muda.
+# PWA PRECISA deste cache para abrir offline e ser instantâneo!
 /main.dart.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
-  Surrogate-Control: no-store
+  Cache-Control: public, max-age=31536000, immutable
 
+# pwa_install.js: revalidar (atualizado pelo patch_build.py)
+/pwa_install.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-cache, must-revalidate
+
+# Assets Flutter com hash no path (ex: /assets/xxx.sha256/...): imutáveis
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# CanvasKit: imutável
+/canvaskit/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Shaders: imutável
+/assets/shaders/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# WASM: imutável
 /*.wasm
   Content-Type: application/wasm
   Cache-Control: public, max-age=31536000, immutable
 
-/manifest.json
-  Content-Type: application/json; charset=utf-8
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
-  Surrogate-Control: no-store
-
-/icons/*
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
-  Surrogate-Control: no-store
-
-/favicon.png
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
-
+# FontManifest e AssetManifest: revalidar (muda a cada build)
 /assets/FontManifest.json
-  Cache-Control: no-store, no-cache, must-revalidate
+  Cache-Control: no-cache, must-revalidate
 
 /assets/AssetManifest.json
-  Cache-Control: no-store, no-cache, must-revalidate
+  Cache-Control: no-cache, must-revalidate
 
 /assets/AssetManifest.bin
-  Cache-Control: no-store, no-cache, must-revalidate
+  Cache-Control: no-cache, must-revalidate
 
-/canvaskit/*
-  Cache-Control: public, max-age=31536000, immutable
+# Ícones do PWA: cache longo (mudam raramente, nome versionado)
+/icons/*
+  Cache-Control: public, max-age=604800
 
-/assets/shaders/*
-  Cache-Control: public, max-age=31536000, immutable
+/favicon.png
+  Cache-Control: public, max-age=604800
