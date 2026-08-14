@@ -147,6 +147,27 @@ class CfApiService {
     return raw;
   }
 
+  // -- WITHDRAWAL CONFIG (limites globais de saque) --------------------------
+
+  static Future<Map<String, dynamic>> getWithdrawalConfig() async {
+    final res = await _get('/api/admin/withdrawal-config');
+    if (res is Map && res['config'] is Map) {
+      return Map<String, dynamic>.from(res['config'] as Map);
+    }
+    return {'min_saque': 0.0, 'max_saque': 0.0};
+  }
+
+  static Future<bool> saveWithdrawalConfig({
+    required double minSaque,
+    required double maxSaque,
+  }) async {
+    final res = await _post('/api/admin/withdrawal-config', {
+      'min_saque': minSaque,
+      'max_saque': maxSaque,
+    });
+    return res != null && res['success'] == true;
+  }
+
   // -- PRODUCTS --------------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> getProducts({bool all = false}) async {
