@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../services/app_config_service.dart';
 
 /// Landing Page — layout 100% adaptável à altura da tela.
 /// Usa LayoutBuilder + Column com Flexible/Expanded para
@@ -122,6 +124,7 @@ class _LandingScreenState extends State<LandingScreen>
                       scale: _ctaScale,
                       child: _CtaSection(
                         scale: scale,
+                        showCadastro: context.watch<AppConfigService>().loginConfig.loginCadastroPublico,
                         onCadastro: () =>
                             Navigator.pushNamed(context, '/register'),
                         onLogin: () =>
@@ -451,19 +454,21 @@ class _CtaSection extends StatelessWidget {
   final VoidCallback onCadastro;
   final VoidCallback onLogin;
   final double scale;
+  final bool showCadastro;
 
   const _CtaSection({
     required this.onCadastro,
     required this.onLogin,
     required this.scale,
+    this.showCadastro = true,
   });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Botão primário
-        SizedBox(
+        // Botão primário — só aparece se cadastro público está habilitado
+        if (showCadastro) SizedBox(
           width: double.infinity,
           height: 50 * scale,
           child: ElevatedButton(
@@ -495,9 +500,9 @@ class _CtaSection extends StatelessWidget {
           ),
         ),
 
-        SizedBox(height: 10 * scale),
+        if (showCadastro) SizedBox(height: 10 * scale),
 
-        // Botão secundário
+        // Botão secundário — "Já tenho uma conta" sempre visível
         SizedBox(
           width: double.infinity,
           height: 46 * scale,
@@ -524,9 +529,9 @@ class _CtaSection extends StatelessWidget {
           ),
         ),
 
-        SizedBox(height: 10 * scale),
+        if (showCadastro) SizedBox(height: 10 * scale),
 
-        Text(
+        if (showCadastro) Text(
           'Ao criar sua conta você concorda com nossos Termos de Uso.',
           textAlign: TextAlign.center,
           style: TextStyle(
