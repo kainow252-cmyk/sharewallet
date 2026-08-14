@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/admin_service.dart';
@@ -18,8 +20,11 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _search = '';
-  // null = todos os tipos, 'mensal' = pixRecorrente, 'unico' = pixAvulso
   String? _tipoFiltro;
+  DateTimeRange? _dateRange;
+
+  final _dtShort = DateFormat('dd/MM/yy');
+  final _dtFull  = DateFormat('dd/MM/yyyy HH:mm');
 
   @override
   void initState() {
@@ -44,8 +49,145 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
       final matchTipo = _tipoFiltro == null ||
           (_tipoFiltro == 'mensal' && s.chargeType == ChargeType.pixRecorrente) ||
           (_tipoFiltro == 'unico'  && s.chargeType == ChargeType.pixAvulso);
-      return matchStatus && matchSearch && matchTipo;
+      // filtro de data
+      bool matchData = true;
+      if (_dateRange != null) {
+        final d = s.dataInicio;
+        if (d.isBefore(_dateRange!.start)) matchData = false;
+        final end = _dateRange!.end.add(const Duration(days: 1));
+        if (d.isAfter(end)) matchData = false;
+      }
+      return matchStatus && matchSearch && matchTipo && matchData;
     }).toList();
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2024),
+      lastDate: now,
+      initialDateRange: _dateRange,
+      helpText: 'Selecione o período',
+      cancelText: 'Cancelar',
+      confirmText: 'Confirmar',
+      builder: (ctx, child) => Theme(
+        data: ThemeData.dark().copyWith(
+          colorScheme: ColorScheme.dark(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (range != null) setState(() => _dateRange = range);
+  }
+
+  String _toCsv(List<SubscriptionModel> list) {
+    final buf = StringBuffer();
+    buf.writeln('ID,Início,Afiliado,Produto,Valor,Tipo,Status');
+    for (final s in list) {
+      final cells = [
+        s.id,
+        _dtFull.format(s.dataInicio),
+        s.affiliateNome ?? s.affiliateCode,
+        s.productNome,
+        s.valor.toStringAsFixed(2),
+        s.chargeType == ChargeType.pixRecorrente ? 'Mensal' : 'Único',
+        s.status.name,
+      ].map((c) => '"${c.toString().replaceAll('"', '""')}"').join(',');
+      buf.writeln(cells);
+    }
+    return buf.toString();
+  }
+
+  void _showExport(List<SubscriptionModel> filtered) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0D2B1A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          const Icon(Icons.download_rounded, color: AppColors.gold, size: 22),
+          const SizedBox(width: 8),
+          Text('Exportar ${filtered.length} assinaturas',
+              style: const TextStyle(color: Colors.white, fontSize: 15)),
+        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Copiar dados para a área de transferência:',
+                style: TextStyle(color: Colors.white60, fontSize: 12)),
+            const SizedBox(height: 14),
+            _ExportBtn(
+              icon: Icons.table_chart_rounded,
+              label: 'Copiar CSV',
+              color: const Color(0xFF1B5E20),
+              onTap: () {
+                Navigator.pop(ctx);
+                Clipboard.setData(ClipboardData(text: _toCsv(filtered)));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('CSV copiado!'),
+                      backgroundColor: AppColors.primary,
+                      duration: Duration(seconds: 2)),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            _ExportBtn(
+              icon: Icons.data_object_rounded,
+              label: 'Copiar JSON',
+              color: const Color(0xFF0D47A1),
+              onTap: () {
+                Navigator.pop(ctx);
+                const enc = JsonEncoder.withIndent('  ');
+                final json = enc.convert(filtered.map((s) => {
+                  'id': s.id,
+                  'inicio': s.dataInicio.toIso8601String(),
+                  'afiliado': s.affiliateNome ?? s.affiliateCode,
+                  'produto': s.productNome,
+                  'valor': s.valor,
+                  'tipo': s.chargeType.name,
+                  'status': s.status.name,
+                }).toList());
+                Clipboard.setData(ClipboardData(text: json));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('JSON copiado!'),
+                      backgroundColor: AppColors.primary,
+                      duration: Duration(seconds: 2)),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            _ExportBtn(
+              icon: Icons.list_alt_rounded,
+              label: 'Copiar lista simples',
+              color: const Color(0xFF4A148C),
+              onTap: () {
+                Navigator.pop(ctx);
+                final lines = filtered.map((s) =>
+                    '${_dtShort.format(s.dataInicio)} | ${s.productNome} | '
+                    '${s.affiliateNome ?? s.affiliateCode} | '
+                    'R\$${s.valor.toStringAsFixed(2)} | ${s.status.name}').join('\n');
+                Clipboard.setData(ClipboardData(text: lines));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Lista copiada!'),
+                      backgroundColor: AppColors.primary,
+                      duration: Duration(seconds: 2)),
+                );
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Fechar', style: TextStyle(color: Colors.white54)),
+          )
+        ],
+      ),
+    );
   }
 
   @override
@@ -141,23 +283,98 @@ class _AdminSubscriptionsScreenState extends State<AdminSubscriptionsScreen>
                       _tipoFiltro = _tipoFiltro == 'unico' ? null : 'unico'),
                 ),
                 const Spacer(),
-                // Contador ativo
-                if (_tipoFiltro != null)
+                if (_tipoFiltro != null || _dateRange != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: AppColors.warning.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(
-                      'filtro ativo',
-                      style: const TextStyle(
-                          color: AppColors.warning,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700),
+                    child: const Text('filtro ativo',
+                        style: TextStyle(
+                            color: AppColors.warning,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700)),
+                  ),
+              ],
+            ),
+          ),
+
+          // -- Barra filtro data + exportar --------------------------------
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: [
+                // Botão data
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _pickDateRange,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: _dateRange != null
+                            ? AppColors.primary.withValues(alpha: 0.15)
+                            : AppColors.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _dateRange != null
+                              ? AppColors.primary
+                              : Colors.white12,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today_rounded, size: 14,
+                              color: _dateRange != null
+                                  ? AppColors.primary
+                                  : AppColors.textHint),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _dateRange != null
+                                  ? '${_dtShort.format(_dateRange!.start)} – ${_dtShort.format(_dateRange!.end)}'
+                                  : 'Data inicial – final',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: _dateRange != null
+                                      ? Colors.white
+                                      : AppColors.textHint),
+                            ),
+                          ),
+                          if (_dateRange != null)
+                            GestureDetector(
+                              onTap: () => setState(() => _dateRange = null),
+                              child: const Icon(Icons.close_rounded,
+                                  size: 14, color: AppColors.textHint),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
+                ),
+                const SizedBox(width: 8),
+                // Botão exportar
+                GestureDetector(
+                  onTap: () => _showExport(todas),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.download_rounded, size: 14, color: AppColors.gold),
+                        SizedBox(width: 5),
+                        Text('Relatório', style: TextStyle(
+                            color: AppColors.gold,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -604,6 +821,34 @@ class _SubTipoChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Botão de exportação reutilizável ──────────────────────────────────────────
+class _ExportBtn extends StatelessWidget {
+  final IconData icon;
+  final String   label;
+  final Color    color;
+  final VoidCallback onTap;
+  const _ExportBtn({required this.icon, required this.label,
+      required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        icon: Icon(icon, size: 18),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
     );
   }

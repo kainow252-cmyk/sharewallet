@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/admin_service.dart';
@@ -15,17 +16,44 @@ class AdminWithdrawalsScreen extends StatefulWidget {
 class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _searchCtrl = TextEditingController();
+  String _search = '';
+  DateTimeRange? _dateRange;
+  final _dtShort = DateFormat('dd/MM/yy');
+  final _dtFull  = DateFormat('dd/MM/yyyy HH:mm');
+
+  List<AdminWithdrawal> _filtered(List<AdminWithdrawal> list) {
+    return list.where((w) {
+      // busca texto
+      if (_search.isNotEmpty) {
+        final q = _search.toLowerCase();
+        if (!w.affiliateNome.toLowerCase().contains(q) &&
+            !w.affiliateCode.toLowerCase().contains(q) &&
+            !w.pixKey.toLowerCase().contains(q)) { return false; }
+      }
+      // filtro data
+      if (_dateRange != null) {
+        final d = w.solicitadoEm;
+        if (d.isBefore(_dateRange!.start)) { return false; }
+        final end = _dateRange!.end.add(const Duration(days: 1));
+        if (d.isAfter(end)) { return false; }
+      }
+      return true;
+    }).toList();
+  }
 
   @override
   void initState() {
     super.initState();
     // 3 tabs: Pendentes | Aprovados | Recusados
     _tabController = TabController(length: 3, vsync: this);
+    _searchCtrl.addListener(() => setState(() => _search = _searchCtrl.text.trim()));
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -34,13 +62,10 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
     final svc = context.watch<AdminService>();
     final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
-    final pendentes =
-        svc.withdrawals.where((w) => w.status == 'pendente').toList();
-    final aprovados =
-        svc.withdrawals.where((w) => w.status == 'aprovado').toList();
-    final recusados = svc.withdrawals
-        .where((w) => w.status == 'recusado' || w.status == 'processando')
-        .toList();
+    final pendentes  = _filtered(svc.withdrawals.where((w) => w.status == 'pendente').toList());
+    final aprovados  = _filtered(svc.withdrawals.where((w) => w.status == 'aprovado').toList());
+    final recusados  = _filtered(svc.withdrawals.where((w) => w.status == 'recusado' || w.status == 'processando').toList());
+    final todos      = _filtered(svc.withdrawals);
 
     final totalPendente = pendentes.fold(0.0, (s, w) => s + w.valor);
 
@@ -122,10 +147,115 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
               ),
             ),
           const SizedBox(height: 8),
-          const Divider(height: 1),
 
-          // -- Barra de filtro ativo (tab Afiliados) ---------------------
-          // [removida - afiliados agora têm tela própria]
+          // -- Busca + data + exportar ------------------------------------
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Buscar por afiliado, código ou chave PIX...',
+                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint),
+                suffixIcon: _search.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded),
+                        onPressed: () { _searchCtrl.clear(); setState(() => _search = ''); },
+                      )
+                    : null,
+                isDense: true,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final range = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2024),
+                        lastDate: now,
+                        initialDateRange: _dateRange,
+                        helpText: 'Selecione o período',
+                        cancelText: 'Cancelar',
+                        confirmText: 'Confirmar',
+                        builder: (ctx, child) => Theme(
+                          data: ThemeData.dark().copyWith(
+                            colorScheme: ColorScheme.dark(
+                              primary: AppColors.primary,
+                              onPrimary: Colors.white,
+                            ),
+                          ),
+                          child: child!,
+                        ),
+                      );
+                      if (range != null) setState(() => _dateRange = range);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: _dateRange != null
+                            ? AppColors.primary.withValues(alpha: 0.15)
+                            : AppColors.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _dateRange != null ? AppColors.primary : Colors.white12,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today_rounded, size: 14,
+                              color: _dateRange != null ? AppColors.primary : AppColors.textHint),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _dateRange != null
+                                  ? '${_dtShort.format(_dateRange!.start)} – ${_dtShort.format(_dateRange!.end)}'
+                                  : 'Data inicial – final',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: _dateRange != null ? Colors.white : AppColors.textHint),
+                            ),
+                          ),
+                          if (_dateRange != null)
+                            GestureDetector(
+                              onTap: () => setState(() => _dateRange = null),
+                              child: const Icon(Icons.close_rounded,
+                                  size: 14, color: AppColors.textHint),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => _showExport(todos),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.download_rounded, size: 14, color: AppColors.gold),
+                        SizedBox(width: 5),
+                        Text('Relatório', style: TextStyle(
+                            color: AppColors.gold, fontSize: 12,
+                            fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
 
           // -- TabBarView -------------------------------------------------
           Expanded(
@@ -134,16 +264,13 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
                 : TabBarView(
                     controller: _tabController,
                     children: [
-                      // Pendentes
                       _WithdrawalList(
                         withdrawals: pendentes,
                         showActions: true,
                         onApprove: (w) => _approve(context, svc, w),
                         onReject: (w) => _reject(context, svc, w),
                       ),
-                      // Aprovados
                       _WithdrawalList(withdrawals: aprovados),
-                      // Recusados
                       _WithdrawalList(withdrawals: recusados),
                     ],
                   ),
@@ -292,6 +419,113 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
         );
       }
     }
+  }
+
+  void _showExport(List<AdminWithdrawal> list) {
+    final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    // CSV
+    String toCsv() {
+      final buf = StringBuffer();
+      buf.writeln('ID,Data,Afiliado,Código,Chave PIX,Valor,Status');
+      for (final w in list) {
+        final cells = [
+          w.id,
+          _dtFull.format(w.solicitadoEm),
+          w.affiliateNome,
+          w.affiliateCode,
+          w.pixKey,
+          w.valor.toStringAsFixed(2),
+          w.status,
+        ].map((c) => '"${c.toString().replaceAll('"', '""')}"').join(',');
+        buf.writeln(cells);
+      }
+      return buf.toString();
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0D2B1A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          const Icon(Icons.download_rounded, color: AppColors.gold, size: 22),
+          const SizedBox(width: 8),
+          Text('Exportar ${list.length} saques',
+              style: const TextStyle(color: Colors.white, fontSize: 15)),
+        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ExportBtn(
+              icon: Icons.table_chart_rounded,
+              label: 'Copiar CSV',
+              color: const Color(0xFF1B5E20),
+              onTap: () {
+                Navigator.pop(ctx);
+                Clipboard.setData(ClipboardData(text: toCsv()));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('CSV copiado!'),
+                      backgroundColor: AppColors.primary,
+                      duration: Duration(seconds: 2)),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            _ExportBtn(
+              icon: Icons.list_alt_rounded,
+              label: 'Copiar lista simples',
+              color: const Color(0xFF4A148C),
+              onTap: () {
+                Navigator.pop(ctx);
+                final lines = list.map((w) =>
+                    '${_dtShort.format(w.solicitadoEm)} | ${w.affiliateNome} | '
+                    '${fmt.format(w.valor)} | ${w.pixKey} | ${w.status}').join('\n');
+                Clipboard.setData(ClipboardData(text: lines));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Lista copiada!'),
+                      backgroundColor: AppColors.primary,
+                      duration: Duration(seconds: 2)),
+                );
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Fechar', style: TextStyle(color: Colors.white54)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// -- Widget botão de exportação ------------------------------------------------
+class _ExportBtn extends StatelessWidget {
+  final IconData icon;
+  final String   label;
+  final Color    color;
+  final VoidCallback onTap;
+  const _ExportBtn({required this.icon, required this.label,
+      required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        icon: Icon(icon, size: 18),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ),
+    );
   }
 }
 

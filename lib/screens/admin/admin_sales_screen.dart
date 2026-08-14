@@ -392,7 +392,7 @@ class _AdminSalesScreenState extends State<AdminSalesScreen>
                           Text(
                             _dateRange != null
                                 ? '${_fmtDateShort(_dateRange!.start)}–${_fmtDateShort(_dateRange!.end)}'
-                                : 'Data',
+                                : 'Início – Fim',
                             style: TextStyle(
                               fontSize: 11,
                               color: _dateRange != null
@@ -414,15 +414,31 @@ class _AdminSalesScreenState extends State<AdminSalesScreen>
                   ),
                   const SizedBox(width: 6),
 
-                  // Export button
-                  IconButton(
-                    onPressed: () => _showExportDialog(currentList),
-                    icon: const Icon(Icons.download_rounded),
-                    color: AppColors.gold,
-                    tooltip: 'Exportar',
-                    style: IconButton.styleFrom(
-                      backgroundColor: AppColors.gold.withValues(alpha: 0.1),
-                      padding: const EdgeInsets.all(8),
+                  // Botão Relatório (export)
+                  GestureDetector(
+                    onTap: () => _showExportDialog(currentList),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.gold.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: AppColors.gold.withValues(alpha: 0.4)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.download_rounded,
+                              size: 14, color: AppColors.gold),
+                          SizedBox(width: 5),
+                          Text('Relatório',
+                              style: TextStyle(
+                                  color: AppColors.gold,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700)),
+                        ],
+                      ),
                     ),
                   ),
                 ],
