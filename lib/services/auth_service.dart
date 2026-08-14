@@ -26,17 +26,33 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Restaurar sessão Firebase (persiste entre aberturas via Persistence.LOCAL)
-      final firebaseUser = FirebaseAuth.instance.currentUser;
+      // 1. Restaurar sessão Firebase via authStateChanges (CORRETO para Web)
+      //
+      // PROBLEMA com currentUser síncrono no Web:
+      //   FirebaseAuth.instance.currentUser retorna null enquanto o SDK ainda
+      //   está hidratando a sessão salva no IndexedDB (Persistence.LOCAL).
+      //   Esse processo é ASSÍNCRONO → currentUser == null mesmo com sessão válida!
+      //
+      // SOLUÇÃO: authStateChanges().first aguarda a hidratação completa.
+      //   Timeout de 2s: suficiente para ler IndexedDB local (operação rápida).
+      //   Se timeout → sem sessão → vai para landing normalmente.
+      final firebaseUser = await FirebaseAuth.instance
+          .authStateChanges()
+          .first
+          .timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => null,
+          );
+
       if (firebaseUser != null) {
         if (kDebugMode) {
-          debugPrint('[AuthService] Sessão Firebase restaurada: ${firebaseUser.email}');
+          debugPrint('[AuthService] Sessão restaurada via authStateChanges: ${firebaseUser.email}');
         }
 
-        // ESTRATÉGIA INSTANTÂNEA: monta UserModel mínimo com dados do Firebase Auth
-        // (uid, email, displayName) e retorna IMEDIATAMENTE → splash some em <100ms.
-        // Em paralelo, busca o perfil completo no Firestore em background e atualiza
-        // o state quando chegar (sem bloquear a navegação).
+        // INSTANTÂNEO: monta UserModel mínimo com dados do Firebase Auth
+        // e retorna imediatamente — sem bloquear na splash esperando Firestore.
+        // Perfil completo (saldo, CPF, código afiliado) carrega em background
+        // e atualiza a UI via notifyListeners() quando chegar.
         _currentUser = UserModel(
           id: firebaseUser.uid,
           nome: firebaseUser.displayName ?? firebaseUser.email!.split('@').first,
@@ -50,12 +66,9 @@ class AuthService extends ChangeNotifier {
         _isLoading = false;
         notifyListeners();
 
-        // Background: atualiza perfil completo (Firestore) sem bloquear a tela
+        // Background: carrega perfil completo do Firestore sem bloquear navegação
         FirebaseUserService.carregarUsuarioAtual()
-            .timeout(
-              const Duration(seconds: 8),
-              onTimeout: () => null,
-            )
+            .timeout(const Duration(seconds: 8), onTimeout: () => null)
             .then((user) {
               if (user != null) {
                 _currentUser = user;

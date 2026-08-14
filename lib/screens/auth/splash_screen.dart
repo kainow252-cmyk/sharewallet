@@ -62,20 +62,23 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _startSequence() async {
-    // 1. Anima o logo
-    await _logoController.forward();
-    // 2. Texto aparece logo depois
-    await Future.delayed(const Duration(milliseconds: 100));
-    _textController.forward();
+    // 1. Inicia animação do logo + auth em PARALELO (não espera animação terminar)
+    _logoController.forward();
 
-    // 3. Inicializa auth em paralelo
+    // 2. Auth init e animação rodam juntos — quem terminar primeiro aguarda o outro
     if (!mounted) return;
     final auth = context.read<AuthService>();
-    await auth.init();
-    if (!mounted) return;
 
-    // 4. Pausa mínima para o usuário ver a splash
-    await Future.delayed(const Duration(milliseconds: 1000));
+    await Future.wait([
+      // auth.init() usa authStateChanges().first com timeout 2s:
+      // → sessão LOCAL: resolve em ~100-300ms (leitura IndexedDB)
+      // → sem sessão: resolve em ~2s (timeout)
+      auth.init(),
+      // Animação do logo (1000ms) + texto (100ms delay)
+      Future.delayed(const Duration(milliseconds: 100))
+          .then((_) => _textController.forward()),
+    ]);
+
     if (!mounted) return;
 
     if (auth.isLoggedIn) {
