@@ -1,23 +1,24 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:http/http.dart' as http;
 
-/// Serviço de foto de perfil — upload para Firebase Storage + atualiza Firestore.
+/// Serviço de foto de perfil — upload via Worker proxy (sem CORS).
 ///
-/// Fluxo:
-///   1. Usuário escolhe: câmera ou galeria
-///   2. Faz upload para storage/avatars/{uid}.jpg
-///   3. Pega download URL
-///   4. Salva photo_url no Firestore (affiliates/{uid})
-///   5. Retorna a URL para o app atualizar o estado local
+/// O Firebase Storage bloqueia uploads diretos do browser por CORS quando o
+/// bucket usa o formato novo `firebasestorage.app`. A solução é enviar os
+/// bytes em base64 para o Worker Cloudflare, que faz o upload server-side
+/// usando as credenciais Admin SDK (sem restrição de CORS) e retorna a URL.
 class ProfilePhotoService {
-  static final _picker = ImagePicker();
+  static const String _base = 'https://api.sharewallet.com.br';
+  static const Duration _timeout = Duration(seconds: 30); // upload pode demorar
 
-  /// Abre câmera ou galeria e retorna a URL final após upload.
-  /// Retorna null se cancelado ou em caso de erro.
+  // ── Selecionar e fazer upload ─────────────────────────────────────────────
+
+  /// Abre picker (câmera ou galeria), redimensiona e faz upload via worker.
+  /// Retorna a URL pública da foto ou null em caso de erro.
   static Future<String?> pickAndUpload({
     required String uid,
     required ImageSource source,
@@ -25,7 +26,8 @@ class ProfilePhotoService {
   }) async {
     try {
       // 1. Selecionar imagem
-      final XFile? picked = await _picker.pickImage(
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
         source: source,
         maxWidth: 800,
         maxHeight: 800,
@@ -33,81 +35,74 @@ class ProfilePhotoService {
       );
       if (picked == null) return null; // usuário cancelou
 
-      // 2. Upload para Firebase Storage
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('avatars')
-          .child('$uid.jpg');
-
-      UploadTask task;
-      if (kIsWeb) {
-        final bytes = await picked.readAsBytes();
-        task = ref.putData(
-          bytes,
-          SettableMetadata(contentType: 'image/jpeg'),
-        );
-      } else {
-        task = ref.putFile(
-          File(picked.path),
-          SettableMetadata(contentType: 'image/jpeg'),
-        );
+      // 2. Ler bytes da imagem
+      final Uint8List bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) {
+        onError?.call('Não foi possível ler a imagem selecionada.');
+        return null;
       }
 
-      final snapshot = await task;
-      final url = await snapshot.ref.getDownloadURL();
+      // 3. Determinar content type
+      final String fileName = picked.name.toLowerCase();
+      String contentType = 'image/jpeg';
+      if (fileName.endsWith('.png')) contentType = 'image/png';
+      else if (fileName.endsWith('.webp')) contentType = 'image/webp';
 
-      // 3. Salvar URL no Firestore
-      try {
-        final db = _getFirestore();
-        if (db != null) {
-          await db.collection('affiliates').doc(uid).set(
-            {'photo_url': url, 'updated_at': FieldValue.serverTimestamp()},
-            SetOptions(merge: true),
-          );
+      // 4. Codificar em base64
+      final String base64Image = base64Encode(bytes);
+
+      // 5. Enviar para worker proxy
+      final uri = Uri.parse('$_base/api/profile/upload-photo');
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'uid': uid,
+              'imageBase64': base64Image,
+              'contentType': contentType,
+            }),
+          )
+          .timeout(_timeout);
+
+      final Map<String, dynamic> body = jsonDecode(response.body);
+
+      if (body['success'] == true) {
+        final result = body['result'];
+        final url = result?['url'] as String?;
+        if (url != null && url.isNotEmpty) {
+          if (kDebugMode) debugPrint('[PhotoService] Upload OK: $url');
+          return url;
         }
-      } catch (e) {
-        // Não bloqueia — a URL já foi salva no Storage
-        if (kDebugMode) debugPrint('[ProfilePhotoService] Firestore update error: $e');
       }
 
-      return url;
-    } catch (e) {
-      if (kDebugMode) debugPrint('[ProfilePhotoService] error: $e');
-      onError?.call('Erro ao enviar foto. Tente novamente.');
+      final errMsg = body['error'] as String? ?? 'Erro desconhecido no upload';
+      if (kDebugMode) debugPrint('[PhotoService] Upload erro: $errMsg');
+      onError?.call('Falha ao enviar foto: $errMsg');
+      return null;
+    } on Exception catch (e) {
+      if (kDebugMode) debugPrint('[PhotoService] Exceção: $e');
+      onError?.call('Erro ao processar imagem: ${e.toString()}');
       return null;
     }
   }
 
-  /// Remove a foto do perfil (define photo_url como null no Firestore).
+  // ── Remover foto ─────────────────────────────────────────────────────────
+
+  /// Remove a photo_url do perfil no Firestore (via Firestore REST API do worker).
+  /// Para simplicidade, usa o endpoint PATCH /api/affiliates/:id que já existe.
   static Future<void> removePhoto(String uid) async {
     try {
-      final db = _getFirestore();
-      if (db != null) {
-        await db.collection('affiliates').doc(uid).update({'photo_url': null});
-      }
-      // Tenta apagar do Storage também (não é crítico se falhar)
-      try {
-        await FirebaseStorage.instance
-            .ref()
-            .child('avatars/$uid.jpg')
-            .delete();
-      } catch (_) {}
+      final uri = Uri.parse('$_base/api/affiliates/$uid');
+      await http
+          .patch(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'photo_url': ''}),
+          )
+          .timeout(const Duration(seconds: 10));
     } catch (e) {
-      if (kDebugMode) debugPrint('[ProfilePhotoService] removePhoto error: $e');
-    }
-  }
-
-  static FirebaseFirestore? _getFirestore() {
-    try {
-      return FirebaseFirestore.instanceFor(
-        app: Firebase.app('affiliatewalletwallet'),
-      );
-    } catch (_) {
-      try {
-        return FirebaseFirestore.instance;
-      } catch (_) {
-        return null;
-      }
+      if (kDebugMode) debugPrint('[PhotoService] removePhoto error: $e');
     }
   }
 }
