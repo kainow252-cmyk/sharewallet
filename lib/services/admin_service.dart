@@ -398,9 +398,8 @@ class AdminService extends ChangeNotifier {
         loadSubscriptions(),
         loadWithdrawals(),
         loadSales(),
-        // loadProducts com silent=true: não toca _isLoadingProducts
-        // não bloqueia a tela de relatórios enquanto produtos carregam
-        loadProducts(silent: true),
+        // loadProducts: o guard interno evita chamadas paralelas
+        loadProducts(),
       ]);
     } catch (e) {
       debugPrint('[AdminService] loadAll erro inesperado: $e');
@@ -625,29 +624,36 @@ class AdminService extends ChangeNotifier {
   //   (usado internamente por loadAll() para não bloquear tela de relatórios)
   // silent=false (padrão) -> seta _isLoadingProducts, usado pela tela de produtos
   Future<void> loadProducts({bool silent = false}) async {
-    // silent=true: não altera _isLoadingProducts (para não bloquear outras telas)
-    // MAS: sempre notifica no final para que a tela de produtos atualize
-    if (!silent) {
-      _isLoadingProducts = true;
-      notifyListeners();
+    // Guard: evita duas chamadas paralelas sobrescrevendo _products
+    if (_isLoadingProducts) {
+      debugPrint('[AdminService] loadProducts já em andamento — ignorando chamada paralela');
+      return;
     }
+    _isLoadingProducts = true;
+    if (!silent) notifyListeners();
     try {
       final rows = await CfApiService.getProducts(all: true);
-      _products = rows.map((r) => ProductModel.fromJson(_normalizeProd(r))).toList();
+      if (rows.isEmpty) {
+        // Pode ser null retornado como lista vazia — tenta novamente uma vez
+        debugPrint('[AdminService] getProducts retornou vazio — retentando...');
+        await Future.delayed(const Duration(milliseconds: 800));
+        final retry = await CfApiService.getProducts(all: true);
+        if (retry.isNotEmpty) {
+          _products = retry.map((r) => ProductModel.fromJson(_normalizeProd(r))).toList();
+        }
+        // Se ainda vazio após retry, mantém o que tinha (não zera)
+      } else {
+        _products = rows.map((r) => ProductModel.fromJson(_normalizeProd(r))).toList();
+      }
       _products.sort((a, b) => a.nome.compareTo(b.nome));
-      if (kDebugMode) debugPrint('[AdminService] ${_products.length} produtos (D1)');
-      // CRÍTICO: notifica mesmo em silent para que a tela de produtos atualize
-      if (silent) notifyListeners();
+      debugPrint('[AdminService] ${_products.length} produtos carregados do D1');
     } catch (e) {
       debugPrint('[AdminService] Erro produtos: $e');
       _error = 'Erro ao carregar produtos: $e';
-      _products = [];
-      // Notifica mesmo em silent para que a tela reflita o estado de erro
-      if (silent) notifyListeners();
-    }
-    if (!silent) {
+      // NÃO zera _products em caso de erro — mantém dados anteriores se houver
+    } finally {
       _isLoadingProducts = false;
-      notifyListeners();
+      notifyListeners(); // sempre notifica — silent ou não
     }
   }
 
