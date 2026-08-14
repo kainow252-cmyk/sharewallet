@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../services/admin_service.dart';
 import '../../theme/app_theme.dart';
@@ -111,6 +113,36 @@ class AdminResetScreen extends StatelessWidget {
 
           const SizedBox(height: 20),
 
+          // -- Divider + Configurações ---------------------------------------
+          Row(
+            children: [
+              Expanded(
+                child: Divider(
+                    color: const Color(0xFF6C3CE1).withValues(alpha: 0.3), thickness: 1),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text('CONFIGURAÇÕES',
+                    style: TextStyle(
+                        color: const Color(0xFF6C3CE1).withValues(alpha: 0.7),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2)),
+              ),
+              Expanded(
+                child: Divider(
+                    color: const Color(0xFF6C3CE1).withValues(alpha: 0.3), thickness: 1),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // -- Card reset token Woovi ----------------------------------------
+          const _WooviResetCard(),
+
+          const SizedBox(height: 20),
+
           // -- Divider + Reset Total -----------------------------------------
           Row(
             children: [
@@ -149,6 +181,8 @@ class AdminResetScreen extends StatelessWidget {
               '⚠️ Afiliados: saldo, comissões, saques e indicados zerados',
               '✅ Produtos: intocados',
               '✅ Cadastros de afiliados: intocados',
+              '✅ Token Woovi: intocado (use o card acima para resetar)',
+              '✅ Config de menus e login: intocadas',
             ],
             target: 'all',
             confirmLabel: 'ZERAR TUDO',
@@ -535,6 +569,343 @@ class _ResetCardState extends State<_ResetCard> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Card específico para resetar o token Woovi (AppID)
+// ─────────────────────────────────────────────────────────────────────────────
+class _WooviResetCard extends StatefulWidget {
+  const _WooviResetCard();
+
+  @override
+  State<_WooviResetCard> createState() => _WooviResetCardState();
+}
+
+class _WooviResetCardState extends State<_WooviResetCard> {
+  static const _wooviPurple = Color(0xFF6C3CE1);
+  bool _loading   = false;
+  bool _expanded  = false;
+  String? _status; // null = inicial, 'ok', 'erro'
+
+  Future<void> _resetToken() async {
+    final confirmed = await _showConfirm();
+    if (!confirmed || !mounted) return;
+
+    setState(() { _loading = true; _status = null; });
+    try {
+      final res = await http.post(
+        Uri.parse('https://api.sharewallet.com.br/api/admin/woovi-config'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'appId':       '',
+          'verified':    false,
+          'accountName': '',
+          'pixKey':      '',
+          'pixKeyType':  '',
+          'webhookUrl':  '',
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      final ok = res.statusCode >= 200 && res.statusCode < 300;
+      setState(() => _status = ok ? 'ok' : 'erro');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(ok
+              ? '✅ Token Woovi removido com sucesso! Configure um novo em Pagamentos.'
+              : '❌ Erro ao resetar token Woovi (status ${res.statusCode})'),
+          backgroundColor: ok ? AppColors.success : AppColors.error,
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    } catch (e) {
+      setState(() => _status = 'erro');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('❌ Erro: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<bool> _showConfirm() async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        final canConfirm = ctrl.text.trim().toUpperCase() == 'CONFIRMAR';
+        return AlertDialog(
+          backgroundColor: const Color(0xFF0D0520),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: _wooviPurple.withValues(alpha: 0.5), width: 1.5),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.key_off_rounded, color: _wooviPurple, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Resetar Token Woovi',
+                    style: TextStyle(
+                        color: _wooviPurple,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16)),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'O AppID (token) da Woovi será removido do banco de dados.\n\n'
+                'Pagamentos PIX via Woovi ficarão indisponíveis até você '
+                'configurar um novo token em Admin → Pagamentos.',
+                style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Digite  CONFIRMAR  para continuar:',
+                style: TextStyle(
+                    color: _wooviPurple.withValues(alpha: 0.9),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.characters,
+                onChanged: (_) => setDlg(() {}),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2),
+                decoration: InputDecoration(
+                  hintText: 'CONFIRMAR',
+                  hintStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.2), letterSpacing: 2),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide:
+                        BorderSide(color: _wooviPurple.withValues(alpha: 0.3)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _wooviPurple),
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Cancelar',
+                  style:
+                      TextStyle(color: Colors.white.withValues(alpha: 0.5))),
+            ),
+            FilledButton(
+              onPressed: canConfirm ? () => Navigator.pop(ctx, true) : null,
+              style: FilledButton.styleFrom(
+                backgroundColor:
+                    canConfirm ? _wooviPurple : Colors.grey.shade800,
+              ),
+              child: const Text('RESETAR TOKEN',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        );
+      }),
+    );
+    ctrl.dispose();
+    return result == true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const purple = _wooviPurple;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0520),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: purple.withValues(alpha: 0.35), width: 1),
+      ),
+      child: Column(
+        children: [
+          // Header
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: purple.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(Icons.key_off_rounded,
+                        color: purple, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Resetar Token Woovi (AppID)',
+                            style: TextStyle(
+                                color: purple,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14)),
+                        SizedBox(height: 2),
+                        Text(
+                          'Remove o AppID da Woovi do banco. PIX fica indisponível até novo cadastro.',
+                          style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 11,
+                              height: 1.3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Badge de status
+                  if (_status == 'ok')
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('RESETADO',
+                          style: TextStyle(
+                              color: AppColors.success,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800)),
+                    ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    _expanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: AppColors.textHint,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Detalhes expandíveis
+          if (_expanded) ...[
+            Divider(
+                height: 1,
+                color: purple.withValues(alpha: 0.2),
+                indent: 14,
+                endIndent: 14),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _DetailRow(Icons.check_circle_rounded, AppColors.success,
+                      'Dados de vendas/assinaturas: intocados'),
+                  _DetailRow(Icons.check_circle_rounded, AppColors.success,
+                      'Cadastros de afiliados: intocados'),
+                  _DetailRow(Icons.warning_amber_rounded, AppColors.warning,
+                      'Pagamentos PIX: indisponíveis até novo token'),
+                  _DetailRow(Icons.info_outline_rounded, purple,
+                      'Após resetar, vá em Admin → Pagamentos para configurar novo AppID'),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: _loading
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 10),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 16, height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: purple),
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text('Removendo token...',
+                                      style: TextStyle(
+                                          color: purple,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          )
+                        : FilledButton.icon(
+                            onPressed: _resetToken,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: purple,
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: const Icon(Icons.key_off_rounded, size: 16),
+                            label: const Text('RESETAR TOKEN WOOVI',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    letterSpacing: 0.5)),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String text;
+  const _DetailRow(this.icon, this.color, this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text,
+                style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                    height: 1.3)),
+          ),
         ],
       ),
     );
