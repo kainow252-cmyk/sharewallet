@@ -1080,11 +1080,14 @@ class _ProductCardInline extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = product;
     final auth = context.read<AuthService>();
-    // SEMPRE usa o affiliate_code real (ex: 9ESQ3K) no link de rastreio.
-    // username é só para exibição — se usado como ref, o webhook não acha o afiliado.
-    final affiliateCode = auth.currentUser?.affiliateCode.isNotEmpty == true
-        ? auth.currentUser!.affiliateCode
-        : 'ABC123';
+    // Usa @username no link se disponível (bonito e memorável): ?ref=@gelci
+    // O Worker resolve tanto username quanto affiliate_code → afiliado correto.
+    // Fallback: affiliate_code (ex: LHH5ZO) garante rastreio mesmo sem username.
+    final user = auth.currentUser;
+    final affiliateRef = (user?.username.isNotEmpty == true)
+        ? '@${user!.username}'
+        : (user?.affiliateCode.isNotEmpty == true ? user!.affiliateCode : 'REF');
+    final affiliateCode = affiliateRef;
 
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -1457,11 +1460,12 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = product;
     final auth = context.read<AuthService>();
-    // SEMPRE usa o affiliate_code real (ex: 9ESQ3K) no link de rastreio.
-    // username é só para exibição — se usado como ref, o webhook não acha o afiliado.
-    final affiliateCode = auth.currentUser?.affiliateCode.isNotEmpty == true
-        ? auth.currentUser!.affiliateCode
-        : 'ABC123';
+    // Usa @username no link se disponível: ?ref=@gelci
+    // Worker resolve username → affiliate_code → afiliado correto.
+    final user2 = auth.currentUser;
+    final affiliateCode = (user2?.username.isNotEmpty == true)
+        ? '@${user2!.username}'
+        : (user2?.affiliateCode.isNotEmpty == true ? user2!.affiliateCode : 'REF');
 
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
