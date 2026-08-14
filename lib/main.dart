@@ -118,7 +118,8 @@ void main() async {
         initialProductId = parts[0].isNotEmpty ? parts[0] : null;
         if (parts.length > 1) {
           final query = Uri.splitQueryString(parts[1]);
-          initialAffiliateCode = query['ref'] ?? '';
+          // Remove '@' inicial se vier como ?ref=@CODE (link com arroba)
+          initialAffiliateCode = (query['ref'] ?? '').replaceAll(RegExp(r'^@+'), '');
         }
         // Limpa após ler para não reutilizar em reloads futuros
         removeSessionStorageValue('flutter_initial_route');
@@ -224,7 +225,7 @@ class ShareWalletApp extends StatelessWidget {
             String affiliateCode = initialAffiliateCode ?? '';
             if (parts.length > 1) {
               final query = Uri.splitQueryString(parts[1]);
-              final ref = query['ref'] ?? '';
+              final ref = (query['ref'] ?? '').replaceAll(RegExp(r'^@+'), '');
               if (ref.isNotEmpty) affiliateCode = ref;
             }
             return MaterialPageRoute(

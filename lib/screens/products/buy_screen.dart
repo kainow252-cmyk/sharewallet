@@ -436,8 +436,10 @@ class _BuyScreenState extends State<BuyScreen> {
       if (!mounted || tentativas >= maxTentativas) { timer.cancel(); return; }
       tentativas++;
       try {
+        // Uri.encodeFull garante que caracteres especiais (@, espaço, etc.)
+        // no paymentId não quebrem a URL
         final r = await http.get(
-          Uri.parse('$_workerBase/api/payment-status/$paymentId'),
+          Uri.parse('$_workerBase/api/payment-status/${Uri.encodeComponent(paymentId)}'),
         ).timeout(const Duration(seconds: 10));
         if (!mounted) { timer.cancel(); return; }
         if (r.statusCode == 200) {
