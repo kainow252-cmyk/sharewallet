@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../services/auth_service.dart';
 import '../../services/firebase_user_service.dart';
 import '../../services/cf_api_service.dart';
+import '../../services/profile_photo_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
 
@@ -18,6 +20,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _editMode = false;
   bool _saving = false;
+  bool _uploadingPhoto = false;
 
   late TextEditingController _nomeCtrl;
   late TextEditingController _emailCtrl;
@@ -398,39 +401,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const SizedBox(height: 20),
-                        Stack(
-                          children: [
-                            CircleAvatar(
-                              radius: 44,
-                              backgroundColor:
-                                  AppColors.gold.withValues(alpha: 0.3),
-                              child: Text(
-                                (user?.nome.isNotEmpty == true)
-                                    ? user!.nome[0].toUpperCase()
-                                    : 'A',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 36,
-                                  fontWeight: FontWeight.w900,
+                        GestureDetector(
+                          onTap: () => _mostrarOpcoesPhoto(context),
+                          child: Stack(
+                            children: [
+                              // Avatar: foto ou inicial
+                              CircleAvatar(
+                                radius: 44,
+                                backgroundColor:
+                                    AppColors.gold.withValues(alpha: 0.3),
+                                backgroundImage: (user?.photoUrl != null &&
+                                        user!.photoUrl!.isNotEmpty)
+                                    ? NetworkImage(user.photoUrl!)
+                                    : null,
+                                child: (user?.photoUrl == null ||
+                                        user!.photoUrl!.isEmpty)
+                                    ? Text(
+                                        (user?.nome.isNotEmpty == true)
+                                            ? user!.nome[0].toUpperCase()
+                                            : 'A',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 36,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      )
+                                    : _uploadingPhoto
+                                        ? const CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2)
+                                        : null,
+                              ),
+                              // Badge verificado
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.gold,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.white, width: 2),
+                                  ),
+                                  child: const Icon(Icons.verified_rounded,
+                                      color: Colors.white, size: 14),
                                 ),
                               ),
-                            ),
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: AppColors.gold,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                      color: Colors.white, width: 2),
+                              // Ícone câmera (overlay)
+                              if (_uploadingPhoto)
+                                Positioned.fill(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.45),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Center(
+                                      child: SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              else
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.45),
+                                      borderRadius: const BorderRadius.only(
+                                        bottomLeft: Radius.circular(44),
+                                        bottomRight: Radius.circular(44),
+                                      ),
+                                    ),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.camera_alt_rounded,
+                                        color: Colors.white,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                                child: const Icon(Icons.verified_rounded,
-                                    color: Colors.white, size: 14),
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 12),
                         Text(
@@ -735,6 +797,140 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // -- Foto de perfil ---------------------------------------------------------
+
+  void _mostrarOpcoesPhoto(BuildContext context) {
+    final auth = context.read<AuthService>();
+    final uid = auth.currentUser?.id ?? '';
+    final temFoto = auth.currentUser?.photoUrl?.isNotEmpty == true;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Row(
+              children: [
+                Icon(Icons.account_circle_rounded,
+                    color: AppColors.primary, size: 22),
+                SizedBox(width: 10),
+                Text(
+                  'Foto de perfil',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Câmera
+            _PhotoOptionTile(
+              icon: Icons.camera_alt_rounded,
+              label: 'Tirar foto',
+              subtitle: 'Usar câmera do dispositivo',
+              onTap: () async {
+                Navigator.pop(context);
+                await _uploadPhoto(uid, ImageSource.camera);
+              },
+            ),
+            const SizedBox(height: 8),
+            // Galeria
+            _PhotoOptionTile(
+              icon: Icons.photo_library_rounded,
+              label: 'Escolher da galeria',
+              subtitle: 'Selecionar imagem existente',
+              onTap: () async {
+                Navigator.pop(context);
+                await _uploadPhoto(uid, ImageSource.gallery);
+              },
+            ),
+            // Remover foto (só se já tiver)
+            if (temFoto) ...[
+              const SizedBox(height: 8),
+              _PhotoOptionTile(
+                icon: Icons.delete_outline_rounded,
+                label: 'Remover foto',
+                subtitle: 'Voltar para inicial do nome',
+                iconColor: AppColors.error,
+                labelColor: AppColors.error,
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _removerPhoto(uid);
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _uploadPhoto(String uid, ImageSource source) async {
+    if (uid.isEmpty) return;
+    setState(() => _uploadingPhoto = true);
+
+    final url = await ProfilePhotoService.pickAndUpload(
+      uid: uid,
+      source: source,
+      onError: (msg) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+          );
+        }
+      },
+    );
+
+    if (!mounted) return;
+    setState(() => _uploadingPhoto = false);
+
+    if (url != null) {
+      context.read<AuthService>().updateCurrentUser(photoUrl: url);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto atualizada com sucesso!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removerPhoto(String uid) async {
+    if (uid.isEmpty) return;
+    setState(() => _uploadingPhoto = true);
+    await ProfilePhotoService.removePhoto(uid);
+    if (!mounted) return;
+    setState(() => _uploadingPhoto = false);
+    context.read<AuthService>().updateCurrentUser(clearPhoto: true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Foto removida.'),
+        backgroundColor: AppColors.primary,
+      ),
+    );
+  }
+
   // -- Helpers ----------------------------------------------------------------
 
   String _maskCpf(String cpf) {
@@ -863,6 +1059,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 // -- Widgets auxiliares ---------------------------------------------------------
+
+class _PhotoOptionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Color? iconColor;
+  final Color? labelColor;
+
+  const _PhotoOptionTile({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+    this.iconColor,
+    this.labelColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = iconColor ?? AppColors.primary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: labelColor ?? AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                color: color.withValues(alpha: 0.5), size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _Section extends StatelessWidget {
   final String title;

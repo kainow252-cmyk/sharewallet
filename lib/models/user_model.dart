@@ -23,6 +23,8 @@ class UserModel {
   // Chave PIX cadastrada no perfil (pode ser email, CPF, telefone ou aleatória)
   final String pixKey;
   final String pixKeyType;
+  // URL da foto de perfil (Firebase Storage)
+  final String? photoUrl;
 
   UserModel({
     required this.id,
@@ -39,6 +41,7 @@ class UserModel {
     required this.createdAt,
     this.pixKey = '',
     this.pixKeyType = 'EMAIL',
+    this.photoUrl,
   });
 
   // ── Getter de admin: email-based, sem necessidade de campo extra no banco ──
@@ -72,6 +75,7 @@ class UserModel {
           : DateTime.now(),
       pixKey: json['pix_key']?.toString() ?? json['pixKey']?.toString() ?? '',
       pixKeyType: json['pix_key_type']?.toString() ?? json['pixKeyType']?.toString() ?? 'EMAIL',
+      photoUrl: json['photo_url']?.toString() ?? json['photoUrl']?.toString(),
     );
   }
 
@@ -90,6 +94,7 @@ class UserModel {
         'created_at': createdAt.toIso8601String(),
         'pix_key': pixKey,
         'pix_key_type': pixKeyType,
+        'photo_url': photoUrl,
       };
 
   String get primeiroNome => nome.split(' ').first;
@@ -109,6 +114,8 @@ class UserModel {
     DateTime? createdAt,
     String? pixKey,
     String? pixKeyType,
+    String? photoUrl,
+    bool clearPhoto = false,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -125,6 +132,7 @@ class UserModel {
       createdAt: createdAt ?? this.createdAt,
       pixKey: pixKey ?? this.pixKey,
       pixKeyType: pixKeyType ?? this.pixKeyType,
+      photoUrl: clearPhoto ? null : (photoUrl ?? this.photoUrl),
     );
   }
 }
