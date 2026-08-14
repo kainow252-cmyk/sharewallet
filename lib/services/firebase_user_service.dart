@@ -469,7 +469,23 @@ class FirebaseUserService {
 
       // ── AUTO-GERAR USERNAME para usuários antigos sem @handle ─────────────
       // Se o usuário não tem username (campo vazio/nulo no Firestore),
-      // gera automaticamente em background e persiste no Firestore + D1.
+      // tenta buscar do D1 primeiro (fonte de verdade para dados editados no app),
+      // só gera novo se também não tiver no D1.
+      if (usernameResolvido.isEmpty) {
+        try {
+          final d1Data = await CfApiService.getAffiliateById(uid);
+          final usernameD1 = d1Data?['username']?.toString() ?? '';
+          if (usernameD1.isNotEmpty) {
+            usernameResolvido = usernameD1;
+            // Sincroniza de volta ao Firestore para resolver inconsistência
+            db.collection('affiliates').doc(uid).set(
+              {'username': usernameD1, 'updated_at': FieldValue.serverTimestamp()},
+              SetOptions(merge: true),
+            ).catchError((_) {});
+            if (kDebugMode) debugPrint('[FirebaseUserService] Username recuperado do D1: @$usernameD1');
+          }
+        } catch (_) {}
+      }
       if (usernameResolvido.isEmpty) {
         final gerado = await _gerarUsernameUnico(nomeResolvido, uid);
         usernameResolvido = gerado;
