@@ -429,7 +429,15 @@ class AuthService extends ChangeNotifier {
     try {
       final user = await FirebaseUserService.carregarUsuarioAtual();
       if (user != null) {
-        _currentUser = user;
+        // CRÍTICO: preserva username atual se o Firestore retornar vazio.
+        // Isso evita que uma propagação lenta do Firestore apague o username
+        // que acabou de ser salvo e atualizado localmente via updateCurrentUser().
+        final usernameAtual = _currentUser?.username ?? '';
+        if (usernameAtual.isNotEmpty && user.username.isEmpty) {
+          _currentUser = user.copyWith(username: usernameAtual);
+        } else {
+          _currentUser = user;
+        }
         notifyListeners();
       }
     } catch (e) {

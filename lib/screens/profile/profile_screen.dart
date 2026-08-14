@@ -180,13 +180,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final pixKey       = _pixCtrl.text.trim();
     final novoUsername = _usernameCtrl.text.toLowerCase().trim();
 
-    // Bloqueia se username inválido
+    // Bloqueia se username inválido ou verificação ainda pendente
     if (_usernameErro != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_usernameErro!), backgroundColor: AppColors.error),
       );
       setState(() => _saving = false);
       return;
+    }
+
+    // Se o usuário digitou algo no campo mas a verificação ainda não terminou → aguarda
+    final novoUsernameCheck = _usernameCtrl.text.toLowerCase().trim();
+    final usernameAtualCheck = context.read<AuthService>().currentUser?.username ?? '';
+    if (novoUsernameCheck.isNotEmpty &&
+        novoUsernameCheck != usernameAtualCheck &&
+        _usernameDisponivel != true &&
+        !_usernameChecking) {
+      // Força verificação antes de salvar
+      await _verificarUsername(novoUsernameCheck);
+      if (!mounted) return;
+      if (_usernameErro != null || _usernameDisponivel != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_usernameErro ?? 'Verifique o @usuário antes de salvar'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        setState(() => _saving = false);
+        return;
+      }
+    }
+    // Se verificação ainda está rodando, aguarda até 3s
+    if (_usernameChecking) {
+      for (int i = 0; i < 30; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (!_usernameChecking) break;
+      }
+      if (!mounted) return;
+      if (_usernameErro != null || (_usernameDisponivel != true && novoUsernameCheck != usernameAtualCheck && novoUsernameCheck.isNotEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_usernameErro ?? 'Aguarde a verificação do @usuário'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        setState(() => _saving = false);
+        return;
+      }
     }
 
     try {
@@ -204,9 +244,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         affiliateCode: auth.currentUser?.affiliateCode ?? '',
       );
 
-      // 1b. Atualiza @username se mudou
+      // 1b. Atualiza @username se mudou OU se ainda não tem username (existente sem campo)
       final usernameAtual = auth.currentUser?.username ?? '';
-      if (novoUsername.isNotEmpty && novoUsername != usernameAtual) {
+      final deveAtualizarUsername = novoUsername.isNotEmpty &&
+          (novoUsername != usernameAtual) &&
+          (_usernameDisponivel == true || novoUsername == usernameAtual);
+      if (deveAtualizarUsername) {
         final res = await FirebaseUserService.atualizarUsername(
           uid: uid,
           novoUsername: novoUsername,
@@ -232,17 +275,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (novoUsername.isNotEmpty) 'username': novoUsername,
       }).catchError((_) => null);
 
-      // 3. Atualiza o currentUser DIRETAMENTE no AuthService
+      // 3. Atualiza o currentUser DIRETAMENTE no AuthService (ANTES do refreshProfile)
+      // CRÍTICO: passar username aqui garante que o header atualize imediatamente.
+      // O refreshProfile em background pode sobrescrever com '' se o Firestore
+      // ainda não propagou — por isso chamamos updateCurrentUser primeiro.
+      final usernameParaSalvar = novoUsername.isNotEmpty ? novoUsername : null;
       auth.updateCurrentUser(
         nome: nome,
         telefone: telefone,
         cpf: cpf,
         pixKey: pixKey,
-        username: novoUsername.isNotEmpty ? novoUsername : null,
+        username: usernameParaSalvar,
       );
+      // Atualiza controller e estado da UI imediatamente
+      if (usernameParaSalvar != null) {
+        _usernameCtrl.text = usernameParaSalvar;
+        _usernameDisponivel = true;
+        _usernameErro = null;
+      }
 
-      // 4. Tenta refreshProfile em background para sincronizar com servidor
-      auth.refreshProfile().catchError((_) {});
+      // 4. refreshProfile em background — mas NÃO sobrescreve username se já foi salvo
+      // Aguarda 2s para o Firestore propagar o write antes de reler
+      if (usernameParaSalvar != null) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!mounted) return;
+          auth.refreshProfile().catchError((_) {});
+        });
+      } else {
+        auth.refreshProfile().catchError((_) {});
+      }
 
       if (!mounted) return;
       setState(() { _editMode = false; _saving = false; });

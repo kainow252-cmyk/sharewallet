@@ -662,7 +662,10 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = product;
     final auth = context.read<AuthService>();
-    final affiliateCode = auth.currentUser?.affiliateCode ?? 'ABC123';
+    // Usa @username como ref de rastreio (mais amigável); fallback para affiliateCode
+    final affiliateCode = auth.currentUser?.username.isNotEmpty == true
+        ? auth.currentUser!.username
+        : (auth.currentUser?.affiliateCode ?? 'ABC123');
 
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
