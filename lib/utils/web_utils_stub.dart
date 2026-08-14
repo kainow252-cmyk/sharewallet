@@ -7,6 +7,8 @@ String? getSessionStorageValue(String key) => null;
 
 void removeSessionStorageValue(String key) {}
 
+void setSessionStorageValue(String key, String value) {}
+
 // ── localStorage (stub — no-op em mobile/desktop) ──────────────────────────
 
 String? getLocalStorageValue(String key) => null;

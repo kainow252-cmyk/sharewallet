@@ -216,7 +216,7 @@ class FirebaseUserService {
           email: email,
           displayName: authResult.displayName,
         ).timeout(
-          const Duration(seconds: 8),
+          const Duration(seconds: 5),  // reduzido de 8s para resposta mais rápida
           onTimeout: () {
             if (kDebugMode) {
               debugPrint('[FirebaseUserService] Timeout buscar perfil — usando fallback');
@@ -399,10 +399,10 @@ class FirebaseUserService {
         db.collection('affiliates').doc(uid).get(),
         db.collection('wallets').doc(uid).get(),
       ]).timeout(
-        const Duration(seconds: 6),
+        const Duration(seconds: 4),  // reduzido de 6s: fallback rápido se Firestore travar
         onTimeout: () => throw TimeoutException(
           'Firestore timeout ao buscar perfil ($uid)',
-          const Duration(seconds: 6),
+          const Duration(seconds: 4),
         ),
       );
       final affiliateDoc = results[0];

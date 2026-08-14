@@ -5,6 +5,7 @@ import '../../services/auth_service.dart';
 import '../../services/firebase_auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
+import '../../utils/web_utils.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,13 +20,24 @@ class _LoginScreenState extends State<LoginScreen> {
   final _senhaController = TextEditingController();
   bool _showPassword = false;
   bool _socialLoading = false;
+  // Flag local para feedback INSTANTÂNEO no botão Entrar — antes do Firebase responder.
+  // auth.isLoading só muda após o primeiro notifyListeners() do AuthService (tem delay).
+  bool _loginLoading = false;
 
   @override
   void initState() {
     super.initState();
-    // Verifica redirect pendente do Google Sign-In (web)
+    // Verifica redirect pendente do Google Sign-In (web).
+    // SÓ executa se sessionStorage indica redirect real pendente —
+    // evita esperar getRedirectResult() toda vez que a tela abre.
     if (kIsWeb) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _checkRedirectResult());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final pendente = getSessionStorageValue('sw_redirect_pending') == 'true';
+        if (pendente) {
+          removeSessionStorageValue('sw_redirect_pending');
+          _checkRedirectResult();
+        }
+      });
     }
   }
 
@@ -48,12 +60,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Verifica se voltou de um redirect do Google Sign-In
   Future<void> _checkRedirectResult() async {
-    // TIMEOUT CRÍTICO: getRedirectResult() pode travar indefinidamente
-    // quando não há redirect pendente (SDK espera resposta do servidor).
-    // 5s é suficiente para processar um redirect real; sem redirect, retorna null rápido.
+    // Só chega aqui se sw_redirect_pending estava gravado — há redirect real.
+    // Timeout de 3s: suficiente para processar redirect; evita bloqueio longo.
     final result = await FirebaseAuthService.getRedirectResult()
         .timeout(
-          const Duration(seconds: 5),
+          const Duration(seconds: 3),
           onTimeout: () => null,
         );
     if (!mounted || result == null) return;
@@ -82,15 +93,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
+    // Feedback IMEDIATO: spinner aparece antes mesmo do Firebase ser chamado
+    setState(() => _loginLoading = true);
     final auth = context.read<AuthService>();
     final ok = await auth.login(_emailController.text.trim(), _senhaController.text);
     if (!mounted) return;
+    setState(() => _loginLoading = false);
     if (ok) {
       _navegarAposLogin();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(auth.error ?? 'Erro ao fazer login'),
+          content: Text(auth.error ?? 'E-mail ou senha inválidos'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -731,8 +745,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               PrimaryButton(
                                 label: 'Entrar',
                                 onPressed:
-                                    auth.isLoading || _socialLoading ? null : _login,
-                                isLoading: auth.isLoading,
+                                    auth.isLoading || _socialLoading || _loginLoading ? null : _login,
+                                isLoading: auth.isLoading || _loginLoading,
                                 icon: Icons.login_rounded,
                               ),
 

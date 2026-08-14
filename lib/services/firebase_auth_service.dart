@@ -12,6 +12,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:flutter/foundation.dart';
+import '../utils/web_utils.dart';
+
+/// Grava flag no sessionStorage para que LoginScreen saiba que há redirect pendente.
+/// Sem essa flag, getRedirectResult() é chamado desnecessariamente a cada abertura
+/// do LoginScreen, adicionando até 5s de espera mesmo sem redirect.
+void _markRedirectPending() {
+  if (kIsWeb) setSessionStorageValue('sw_redirect_pending', 'true');
+}
 
 // -- Resultado padrão de autenticação -----------------------------------------
 
@@ -267,6 +275,7 @@ class FirebaseAuthService {
     // signInWithPopup gera "Cross-Origin-Opener-Policy would block window.closed".
     // Usa redirect diretamente nesses ambientes para evitar o warning.
     if (_hasCOOPRestriction()) {
+      _markRedirectPending();
       await _auth.signInWithRedirect(googleProvider);
       return FirebaseAuthResult.failure(
         'REDIRECT_INITIATED',
@@ -319,6 +328,7 @@ class FirebaseAuthService {
           msg.contains('popup') ||
           msg.contains('cross-origin') ||
           msg.contains('coop')) {
+        _markRedirectPending();
         await _auth.signInWithRedirect(googleProvider);
         return FirebaseAuthResult.failure(
           'REDIRECT_INITIATED',
@@ -334,6 +344,7 @@ class FirebaseAuthService {
       final s = e.toString().toLowerCase();
       if (s.contains('popup') || s.contains('blocked') ||
           s.contains('cross-origin') || s.contains('coop')) {
+        _markRedirectPending();
         final GoogleAuthProvider gp2 = GoogleAuthProvider();
         await _auth.signInWithRedirect(gp2);
         return FirebaseAuthResult.failure(
@@ -457,6 +468,7 @@ class FirebaseAuthService {
 
     // Mesma logica do Google: usa redirect em ambientes com COOP restritivo
     if (_hasCOOPRestriction()) {
+      _markRedirectPending();
       await _auth.signInWithRedirect(provider);
       return FirebaseAuthResult.failure(
         'REDIRECT_INITIATED',
@@ -496,6 +508,7 @@ class FirebaseAuthService {
       if (code == 'popup-blocked' ||
           code == 'unauthorized-domain' ||
           (e.message?.toLowerCase().contains('domain') == true)) {
+        _markRedirectPending();
         await _auth.signInWithRedirect(FacebookAuthProvider());
         return FirebaseAuthResult.failure(
           'REDIRECT_INITIATED',
@@ -515,6 +528,7 @@ class FirebaseAuthService {
         );
       }
       if (s.contains('popup') || s.contains('blocked')) {
+        _markRedirectPending();
         await _auth.signInWithRedirect(FacebookAuthProvider());
         return FirebaseAuthResult.failure(
           'REDIRECT_INITIATED',

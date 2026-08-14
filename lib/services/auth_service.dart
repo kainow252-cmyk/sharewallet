@@ -72,7 +72,7 @@ class AuthService extends ChangeNotifier {
           .authStateChanges()
           .first
           .timeout(
-            const Duration(seconds: 2),
+            const Duration(milliseconds: 1500),  // reduzido: IndexedDB local é rápido
             onTimeout: () => null,
           );
 
@@ -110,7 +110,7 @@ class AuthService extends ChangeNotifier {
 
         // Background: carrega perfil completo do Firestore sem bloquear navegação
         FirebaseUserService.carregarUsuarioAtual()
-            .timeout(const Duration(seconds: 8), onTimeout: () => null)
+            .timeout(const Duration(seconds: 4), onTimeout: () => null)  // reduzido de 8s
             .then((user) {
               if (user != null) {
                 _currentUser = user;

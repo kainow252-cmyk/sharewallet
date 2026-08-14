@@ -13,6 +13,11 @@ void removeSessionStorageValue(String key) {
   html.window.sessionStorage.remove(key);
 }
 
+/// Grava um valor no sessionStorage.
+void setSessionStorageValue(String key, String value) {
+  html.window.sessionStorage[key] = value;
+}
+
 // ── localStorage (persiste entre sessões / PWA relaunches) ───────────────────
 
 /// Lê um valor do localStorage. Retorna null se não existir ou em caso de erro.
