@@ -242,16 +242,28 @@ class _BuyScreenState extends State<BuyScreen> {
             _clienteEncontrado = true;
             _clienteNomeBanco  = c['nome'] as String? ?? '';
             // Preenche todos os campos — sobrescreve só se o campo estiver vazio
-            if (_nomeCtrl.text.trim().isEmpty)    _nomeCtrl.text    = c['nome']     as String? ?? '';
-            if (_emailCtrl.text.trim().isEmpty)   _emailCtrl.text   = c['email']    as String? ?? '';
+            if (_nomeCtrl.text.trim().isEmpty)    _nomeCtrl.text    = c['nome']            as String? ?? '';
+            if (_emailCtrl.text.trim().isEmpty)   _emailCtrl.text   = c['email']           as String? ?? '';
             if (_celularCtrl.text.trim().isEmpty) _celularCtrl.text = _formatarTel(c['telefone'] as String? ?? '');
-            if (_cepCtrl.text.trim().isEmpty)     _cepCtrl.text     = _formatarCep(c['cep']      as String? ?? '');
-            if (_ruaCtrl.text.trim().isEmpty)     _ruaCtrl.text     = c['rua']      as String? ?? '';
-            if (_numeroCtrl.text.trim().isEmpty)  _numeroCtrl.text  = c['numero']   as String? ?? '';
+            // Data de nascimento: aceita dd/mm/yyyy direto
+            final nascRaw = c['data_nascimento'] as String? ?? '';
+            if (_nascCtrl.text.trim().isEmpty && nascRaw.isNotEmpty) {
+              // Garante formato dd/mm/yyyy
+              if (RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(nascRaw)) {
+                _nascCtrl.text = nascRaw;
+              } else if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(nascRaw)) {
+                // ISO 8601 → dd/mm/yyyy
+                final parts = nascRaw.substring(0, 10).split('-');
+                _nascCtrl.text = '${parts[2]}/${parts[1]}/${parts[0]}';
+              }
+            }
+            if (_cepCtrl.text.trim().isEmpty)     _cepCtrl.text     = _formatarCep(c['cep'] as String? ?? '');
+            if (_ruaCtrl.text.trim().isEmpty)     _ruaCtrl.text     = c['rua']         as String? ?? '';
+            if (_numeroCtrl.text.trim().isEmpty)  _numeroCtrl.text  = c['numero']      as String? ?? '';
             if (_compCtrl.text.trim().isEmpty)    _compCtrl.text    = c['complemento'] as String? ?? '';
-            if (_bairroCtrl.text.trim().isEmpty)  _bairroCtrl.text  = c['bairro']   as String? ?? '';
-            if (_cidadeCtrl.text.trim().isEmpty)  _cidadeCtrl.text  = c['cidade']   as String? ?? '';
-            if (_estadoCtrl.text.trim().isEmpty)  _estadoCtrl.text  = (c['estado']  as String? ?? '').toUpperCase();
+            if (_bairroCtrl.text.trim().isEmpty)  _bairroCtrl.text  = c['bairro']      as String? ?? '';
+            if (_cidadeCtrl.text.trim().isEmpty)  _cidadeCtrl.text  = c['cidade']      as String? ?? '';
+            if (_estadoCtrl.text.trim().isEmpty)  _estadoCtrl.text  = (c['estado']     as String? ?? '').toUpperCase();
           });
           // Se endereço veio incompleto mas CEP veio — busca via ViaCEP
           final cepDigits = _cepCtrl.text.replaceAll(RegExp(r'\D'), '');
