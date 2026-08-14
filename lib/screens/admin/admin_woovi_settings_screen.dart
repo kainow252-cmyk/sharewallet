@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../services/woovi_admin_service.dart';
 import '../../theme/app_theme.dart';
 
+// ignore_for_file: use_build_context_synchronously
+
 const _wooviPurple  = Color(0xFF6C3CE1);
 const _wooviDark    = Color(0xFF4A1FA8);
 const _wooviGreen   = Color(0xFF00C851);
@@ -68,7 +70,7 @@ class _AdminWooviSettingsScreenState extends State<AdminWooviSettingsScreen>
                 child: TabBarView(
                   controller: _tab,
                   children: [
-                    _CredentialsTab(svc: svc),
+                    const _CredentialsTab(),  // usa context.watch internamente
                     _SettingsTab(svc: svc),
                   ],
                 ),
@@ -86,8 +88,8 @@ class _AdminWooviSettingsScreenState extends State<AdminWooviSettingsScreen>
 // ===========================================================================
 
 class _CredentialsTab extends StatefulWidget {
-  final WooviAdminService svc;
-  const _CredentialsTab({required this.svc});
+  // Não recebe mais 'svc' por parâmetro — usa context.watch para reagir a mudanças
+  const _CredentialsTab();
 
   @override
   State<_CredentialsTab> createState() => _CredentialsTabState();
@@ -99,13 +101,7 @@ class _CredentialsTabState extends State<_CredentialsTab> {
   bool _saving     = false;
   String? _erro;
   String? _sucesso;
-
-  @override
-  void initState() {
-    super.initState();
-    final cfg = widget.svc.config;
-    _appIdCtrl.text = cfg.appId;
-  }
+  bool _initialized = false;
 
   @override
   void dispose() {
@@ -113,8 +109,19 @@ class _CredentialsTabState extends State<_CredentialsTab> {
     super.dispose();
   }
 
+  // ── Inicializa campo uma única vez quando config carrega ───────────────────
+  void _initFieldIfNeeded(WooviConfig cfg) {
+    if (!_initialized && cfg.appId.isNotEmpty) {
+      _appIdCtrl.text = cfg.appId;
+      _initialized = true;
+    } else if (!_initialized && cfg.appId.isEmpty) {
+      // Config carregada mas vazia — marca como inicializado mesmo assim
+      _initialized = true;
+    }
+  }
+
   // ── Verifica + Salva ──────────────────────────────────────────────────────
-  Future<void> _salvar() async {
+  Future<void> _salvar(WooviAdminService svc) async {
     final appId = _appIdCtrl.text.trim();
     if (appId.isEmpty) {
       setState(() => _erro = 'Informe o AppID da Woovi.');
@@ -123,19 +130,21 @@ class _CredentialsTabState extends State<_CredentialsTab> {
     setState(() { _saving = true; _erro = null; _sucesso = null; });
 
     // 1. Verificar AppID
-    final res = await widget.svc.verifyAppId(appId);
+    final res = await svc.verifyAppId(appId);
+    if (!mounted) return;
     if (!res.ok) {
       setState(() { _saving = false; _erro = res.error; });
       return;
     }
 
     // 2. Salvar config verificada
-    final newCfg = widget.svc.config.copyWith(
+    final newCfg = svc.config.copyWith(
       appId:       appId,
       verified:    true,
       accountName: res.accountName,
     );
-    final ok = await widget.svc.saveConfig(newCfg);
+    final ok = await svc.saveConfig(newCfg);
+    if (!mounted) return;
     setState(() {
       _saving  = false;
       _sucesso = ok
@@ -146,7 +155,7 @@ class _CredentialsTabState extends State<_CredentialsTab> {
   }
 
   // ── Remover credenciais ────────────────────────────────────────────────────
-  Future<void> _remover() async {
+  Future<void> _remover(WooviAdminService svc) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -162,14 +171,16 @@ class _CredentialsTabState extends State<_CredentialsTab> {
         ],
       ),
     );
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
 
     setState(() { _saving = true; _erro = null; _sucesso = null; });
-    final newCfg = widget.svc.config.copyWith(
+    final newCfg = svc.config.copyWith(
       appId: '', verified: false, accountName: '',
     );
-    await widget.svc.saveConfig(newCfg);
+    await svc.saveConfig(newCfg);
+    if (!mounted) return;
     _appIdCtrl.clear();
+    _initialized = false; // reseta para inicializar novamente se necessário
     setState(() {
       _saving  = false;
       _sucesso = 'AppID removido.';
@@ -178,8 +189,13 @@ class _CredentialsTabState extends State<_CredentialsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final cfg        = widget.svc.config;
+    // ⚡ context.watch garante rebuild automático quando saveConfig chama notifyListeners()
+    final svc        = context.watch<WooviAdminService>();
+    final cfg        = svc.config;
     final configured = cfg.verified && cfg.appId.isNotEmpty;
+
+    // Inicializa campo de texto com valor do servidor (só na primeira vez)
+    _initFieldIfNeeded(cfg);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -269,9 +285,9 @@ class _CredentialsTabState extends State<_CredentialsTab> {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: (_saving || widget.svc.isVerifying)
+                      onPressed: (_saving || svc.isVerifying)
                           ? null
-                          : _salvar,
+                          : () => _salvar(svc),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _wooviPurple,
                         foregroundColor: Colors.white,
@@ -279,7 +295,7 @@ class _CredentialsTabState extends State<_CredentialsTab> {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
-                      icon: (_saving || widget.svc.isVerifying)
+                      icon: (_saving || svc.isVerifying)
                           ? const SizedBox(
                               width: 18,
                               height: 18,
@@ -287,7 +303,7 @@ class _CredentialsTabState extends State<_CredentialsTab> {
                                   strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.verified_rounded, size: 18),
                       label: Text(
-                          (_saving || widget.svc.isVerifying)
+                          (_saving || svc.isVerifying)
                               ? 'Verificando...'
                               : 'Verificar e Salvar',
                           style: const TextStyle(
@@ -297,7 +313,7 @@ class _CredentialsTabState extends State<_CredentialsTab> {
                   if (configured) ...[
                     const SizedBox(width: 8),
                     OutlinedButton.icon(
-                      onPressed: _saving ? null : _remover,
+                      onPressed: _saving ? null : () => _remover(svc),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.error,
                         side: BorderSide(color: AppColors.error),

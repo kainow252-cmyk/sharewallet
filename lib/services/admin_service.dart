@@ -354,7 +354,7 @@ class AdminService extends ChangeNotifier {
     return false;
   }
 
-  void adminLogout() {
+  Future<void> adminLogout() async {
     _isAdmin = false;
     _affiliates = [];
     _subscriptions = [];
@@ -362,6 +362,11 @@ class AdminService extends ChangeNotifier {
     _sales = [];
     _metrics = null;
     notifyListeners();
+    // Faz signOut completo do Firebase — sem isso a sessão persiste
+    // e qualquer rota que cheque o auth redireciona de volta para /admin
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {}
   }
 
   // ── initFromExistingSession ─────────────────────────────────────────────

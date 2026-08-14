@@ -100,7 +100,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
   }
 
   Future<void> _logout() async {
-    final confirm = await showDialog<bool>(
+    final confirm = await showDialog<bool>(  // já é async ✓
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF0D2518),
@@ -129,8 +129,11 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
       ),
     );
     if (confirm == true && mounted) {
-      context.read<AdminService>().adminLogout();
-      Navigator.pushReplacementNamed(context, '/landing');
+      // Aguarda signOut do Firebase antes de navegar — evita loop de redirecionamento
+      await context.read<AdminService>().adminLogout();
+      if (!mounted) return;
+      // Vai para /admin/login (não /landing, que redireciona de volta para /admin se logado)
+      Navigator.pushReplacementNamed(context, '/admin/login');
     }
   }
 
