@@ -17,6 +17,7 @@ class WalletService extends ChangeNotifier {
   double _saldoPendente = 0.0;
   double _totalRecebido = 0.0;
   double _totalSacado = 0.0;
+  double _saqueMinimo = 0.0; // dinâmico: vem do Worker (affiliates.saque_minimo)
 
   List<SaleModel> get sales => _sales;
   List<SaleModel> get salesCompleted => _sales.where((s) => s.isCompleted).toList();
@@ -29,6 +30,11 @@ class WalletService extends ChangeNotifier {
   double get saldoPendente => _saldoPendente;
   double get totalRecebido => _totalRecebido;
   double get totalSacado => _totalSacado;
+  /// Limite mínimo de saque do afiliado (configurável pelo admin).
+  /// Retorna o valor do Worker; 0 significa sem limite configurado.
+  double get saqueMinimo => _saqueMinimo;
+  /// Retorna true se o afiliado tem saldo suficiente para sacar
+  bool get podeSacar => _saqueMinimo <= 0 || _saldoCarteira >= _saqueMinimo;
 
   double get totalComissoes =>
       salesCompleted.fold(0.0, (sum, s) => sum + s.comissao);
@@ -120,6 +126,12 @@ class WalletService extends ChangeNotifier {
         _totalRecebido  = _toDouble(wallet['total_recebido']);
         _totalSacado    = _toDouble(wallet['total_sacado']);
         _totalIndicados = _toInt(wallet['total_indicados']);
+      }
+
+      // Carrega saque_minimo dinâmico (retornado junto com a wallet pelo Worker)
+      if (walletRaw != null && walletRaw.containsKey('saque_minimo')) {
+        final sm = walletRaw['saque_minimo'];
+        if (sm != null) _saqueMinimo = _toDouble(sm);
       }
 
       // Sales: usa walletData['sales'] se existir, senão resultado separado

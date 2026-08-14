@@ -166,6 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     saldo: saldoExibido,
                     isLoading: wallet.isLoading && wallet.saldoCarteira == 0,
                     isVisible: _saldoVisible,
+                    saqueMinimo: wallet.saqueMinimo,
                     onToggleVisibility: () =>
                         setState(() => _saldoVisible = !_saldoVisible),
                     onTapCarteira: () => MainNavController().goCarteira(),
@@ -462,15 +463,16 @@ class _WalletSummaryCard extends StatelessWidget {
     this.isLoading = false,
     required this.onToggleVisibility,
     required this.onTapCarteira,
+    this.saqueMinimo = 0.0,
   });
 
-  static const double _saqueMinimo = 100.0;
+  final double saqueMinimo;
 
   @override
   Widget build(BuildContext context) {
-    final pct = (saldo / _saqueMinimo).clamp(0.0, 1.0);
-    final faltam = (_saqueMinimo - saldo).clamp(0.0, _saqueMinimo);
-    final podesSacar = saldo >= _saqueMinimo;
+    final pct = saqueMinimo > 0 ? (saldo / saqueMinimo).clamp(0.0, 1.0) : 1.0;
+    final faltam = saqueMinimo > 0 ? (saqueMinimo - saldo).clamp(0.0, saqueMinimo) : 0.0;
+    final podesSacar = saqueMinimo <= 0 || saldo >= saqueMinimo;
 
     return GestureDetector(
       onTap: onTapCarteira,
@@ -558,7 +560,9 @@ class _WalletSummaryCard extends StatelessWidget {
                               style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.5),
                                   fontSize: 11)),
-                          Text('R\$ ${_saqueMinimo.toStringAsFixed(0)}',
+                          Text(saqueMinimo > 0
+                              ? 'R\$ ${saqueMinimo.toStringAsFixed(0)}'
+                              : 'Sem m\u00ednimo',
                               style: const TextStyle(
                                   color: Colors.white54, fontSize: 11)),
                         ],

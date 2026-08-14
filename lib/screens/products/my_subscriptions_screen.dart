@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/subscription_model.dart';
 import '../../models/product_model.dart';
 import '../../services/subscription_service.dart';
+import '../../services/wallet_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 // ignore: unused_import
@@ -164,7 +165,9 @@ class _CommissionSummary extends StatelessWidget {
                             style: TextStyle(
                                 color: Colors.white70, fontSize: 11)),
                         Text(
-                          'R\$ ${SubscriptionService.saqueMinimo.toStringAsFixed(0)}',
+                          context.watch<WalletService>().saqueMinimo > 0
+                              ? 'R\$ ${context.watch<WalletService>().saqueMinimo.toStringAsFixed(0)}'
+                              : 'Livre',
                           style: const TextStyle(
                               color: Colors.white70, fontSize: 11),
                         ),
@@ -174,9 +177,12 @@ class _CommissionSummary extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
-                        value: (svc.saldoDisponivel /
-                                SubscriptionService.saqueMinimo)
-                            .clamp(0.0, 1.0),
+                        value: (() {
+                          final sm = context.watch<WalletService>().saqueMinimo;
+                          return sm > 0
+                              ? (svc.saldoDisponivel / sm).clamp(0.0, 1.0)
+                              : 1.0;
+                        })(),
                         backgroundColor:
                             Colors.white.withValues(alpha: 0.2),
                         valueColor: AlwaysStoppedAnimation(
@@ -189,7 +195,12 @@ class _CommissionSummary extends StatelessWidget {
                     Text(
                       svc.podeSacar
                           ? 'Saldo suficiente  -  você pode sacar agora!'
-                          : 'Faltam R\$ ${(SubscriptionService.saqueMinimo - svc.saldoDisponivel).toStringAsFixed(2).replaceAll('.',',')} para o saque mínimo',
+                          : (() {
+                              final sm = context.watch<WalletService>().saqueMinimo;
+                              return sm > 0
+                                  ? 'Faltam R\$ ${(sm - svc.saldoDisponivel).toStringAsFixed(2).replaceAll(".",",")} para o saque mínimo'
+                                  : 'Você já pode sacar!';
+                            })(),
                       style: TextStyle(
                           color: svc.podeSacar
                               ? AppColors.gold

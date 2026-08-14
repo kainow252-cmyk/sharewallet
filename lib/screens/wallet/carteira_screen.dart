@@ -19,8 +19,6 @@ class _CarteiraScreenState extends State<CarteiraScreen>
     with SingleTickerProviderStateMixin {
   final _fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
   bool _saldoVisible = true;
-  static const double _saqueMinimo = 100.0;
-
   // Abas: 0 = Carteira, 1 = Indicados
   late TabController _tabController;
 
@@ -141,11 +139,12 @@ class _CarteiraScreenState extends State<CarteiraScreen>
 
   Future<void> _solicitarSaque() async {
     final wallet = context.read<WalletService>();
-    if (wallet.saldoCarteira < _saqueMinimo) {
+    final saqueMinimo = wallet.saqueMinimo > 0 ? wallet.saqueMinimo : 0.01;
+    if (wallet.saldoCarteira < saqueMinimo) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Saldo mínimo para saque: ${_fmt.format(_saqueMinimo)}.'
+            'Saldo mínimo para saque: ${_fmt.format(saqueMinimo)}. '
             'Você tem ${_fmt.format(wallet.saldoCarteira)}.',
           ),
           backgroundColor: AppColors.error,
@@ -194,9 +193,11 @@ class _CarteiraScreenState extends State<CarteiraScreen>
         final pendente     = wallet.saldoPendente;
         final totalRecebido = wallet.totalRecebido;
         final transacoes   = wallet.extratoCompleto;
-        final metaPct      = (saldo / _saqueMinimo).clamp(0.0, 1.0);
-        final faltam       = (_saqueMinimo - saldo).clamp(0.0, _saqueMinimo);
-        final podesSacar   = saldo >= _saqueMinimo;
+        // Usa saque_minimo din\u00e2mico do Worker; se 0 (n\u00e3o configurado), exibe sem limite
+        final saqueMinimo  = wallet.saqueMinimo > 0 ? wallet.saqueMinimo : 0.01;
+        final metaPct      = wallet.saqueMinimo > 0 ? (saldo / saqueMinimo).clamp(0.0, 1.0) : 1.0;
+        final faltam       = wallet.saqueMinimo > 0 ? (saqueMinimo - saldo).clamp(0.0, saqueMinimo) : 0.0;
+        final podesSacar   = wallet.saqueMinimo <= 0 || saldo >= saqueMinimo;
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -408,7 +409,9 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                               Text(
                                 podesSacar
                                     ? 'Você já pode solicitar seu saque!'
-                                    : 'Faltam ${_fmt.format(faltam)} para o mínimo de ${_fmt.format(_saqueMinimo)}',
+                                    : wallet.saqueMinimo > 0
+                                        ? 'Faltam ${_fmt.format(faltam)} para o mínimo de ${_fmt.format(saqueMinimo)}'
+                                        : 'Você já pode solicitar seu saque!',
                                 style: TextStyle(
                                     color: podesSacar
                                         ? AppColors.success
@@ -473,7 +476,9 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Mínimo: ${_fmt.format(_saqueMinimo)} * Processamento em até 24h',
+                          wallet.saqueMinimo > 0
+                              ? 'Mínimo: ${_fmt.format(saqueMinimo)} • Processamento em até 24h'
+                              : 'Sem mínimo configurado • Processamento em até 24h',
                           style: const TextStyle(
                               color: AppColors.textHint, fontSize: 11),
                         ),
