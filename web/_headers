@@ -44,12 +44,14 @@
   CDN-Cache-Control: no-store
   Cloudflare-CDN-Cache-Control: no-store
 
-# main.dart.js: CACHE LONGO — Flutter adiciona fingerprint hash no nome.
-# O arquivo NUNCA muda de conteúdo com o mesmo nome; a cada build o nome muda.
-# PWA PRECISA deste cache para abrir offline e ser instantâneo!
+# main.dart.js: SEM CACHE — o Flutter NÃO adiciona hash no nome (sempre "main.dart.js").
+# O patch_build.py injeta ?v=VERSION no flutter_bootstrap.js para cache-busting.
+# CDN e browser devem sempre revalidar para pegar o build mais recente.
 /main.dart.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 # pwa_install.js: revalidar (atualizado pelo patch_build.py)
 /pwa_install.js

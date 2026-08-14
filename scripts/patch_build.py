@@ -46,7 +46,7 @@ def _app_version():
     return ts
 
 
-def patch_bootstrap():
+def patch_bootstrap(version: str):
     path = os.path.join(BUILD_DIR, 'flutter_bootstrap.js')
     if not os.path.exists(path):
         print(f'SKIP: {path} not found')
@@ -55,7 +55,7 @@ def patch_bootstrap():
     with open(path, 'r') as f:
         content = f.read()
 
-    # Remove serviceWorkerSettings block
+    # 1. Remove serviceWorkerSettings block
     # O flutter_bootstrap.js gerado pelo Flutter pode ter duas formas:
     # 1. Minificada: _flutter.loader.load({serviceWorkerSettings:{serviceWorkerVersion:"..."}})
     # 2. Com quebras de linha: _flutter.loader.load({\n  serviceWorkerSettings: {\n    ...\n  }\n});
@@ -67,12 +67,34 @@ def patch_bootstrap():
         flags=re.DOTALL,
     )
 
-    if patched != content:
-        with open(path, 'w') as f:
-            f.write(patched)
+    changed1 = patched != content
+    if changed1:
         print('OK: flutter_bootstrap.js — serviceWorkerSettings removido')
     else:
         print('SKIP: flutter_bootstrap.js — já sem serviceWorkerSettings ou padrão não encontrado')
+
+    # 2. Injeta ?v=VERSION em TODAS as referências a main.dart.js
+    # O Flutter sempre gera o arquivo com o nome fixo "main.dart.js" (sem hash).
+    # O browser e a CDN ficam com o arquivo em cache por 1 ano (immutable).
+    # Solução: adicionar query string única por build → o browser trata como URL nova.
+    # Cobre tanto "main.dart.js" quanto "main.dart.js?v=OLD" (idempotente).
+    patched2 = re.sub(
+        r'(["\'`])main\.dart\.js(?:\?v=[^"\'`]*)?(["\'`])',
+        lambda m: f'{m.group(1)}main.dart.js?v={version}{m.group(2)}',
+        patched,
+    )
+    changed2 = patched2 != patched
+    if changed2:
+        print(f'OK: flutter_bootstrap.js — main.dart.js?v={version} injetado (cache-busting)')
+    else:
+        print('SKIP: flutter_bootstrap.js — referência main.dart.js não encontrada')
+
+    if changed1 or changed2:
+        with open(path, 'w') as f:
+            f.write(patched2)
+    elif not changed1 and not changed2:
+        # Garante escrita mesmo sem alterações (idempotência)
+        pass
 
 
 def patch_index_redirect():
@@ -211,7 +233,8 @@ def deploy_version_sw():
 
 
 if __name__ == '__main__':
-    patch_bootstrap()
+    version = _app_version()
+    patch_bootstrap(version)
     patch_index_redirect()
     deploy_kill_switch_sw()
     copy_headers()
