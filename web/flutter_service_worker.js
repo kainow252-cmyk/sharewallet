@@ -1,24 +1,23 @@
-// flutter_service_worker.js — SW SUICIDA / KILL SWITCH
+// flutter_service_worker.js — SW REMOVEDOR SILENCIOSO
 //
-// Este arquivo substitui o Service Worker padrão do Flutter.
-// Quando o SW antigo detectar este arquivo novo (via update check),
-// ele vai instalar este SW, que imediatamente:
-//   1. Apaga TODOS os caches (flutter-app-cache, flutter-app-manifest, etc.)
-//   2. Se desregistra
-//   3. Força o browser a recarregar a página com o código mais recente
+// Propósito único: desregistrar qualquer SW antigo do Flutter sem causar reload.
 //
-// Isso resolve o problema de "422 persistente" causado pelo SW antigo
-// continuando a servir main.dart.js desatualizado do cache.
+// O Flutter build gera um SW que cacheia main.dart.js (4MB) e serve código
+// antigo mesmo após novos deploys. Este arquivo substitui esse SW.
+//
+// IMPORTANTE: NÃO faz client.navigate() nem postMessage — apenas limpa caches
+// e se destrói silenciosamente, sem causar reloads ou loops.
+//
 'use strict';
 
 self.addEventListener('install', function(event) {
-  // Ativa imediatamente sem esperar outros SWs
+  // Ativa imediatamente sem esperar fechar abas
   self.skipWaiting();
 });
 
 self.addEventListener('activate', function(event) {
   event.waitUntil(
-    // 1. Apagar todos os caches
+    // 1. Apagar todos os caches do Flutter
     caches.keys().then(function(cacheNames) {
       return Promise.all(
         cacheNames.map(function(cacheName) {
@@ -26,22 +25,16 @@ self.addEventListener('activate', function(event) {
         })
       );
     }).then(function() {
-      // 2. Assumir controle de todos os clientes imediatamente
+      // 2. Assumir controle (necessário para poder se desregistrar)
       return self.clients.claim();
     }).then(function() {
-      // 3. Notificar todos os clientes para recarregar
-      return self.clients.matchAll({ type: 'window' }).then(function(clients) {
-        clients.forEach(function(client) {
-          client.navigate(client.url);
-        });
-      });
-    }).then(function() {
-      // 4. Se auto-desregistrar
+      // 3. Se auto-desregistrar silenciosamente
+      // NÃO faz reload nem navigate — o browser vai usar os arquivos do servidor
+      // normalmente na próxima requisição (que terão Cache-Control: immutable).
       return self.registration.unregister();
     })
   );
 });
 
-// Sem listener 'fetch' — SW suicida não precisa interceptar requests.
-// Registrar um listener vazio causaria Chrome warning "No-op fetch handler"
-// e overhead desnecessário em todas as navegações.
+// SEM listener 'fetch' — não intercepta nada, não cacheia nada.
+// SEM client.navigate() — não causa reloads/loops.

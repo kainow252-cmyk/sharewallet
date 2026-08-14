@@ -1,11 +1,14 @@
 /**
- * pwa_install.js — ShareWallet PWA Install v6
+ * pwa_install.js — ShareWallet PWA Install v7
  * Lógica:
  *   1. App já instalado (standalone)  → silêncio total
  *   2. Rota /produto/                 → silêncio total (comprador, não instalar)
  *   3. Rota /admin                    → troca manifest para manifest-admin.json
  *   4. beforeinstallprompt disparou   → banner automático bonito
  *   5. Prompt bloqueado / sem prompt  → silêncio total
+ *
+ * v7: REMOVIDO registro de SW e reload automático que causavam loop de reset.
+ *     SWs são gerenciados apenas pelo flutter_bootstrap.js (sem serviceWorkerSettings).
  */
 (function () {
   'use strict';
@@ -197,27 +200,19 @@
   }
 
   /* ── SW registration ─────────────────────────────────────── */
+  // v7: NÃO registra Service Worker nem faz reload automático.
+  // Motivo: o sw_version.js v3 anterior causava loop infinito de reset:
+  //   activate → postMessage(SW_AUTO_RELOAD) → location.reload() → novo SW → loop
+  // O Cloudflare Worker já serve cache correto (immutable para main.dart.js).
+  // O flutter_bootstrap.js NÃO tem serviceWorkerSettings (removido pelo patch_build.py).
+  // Portanto, nenhum SW precisa ser registrado aqui.
   function registerSW() {
-    if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.addEventListener('message', function (ev) {
-      if (!ev.data) return;
-
-      // Novo SW ativado → recarrega silenciosamente (auto-update)
-      if (ev.data.type === 'SW_AUTO_RELOAD') {
-        // Pequeno delay para o SW terminar de assumir o controle
-        setTimeout(function () {
-          window.location.reload(true);
-        }, 500);
-        return;
-      }
-
-      // Fallback: banner de atualização (não deve chegar aqui com o SW v3)
-      if (ev.data.type === 'SW_UPDATE_AVAILABLE') {
-        window.location.reload(true);
-      }
-    });
-    navigator.serviceWorker.register('/app/sw_version.js', { scope: '/app/' })
-      .catch(function () {});
+    // Desregistra qualquer SW residual de versões anteriores
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(r) { r.unregister(); });
+      }).catch(function() {});
+    }
   }
 
   /* ── captura o prompt ANTES de qualquer coisa ────────────── */
