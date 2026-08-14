@@ -237,12 +237,18 @@ class _ProductsScreenState extends State<ProductsScreen> {
       final allHaveIcon = products.every(
           (p) => p.iconName != null && p.iconName!.isNotEmpty);
 
+      // Ícone efetivo para o header compacto: usa o iconName do primeiro produto
+      // (todos têm o mesmo quando allHaveIcon=true), com fallback para categoria.
+      final compactIconData = allHaveIcon
+          ? (ProductIconHelper.fromName(products.first.iconName) ?? iconData)
+          : iconData;
+
       // Cada categoria = um card unificado (header + produtos internos)
       widgets.add(
         SliverToBoxAdapter(
           child: _CategorySection(
             cat: cat,
-            iconData: iconData,
+            iconData: compactIconData,
             label: label,
             color: color,
             count: products.length,

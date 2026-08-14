@@ -409,7 +409,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   late TextEditingController _comissao;
   late TextEditingController _diaCobranca;
   late TextEditingController _beneficios;
-  late TextEditingController _categoria;
+  late String _selectedCategoria;
   late TextEditingController _imagemUrl;
   late ChargeType _chargeType;
   late bool _ativo;
@@ -419,6 +419,31 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   List<CustomField> _customFields = [];
   // Ícone personalizado do produto
   String? _selectedIconName;
+
+  // Categorias disponíveis com label, ícone e símbolo padrão sugerido
+  static const _catOptions = [
+    (key: 'seguros',        label: 'Seguros',        icon: Icons.security_rounded,        defaultIcon: 'security_rounded'),
+    (key: 'capitalizacao',  label: 'Capitalização',  icon: Icons.savings_rounded,         defaultIcon: 'savings_rounded'),
+    (key: 'assistencia',    label: 'Assistência',    icon: Icons.handshake_rounded,       defaultIcon: 'handshake_rounded'),
+    (key: 'beneficios',     label: 'Benefícios',     icon: Icons.card_giftcard_rounded,   defaultIcon: 'card_giftcard_rounded'),
+    (key: 'cursos',         label: 'Cursos',         icon: Icons.school_rounded,          defaultIcon: 'school_rounded'),
+    (key: 'entretenimento', label: 'Entretenimento', icon: Icons.movie_rounded,           defaultIcon: 'movie_rounded'),
+    (key: 'garantias',      label: 'Garantias',      icon: Icons.verified_user_rounded,   defaultIcon: 'verified_user_rounded'),
+    (key: 'geral',          label: 'Geral',          icon: Icons.label_rounded,           defaultIcon: null),
+  ];
+
+  static Color _catColor(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'seguros':        return const Color(0xFF1565C0);
+      case 'capitalizacao':  return const Color(0xFF6A1B9A);
+      case 'assistencia':    return const Color(0xFF00695C);
+      case 'beneficios':     return const Color(0xFFE65100);
+      case 'cursos':         return const Color(0xFF2E7D32);
+      case 'entretenimento': return const Color(0xFFAD1457);
+      case 'garantias':      return const Color(0xFF00838F);
+      default:               return const Color(0xFF1B5E20);
+    }
+  }
 
   // Documentos disponíveis para seleção
   static const _docOpts = [
@@ -452,7 +477,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
         TextEditingController(text: p?.diaCobranca?.toString() ?? '5');
     _beneficios =
         TextEditingController(text: p?.beneficiosList.join('\n') ?? '');
-    _categoria = TextEditingController(text: p?.categoria ?? 'geral');
+    _selectedCategoria = p?.categoria ?? 'geral';
     _imagemUrl = TextEditingController(text: p?.imagemUrl ?? '');
     _chargeType = p?.chargeType ?? ChargeType.pixRecorrente;
     _ativo = p?.ativo ?? true;
@@ -464,7 +489,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   @override
   void dispose() {
     for (final c in [
-      _nome, _descricao, _valor, _comissao, _diaCobranca, _beneficios, _categoria, _imagemUrl
+      _nome, _descricao, _valor, _comissao, _diaCobranca, _beneficios, _imagemUrl
     ]) {
       c.dispose();
     }
@@ -488,7 +513,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       descricao: _descricao.text.trim(),
       valor: double.tryParse(_valor.text.replaceAll(',', '.')) ?? 0,
       comissao: (double.tryParse(_comissao.text) ?? 0) / 100,
-      categoria: _categoria.text.trim(),
+      categoria: _selectedCategoria,
       chargeType: _chargeType,
       diaCobranca: diaCobrancaVal,
       periodicidade:
@@ -677,10 +702,21 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       ),
                       const SizedBox(height: 12),
                     ],
-                    _Field(
-                      controller: _categoria,
-                      label: 'Categoria',
-                      icon: Icons.category_rounded,
+                    // -- Picker visual de categoria -------------------
+                    _CategoryPickerSection(
+                      selectedKey: _selectedCategoria,
+                      catOptions: _catOptions,
+                      catColor: _catColor,
+                      onChanged: (key, defaultIconName) {
+                        setState(() {
+                          _selectedCategoria = key;
+                          // Auto-sugere o símbolo padrão da categoria
+                          // se o admin ainda não escolheu um símbolo próprio
+                          if (_selectedIconName == null && defaultIconName != null) {
+                            _selectedIconName = defaultIconName;
+                          }
+                        });
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -1551,6 +1587,179 @@ class _CustomFieldsEditorState extends State<_CustomFieldsEditor> {
               ),
             ],
           ],
+        ],
+      ),
+    );
+  }
+}
+
+// -- Seletor visual de categoria (admin) — chips coloridos com ícone -----------
+class _CategoryPickerSection extends StatelessWidget {
+  final String selectedKey;
+  final List<({String key, String label, IconData icon, String? defaultIcon})> catOptions;
+  final Color Function(String) catColor;
+  final void Function(String key, String? defaultIconName) onChanged;
+
+  const _CategoryPickerSection({
+    required this.selectedKey,
+    required this.catOptions,
+    required this.catColor,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selEntry = catOptions.where((c) => c.key == selectedKey).firstOrNull;
+    final selColor = catColor(selectedKey);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Cabeçalho
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: selColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  selEntry?.icon ?? Icons.category_rounded,
+                  color: selColor,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Categoria do Produto',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: AppColors.textPrimary),
+                    ),
+                    Text(
+                      selEntry != null
+                          ? 'Selecionada: ${selEntry.label}'
+                          : 'Selecione uma categoria',
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textHint),
+                    ),
+                  ],
+                ),
+              ),
+              // Badge da selecionada
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: selColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: selColor.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  selEntry?.label ?? selectedKey,
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: selColor,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+
+          // Grid de chips de categoria (2 colunas)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: catOptions.map((opt) {
+              final color = catColor(opt.key);
+              final isSelected = opt.key == selectedKey;
+              return GestureDetector(
+                onTap: () => onChanged(opt.key, opt.defaultIcon),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: isSelected ? color : AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected
+                          ? color
+                          : AppColors.cardBorder,
+                      width: isSelected ? 2 : 1,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: color.withValues(alpha: 0.25),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            )
+                          ]
+                        : [],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        opt.icon,
+                        size: 15,
+                        color: isSelected ? Colors.white : color,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        opt.label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+
+          // Dica sobre símbolo automático
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded,
+                  size: 11, color: AppColors.textHint),
+              const SizedBox(width: 5),
+              const Expanded(
+                child: Text(
+                  'Ao selecionar a categoria, o símbolo padrão é sugerido automaticamente abaixo',
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textHint,
+                      fontStyle: FontStyle.italic),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
