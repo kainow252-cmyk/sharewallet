@@ -105,6 +105,20 @@ class SaleModel {
   String get valorFormatado => 'R\$ ${valor.toStringAsFixed(2).replaceAll('.',',')}';
   String get comissaoFormatada => 'R\$ ${comissao.toStringAsFixed(2).replaceAll('.',',')}';
 
+  /// Serializa para o formato D1 (usado pelo cache local do WalletService)
+  Map<String, dynamic> toD1Map() => {
+    'id': id,
+    'user_id': userId,
+    'product_id': productId,
+    'product_nome': productNome,
+    'valor': valor,
+    'comissao': comissao,
+    'status': status == 'COMPLETED' ? 'aprovado'
+             : status == 'PENDING'  ? 'pendente'
+             : 'cancelado',
+    'created_at': createdAt.toIso8601String(),
+  };
+
   static String statusLabel(String status) {
     switch (status) {
       case 'COMPLETED': return 'Pago';

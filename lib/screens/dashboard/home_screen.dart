@@ -25,8 +25,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      // Cache: só carrega se ainda não tem dados
+      // loadData: pré-popula do cache local primeiro (instantâneo),
+      // depois atualiza via Worker em background (sem bloquear a UI)
       context.read<WalletService>().loadData(userId: uid);
+      // Produtos: carrega em background (não bloqueia home)
       context.read<ProductService>().loadProducts();
     });
   }
@@ -36,6 +38,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final auth = context.watch<AuthService>();
     final wallet = context.watch<WalletService>();
     final user = auth.currentUser;
+
+    // SALDO IMEDIATO: usa saldo do AuthService (Firestore, já carregado em background
+    // pelo init()) como placeholder enquanto o Worker (D1) não responde.
+    // Quando wallet.saldoCarteira > 0 (Worker respondeu ou cache carregado), usa esse.
+    final saldoExibido = wallet.saldoCarteira > 0
+        ? wallet.saldoCarteira
+        : (user?.saldo ?? 0.0);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -153,7 +162,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Usa SEMPRE wallet.saldoCarteira (D1/Cloudflare) como fonte
                   // única de verdade - sincroniza dashboard com performance
                   _WalletSummaryCard(
-                    saldo: wallet.saldoCarteira,
+                    saldo: saldoExibido,
+                    isLoading: wallet.isLoading && wallet.saldoCarteira == 0,
                     isVisible: _saldoVisible,
                     onToggleVisibility: () =>
                         setState(() => _saldoVisible = !_saldoVisible),
@@ -419,12 +429,14 @@ class _HomeScreenState extends State<HomeScreen> {
 class _WalletSummaryCard extends StatelessWidget {
   final double saldo;
   final bool isVisible;
+  final bool isLoading;
   final VoidCallback onToggleVisibility;
   final VoidCallback onTapCarteira;
 
   const _WalletSummaryCard({
     required this.saldo,
     required this.isVisible,
+    this.isLoading = false,
     required this.onToggleVisibility,
     required this.onTapCarteira,
   });
@@ -487,20 +499,24 @@ class _WalletSummaryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            Text(
-              isVisible
-                  ? 'R\$ ${saldo.toStringAsFixed(2).replaceAll('.',',')}'
-                  : 'R\$ ******',
-              style: const TextStyle(
-                color: Color(0xFF00E5B4),
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.5,
+            // Saldo: shimmer se carregando sem cache, valor real caso contrário
+            if (isLoading && saldo == 0)
+              const LoadingShimmer(height: 32, width: 140, borderRadius: 8)
+            else
+              Text(
+                isVisible
+                    ? 'R\$ ${saldo.toStringAsFixed(2).replaceAll('.',',')}'
+                    : 'R\$ ******',
+                style: const TextStyle(
+                  color: Color(0xFF00E5B4),
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                ),
               ),
-            ),
             const SizedBox(height: 4),
             Text(
-              'Saldo disponível',
+              isLoading && saldo == 0 ? 'Carregando saldo...' : 'Saldo disponível',
               style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.4), fontSize: 12),
             ),

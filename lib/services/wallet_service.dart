@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/sale_model.dart';
 import '../models/withdraw_model.dart';
@@ -39,21 +40,68 @@ class WalletService extends ChangeNotifier {
         .fold(0.0, (sum, s) => sum + s.comissao);
   }
 
+  // -- Cache local: persiste último saldo/dados entre sessões -----------------
+  static const String _cacheKey = 'wallet_cache_v1';
+
+  /// Pré-popula saldo a partir do cache local (SharedPreferences).
+  /// Chamado ANTES do request ao Worker — tela aparece instantânea.
+  Future<void> _prePopulateFromCache(String uid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('${_cacheKey}_$uid');
+      if (raw == null) return;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      _saldoCarteira  = (data['saldo'] as num?)?.toDouble() ?? 0.0;
+      _saldoPendente  = (data['pendente'] as num?)?.toDouble() ?? 0.0;
+      _totalRecebido  = (data['recebido'] as num?)?.toDouble() ?? 0.0;
+      _totalSacado    = (data['sacado'] as num?)?.toDouble() ?? 0.0;
+      _totalIndicados = (data['indicados'] as num?)?.toInt() ?? 0;
+      // Sales do cache
+      final salesRaw = data['sales'] as List?;
+      if (salesRaw != null && salesRaw.isNotEmpty) {
+        _sales = salesRaw
+            .map((r) => SaleModel.fromD1(r as Map<String, dynamic>))
+            .toList();
+      }
+      notifyListeners(); // Renderiza com dados do cache IMEDIATAMENTE
+      if (kDebugMode) debugPrint('[WalletService] Cache local carregado — saldo=R\$$_saldoCarteira');
+    } catch (_) {}
+  }
+
+  /// Persiste dados atuais no cache local após sucesso do Worker.
+  Future<void> _saveToCache(String uid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = {
+        'saldo': _saldoCarteira,
+        'pendente': _saldoPendente,
+        'recebido': _totalRecebido,
+        'sacado': _totalSacado,
+        'indicados': _totalIndicados,
+        'sales': _sales.take(20).map((s) => s.toD1Map()).toList(),
+      };
+      await prefs.setString('${_cacheKey}_$uid', jsonEncode(data));
+    } catch (_) {}
+  }
+
   // -- Carregar dados via Cloudflare D1 --------------------------------------
   Future<void> loadData({String? userId, bool forceRefresh = false}) async {
+    // Se já tem dados em memória e não é forceRefresh, não vai ao Worker
     if (!forceRefresh && (_sales.isNotEmpty || _saldoCarteira > 0)) return;
 
+    final uid = userId ?? FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    // INSTANTÂNEO: carrega cache local ANTES de ir ao Worker
+    // → Tela aparece com dados reais da última sessão em <50ms
+    final temCache = _saldoCarteira == 0 && _sales.isEmpty;
+    if (temCache) await _prePopulateFromCache(uid);
+
+    // Agora vai buscar dados frescos no Worker (em background se tinha cache)
     _isLoading = true;
     notifyListeners();
 
     try {
-      final uid = userId ?? FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) {
-        _isLoading = false;
-        notifyListeners();
-        return;
-      }
-
       // Busca carteira + sales + withdrawals em paralelo
       final results = await Future.wait([
         CfApiService.getWallet(uid),
@@ -89,8 +137,13 @@ class WalletService extends ChangeNotifier {
             'wallet=${wallet != null} '
             'sales=${_sales.length} withdrawals=${_withdraws.length}');
       }
+
+      // Persiste no cache local para próxima abertura ser instantânea
+      _saveToCache(uid).catchError((_) {});
+
     } catch (e) {
       if (kDebugMode) debugPrint('[WalletService] Erro loadData: $e');
+      // Erro no Worker — mantém dados do cache (não limpa)
     }
 
     _isLoading = false;
