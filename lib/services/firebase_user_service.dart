@@ -15,6 +15,7 @@
 //   3. Retorna UserModel com saldo real da carteira
 // ===========================================================================
 
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -202,12 +203,46 @@ class FirebaseUserService {
 
       final uid = authResult.uid!;
 
-      // 2. Buscar perfil no Firestore
-      final user = await _buscarOuCriarPerfil(
-        uid: uid,
-        email: email,
-        displayName: authResult.displayName,
-      );
+      // 2. Buscar perfil no Firestore com timeout de segurança
+      // Se o Firestore travar (WebChannel frio), o usuário não fica preso.
+      // O fallback retorna um UserModel mínimo baseado nos dados do Firebase Auth.
+      UserModel? user;
+      try {
+        user = await _buscarOuCriarPerfil(
+          uid: uid,
+          email: email,
+          displayName: authResult.displayName,
+        ).timeout(
+          const Duration(seconds: 8),
+          onTimeout: () {
+            if (kDebugMode) {
+              debugPrint('[FirebaseUserService] Timeout buscar perfil — usando fallback');
+            }
+            return UserModel(
+              id: uid,
+              nome: authResult.displayName ?? email.split('@').first,
+              cpf: '',
+              email: email,
+              telefone: '',
+              affiliateCode: _gerarCodigo(uid),
+              saldo: 0.0,
+              createdAt: DateTime.now(),
+            );
+          },
+        );
+      } catch (e) {
+        if (kDebugMode) debugPrint('[FirebaseUserService] Erro buscar perfil: $e');
+        user = UserModel(
+          id: uid,
+          nome: authResult.displayName ?? email.split('@').first,
+          cpf: '',
+          email: email,
+          telefone: '',
+          affiliateCode: _gerarCodigo(uid),
+          saldo: 0.0,
+          createdAt: DateTime.now(),
+        );
+      }
 
       return UserServiceResult(success: true, user: user);
     } on FirebaseAuthException catch (e) {
@@ -354,10 +389,19 @@ class FirebaseUserService {
 
     try {
       // Buscar perfil do afiliado + carteira em PARALELO (antes era sequencial: 2x latência)
+      // TIMEOUT CRÍTICO: sem timeout, Future.wait no banco não-default 'affiliatewalletwallet'
+      // pode travar 30-120s na inicialização do WebChannel (primeira conexão fria).
+      // 6s é conservador: latência normal do Firestore é <1s; 6s absorve pico de cold start.
       final results = await Future.wait([
         db.collection('affiliates').doc(uid).get(),
         db.collection('wallets').doc(uid).get(),
-      ]);
+      ]).timeout(
+        const Duration(seconds: 6),
+        onTimeout: () => throw TimeoutException(
+          'Firestore timeout ao buscar perfil ($uid)',
+          const Duration(seconds: 6),
+        ),
+      );
       final affiliateDoc = results[0];
       final walletDoc    = results[1];
 

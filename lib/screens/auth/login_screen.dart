@@ -48,7 +48,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Verifica se voltou de um redirect do Google Sign-In
   Future<void> _checkRedirectResult() async {
-    final result = await FirebaseAuthService.getRedirectResult();
+    // TIMEOUT CRÍTICO: getRedirectResult() pode travar indefinidamente
+    // quando não há redirect pendente (SDK espera resposta do servidor).
+    // 5s é suficiente para processar um redirect real; sem redirect, retorna null rápido.
+    final result = await FirebaseAuthService.getRedirectResult()
+        .timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => null,
+        );
     if (!mounted || result == null) return;
     if (result.success) {
       final auth = context.read<AuthService>();
