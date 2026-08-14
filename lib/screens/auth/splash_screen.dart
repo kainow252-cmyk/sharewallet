@@ -71,12 +71,16 @@ class _SplashScreenState extends State<SplashScreen>
 
     await Future.wait([
       // auth.init() usa authStateChanges().first com timeout 2s:
-      // → sessão LOCAL: resolve em ~100-300ms (leitura IndexedDB)
+      // → sessão LOCAL (localStorage UID): resolve em ~1-5ms (instantâneo)
+      // → sessão Firebase (IndexedDB): resolve em ~100-300ms
       // → sem sessão: resolve em ~2s (timeout)
       auth.init(),
       // Animação do logo (1000ms) + texto (100ms delay)
+      // MÍNIMO de 800ms garantido — evita tela branca quando auth.init() resolve
+      // em <10ms (caso localStorage UID) e navegação ocorre antes da animação aparecer.
       Future.delayed(const Duration(milliseconds: 100))
           .then((_) => _textController.forward()),
+      Future.delayed(const Duration(milliseconds: 800)),
     ]);
 
     if (!mounted) return;
