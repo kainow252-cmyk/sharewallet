@@ -5,7 +5,9 @@
 # index.html: sempre revalidar (nunca servir stale — contém versão do app)
 /index.html
   Content-Type: text/html; charset=utf-8
-  Cache-Control: no-cache, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
   Pragma: no-cache
 
 # manifest.json: revalidar sempre (PWA precisa de versão fresca)
@@ -16,23 +18,31 @@
 # sw_version.js: sem cache (SW precisa checar atualização)
 /sw_version.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-cache, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
   Service-Worker-Allowed: /app/
 
 # flutter_service_worker.js (kill-switch): sem cache
 /flutter_service_worker.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-cache, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 # flutter_bootstrap.js: revalidar (ponto de entrada, muda a cada build)
 /flutter_bootstrap.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-cache, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 # flutter.js: revalidar (muda entre versões do Flutter SDK)
 /flutter.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-cache, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 # main.dart.js: CACHE LONGO — Flutter adiciona fingerprint hash no nome.
 # O arquivo NUNCA muda de conteúdo com o mesmo nome; a cada build o nome muda.
@@ -44,7 +54,9 @@
 # pwa_install.js: revalidar (atualizado pelo patch_build.py)
 /pwa_install.js
   Content-Type: application/javascript; charset=utf-8
-  Cache-Control: no-cache, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
 
 # Assets Flutter com hash no path (ex: /assets/xxx.sha256/...): imutáveis
 /assets/*
