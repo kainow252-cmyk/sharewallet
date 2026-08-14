@@ -9,6 +9,7 @@ import '../../widgets/app_widgets.dart';
 import '../../models/sale_model.dart';
 import 'package:intl/intl.dart';
 import 'main_nav_screen.dart';
+import '../../services/app_config_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -217,38 +218,60 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildQuickActions(BuildContext context) {
     final nav = MainNavController();
+    final cfg = context.watch<AppConfigService>().config;
+
+    // Monta lista dinâmica de ações rápidas baseada na config do admin
+    final actions = <Widget>[];
+
+    void addAction(Widget w) {
+      if (actions.isNotEmpty) actions.add(const SizedBox(width: 10));
+      actions.add(w);
+    }
+
+    if (cfg.quickProdutos) {
+      addAction(_QuickAction(
+        icon: Icons.store_rounded,
+        label: 'Produtos',
+        color: AppColors.primary,
+        onTap: () => nav.goProducts(),
+      ));
+    }
+    if (cfg.quickCarteira) {
+      addAction(_QuickAction(
+        icon: Icons.account_balance_wallet_rounded,
+        label: 'Carteira',
+        color: const Color(0xFF00E5B4),
+        onTap: () => nav.goCarteira(),
+      ));
+    }
+    if (cfg.quickIndicacoes) {
+      addAction(_QuickAction(
+        icon: Icons.people_alt_rounded,
+        label: 'Indicações',
+        color: AppColors.info,
+        onTap: () => nav.goIndicacoes(),
+      ));
+    }
+    if (cfg.quickChat) {
+      addAction(_QuickAction(
+        icon: Icons.chat_bubble_rounded,
+        label: 'Chat',
+        color: const Color(0xFF29B6F6),
+        onTap: () => nav.goToVisibleChat(context),
+      ));
+    }
+
+    // Se todas as quick actions foram ocultadas, retorna vazio
+    if (actions.isEmpty) return const SizedBox.shrink();
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
-        children: [
-          _QuickAction(
-            icon: Icons.store_rounded,
-            label: 'Produtos',
-            color: AppColors.primary,
-            onTap: () => nav.goProducts(),
-          ),
-          const SizedBox(width: 10),
-          _QuickAction(
-            icon: Icons.account_balance_wallet_rounded,
-            label: 'Carteira',
-            color: const Color(0xFF00E5B4),
-            onTap: () => nav.goCarteira(),
-          ),
-          const SizedBox(width: 10),
-          _QuickAction(
-            icon: Icons.people_alt_rounded,
-            label: 'Indicações',
-            color: AppColors.info,
-            onTap: () => nav.goIndicacoes(),
-          ),
-          const SizedBox(width: 10),
-          _QuickAction(
-            icon: Icons.chat_bubble_rounded,
-            label: 'Chat',
-            color: const Color(0xFF29B6F6),
-            onTap: () => nav.goChat(),
-          ),
-        ],
+        children: actions.map((w) {
+          // Se não for SizedBox (espaçador), envolve em Expanded
+          if (w is SizedBox) return w;
+          return Expanded(child: w);
+        }).toList(),
       ),
     );
   }
