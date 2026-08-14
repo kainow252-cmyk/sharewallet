@@ -214,12 +214,14 @@ class ChargeResult {
   final String saleId;
   final String correlationID;
   final String brCode;          // Copia-e-cola Pix
-  final String qrCodeImage;     // URL da imagem do QR Code
-  final String paymentLinkUrl;  // Link de pagamento Woovi
+  final String qrCodeImage;     // URL ou base64 da imagem do QR Code
+  final String paymentLinkUrl;  // Link de pagamento
   final String expiresAt;       // ISO 8601
   final int totalValue;         // centavos
   final int commissionValue;    // centavos (comissão afiliado)
   final String productName;
+  final String gateway;         // 'woovi' | 'mercadopago'
+  final String mpPaymentId;     // ID do pagamento no MP (para polling)
 
   const ChargeResult({
     required this.saleId,
@@ -231,7 +233,13 @@ class ChargeResult {
     required this.totalValue,
     required this.commissionValue,
     required this.productName,
+    this.gateway      = 'woovi',
+    this.mpPaymentId  = '',
   });
+
+  bool get isMercadoPago => gateway == 'mercadopago';
+  // qrCodeImage pode ser URL (Woovi) ou data:image/png;base64,... (MP)
+  bool get qrIsBase64    => qrCodeImage.startsWith('data:image');
 
   factory ChargeResult.fromJson(Map<String, dynamic> j) => ChargeResult(
     saleId:          j['saleId']         as String? ?? '',
@@ -240,9 +248,11 @@ class ChargeResult {
     qrCodeImage:     j['qrCodeImage']    as String? ?? '',
     paymentLinkUrl:  j['paymentLinkUrl'] as String? ?? '',
     expiresAt:       j['expiresAt']      as String? ?? '',
-    totalValue:      j['totalValue']     as int?    ?? 0,
-    commissionValue: j['commissionValue']as int?    ?? 0,
+    totalValue:      (j['totalValue']    as num?)?.toInt() ?? 0,
+    commissionValue: (j['commissionValue'] as num?)?.toInt() ?? 0,
     productName:     j['productName']    as String? ?? '',
+    gateway:         j['gateway']        as String? ?? 'woovi',
+    mpPaymentId:     j['mpPaymentId']    as String? ?? '',
   );
 
   double get totalInReais      => totalValue / 100;

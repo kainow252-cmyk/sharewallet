@@ -969,7 +969,7 @@ class _BuyScreenState extends State<BuyScreen> {
             const SizedBox(height: 12),
             Center(
               child: Text(
-                'Pagamento 100% via PIX  -  processado pela Woovi',
+                'Pagamento 100% via PIX  -  processado com segurança',
                 style: TextStyle(fontSize: 11,
                     color: AppColors.textHint.withValues(alpha: 0.8)),
                 textAlign: TextAlign.center,
@@ -3259,7 +3259,7 @@ class _PixQrCardState extends State<_PixQrCard> {
           ),
           const SizedBox(height: 20),
 
-          // QR Code image (URL Woovi)
+          // QR Code image: URL (Woovi) ou base64 data:image (Mercado Pago)
           if (r.qrCodeImage.isNotEmpty) ...[
             Container(
               padding: const EdgeInsets.all(16),
@@ -3268,13 +3268,24 @@ class _PixQrCardState extends State<_PixQrCard> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: AppColors.cardBorder),
               ),
-              child: Image.network(
-                r.qrCodeImage,
-                width: 200, height: 200,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Icon(
-                  Icons.qr_code_2_rounded, size: 160, color: AppColors.textHint),
-              ),
+              child: r.qrIsBase64
+                  ? Image.memory(
+                      base64Decode(r.qrCodeImage.replaceFirst(
+                          RegExp(r'data:image/[^;]+;base64,'), '')),
+                      width: 200, height: 200,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.qr_code_2_rounded, size: 160,
+                          color: AppColors.textHint),
+                    )
+                  : Image.network(
+                      r.qrCodeImage,
+                      width: 200, height: 200,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.qr_code_2_rounded, size: 160,
+                          color: AppColors.textHint),
+                    ),
             ),
             const SizedBox(height: 8),
             const Text('Escaneie com o app do seu banco',
