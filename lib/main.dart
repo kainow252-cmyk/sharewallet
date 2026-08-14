@@ -167,7 +167,7 @@ class ShareWalletApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AdminService()),
         ChangeNotifierProvider(create: (_) => MercadoPagoService()),
         ChangeNotifierProvider(create: (_) => ChatService()),
-        ChangeNotifierProvider(create: (_) => AppConfigService()),
+        ChangeNotifierProvider(create: (_) => AppConfigService()..load()),
       ],
       child: MaterialApp(
         title: 'ShareWallet',
