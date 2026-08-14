@@ -13,7 +13,7 @@ class AdminLoginScreen extends StatefulWidget {
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController(text: 'admin@affiliatewallet.com');
-  final _senhaCtrl = TextEditingController(text: 'admin123');
+  final _senhaCtrl = TextEditingController();
   bool _obscureSenha = true;
 
   @override
@@ -217,26 +217,26 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   ),
 
                   const SizedBox(height: 20),
-                  // Hint credenciais demo
+                  // Aviso de segurança
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppColors.gold.withValues(alpha: 0.1),
+                      color: Colors.white.withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: AppColors.gold.withValues(alpha: 0.3)),
+                          color: Colors.white.withValues(alpha: 0.1)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline_rounded,
-                            color: AppColors.gold, size: 16),
+                        Icon(Icons.shield_rounded,
+                            color: Colors.white.withValues(alpha: 0.3), size: 16),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Modo demo: admin@affiliatewallet.com / admin123',
+                            'Acesso restrito — somente administradores autorizados.',
                             style: TextStyle(
-                              color: AppColors.gold.withValues(alpha: 0.9),
+                              color: Colors.white.withValues(alpha: 0.35),
                               fontSize: 12,
                             ),
                           ),
