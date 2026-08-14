@@ -75,11 +75,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (d1Tel.isNotEmpty)  _telefoneCtrl.text = d1Tel;
             if (d1Pix.isNotEmpty)  _pixCtrl.text  = d1Pix;
             else if (email.isNotEmpty) _pixCtrl.text = email;
-            // D1 não tem 'username' ainda — busca do Firestore / AuthService
+            // Username: D1 é agora fonte de verdade (coluna username existe)
             final usernameD1 = d1Data['username']?.toString() ?? '';
             final usernameFallback = auth.currentUser?.username ?? '';
+            // D1 tem prioridade; se vazio, usa AuthService/Firestore como fallback
             final usernameResolvido = usernameD1.isNotEmpty ? usernameD1 : usernameFallback;
-            if (usernameResolvido.isNotEmpty && _usernameCtrl.text.isEmpty) {
+            if (usernameResolvido.isNotEmpty) {
+              // Sempre atualiza o controller com o valor mais recente do D1
               _usernameCtrl.text = usernameResolvido;
               auth.updateCurrentUser(username: usernameResolvido);
             }
@@ -244,11 +246,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         affiliateCode: auth.currentUser?.affiliateCode ?? '',
       );
 
-      // 1b. Atualiza @username se mudou OU se ainda não tem username (existente sem campo)
+      // 1b. Atualiza @username se o campo tem valor E
+      //     (é diferente do atual OU o atual está vazio — primeiro cadastro)
       final usernameAtual = auth.currentUser?.username ?? '';
-      final deveAtualizarUsername = novoUsername.isNotEmpty &&
-          (novoUsername != usernameAtual) &&
-          (_usernameDisponivel == true || novoUsername == usernameAtual);
+      final usernameNovo = novoUsername.isNotEmpty;
+      final usernameMudou = novoUsername != usernameAtual;
+      final usernameValidado = _usernameDisponivel == true || novoUsername == usernameAtual;
+      final deveAtualizarUsername = usernameNovo && usernameMudou && usernameValidado;
       if (deveAtualizarUsername) {
         final res = await FirebaseUserService.atualizarUsername(
           uid: uid,

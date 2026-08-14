@@ -449,21 +449,23 @@ async function _handleRequest(request, env) {
       const id = b.id || 'aff_' + Date.now();
       await DB.prepare(
         `INSERT INTO affiliates
-          (id,nome,email,cpf,telefone,affiliate_code,sponsor_code,pix_key,status)
-         VALUES (?,?,?,?,?,?,?,?,?)
+          (id,nome,email,cpf,telefone,affiliate_code,sponsor_code,pix_key,status,username)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET
           nome=excluded.nome, email=excluded.email, cpf=excluded.cpf,
           telefone=excluded.telefone, pix_key=excluded.pix_key,
           affiliate_code=CASE WHEN excluded.affiliate_code != '' THEN excluded.affiliate_code ELSE affiliates.affiliate_code END,
           sponsor_code=COALESCE(excluded.sponsor_code, affiliates.sponsor_code),
           saque_minimo=CASE WHEN excluded.saque_minimo IS NOT NULL THEN excluded.saque_minimo ELSE COALESCE(affiliates.saque_minimo,0) END,
-          status=excluded.status`
+          status=excluded.status,
+          username=COALESCE(excluded.username, affiliates.username)`
       ).bind(
         id, b.nome??'', b.email??'', b.cpf??'', b.telefone??'',
         b.affiliateCode??b.affiliate_code??'',
         b.sponsorCode??b.sponsor_code??null,
         b.pixKey??b.pix_key??null,
-        b.status??'ativo'
+        b.status??'ativo',
+        b.username??null
       ).run();
       const aff = await DB.prepare(`SELECT * FROM affiliates WHERE id=?`).bind(id).first();
       return ok(aff);
@@ -481,13 +483,14 @@ async function _handleRequest(request, env) {
         // Afiliado não existe no D1 (criado via Firebase) → INSERT com campos disponíveis
         await DB.prepare(
           `INSERT INTO affiliates
-            (id, nome, email, cpf, telefone, affiliate_code, sponsor_code, pix_key, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, nome, email, cpf, telefone, affiliate_code, sponsor_code, pix_key, status, username)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
             nome=excluded.nome, email=excluded.email, cpf=excluded.cpf,
             telefone=excluded.telefone, pix_key=excluded.pix_key,
             affiliate_code=CASE WHEN excluded.affiliate_code != '' THEN excluded.affiliate_code ELSE affiliates.affiliate_code END,
-            sponsor_code=COALESCE(excluded.sponsor_code, affiliates.sponsor_code)`
+            sponsor_code=COALESCE(excluded.sponsor_code, affiliates.sponsor_code),
+            username=COALESCE(excluded.username, affiliates.username)`
         ).bind(
           id,
           b.nome ?? '',
@@ -497,7 +500,8 @@ async function _handleRequest(request, env) {
           b.affiliateCode ?? b.affiliate_code ?? '',
           b.sponsorCode ?? b.sponsor_code ?? null,
           b.pixKey ?? b.pix_key ?? null,
-          b.status ?? 'ativo'
+          b.status ?? 'ativo',
+          b.username ?? null
         ).run();
       } else {
         // Afiliado existe → UPDATE parcial apenas nos campos enviados
@@ -511,7 +515,8 @@ async function _handleRequest(request, env) {
           saldo_disponivel:'saldo_disponivel', saldo_pendente:'saldo_pendente',
           total_comissoes:'total_comissoes', total_sacado:'total_sacado',
           total_indicados:'total_indicados', total_assinaturas:'total_assinaturas',
-          saque_minimo:'saque_minimo', saqueMinimo:'saque_minimo'
+          saque_minimo:'saque_minimo', saqueMinimo:'saque_minimo',
+          username:'username'
         };
         for (const [k, col] of Object.entries(map)) {
           if (b[k] !== undefined) { fields.push(`${col}=?`); vals.push(b[k]); }
