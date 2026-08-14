@@ -232,6 +232,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   products.length)
               .round();
 
+      // Se TODOS os produtos da categoria têm iconName definido,
+      // o ícone já identifica a categoria — não precisamos do header de texto.
+      final allHaveIcon = products.every(
+          (p) => p.iconName != null && p.iconName!.isNotEmpty);
+
       // Cada categoria = um card unificado (header + produtos internos)
       widgets.add(
         SliverToBoxAdapter(
@@ -244,6 +249,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
             comissao: avgComissao,
             products: products,
             isExpanded: isExpanded,
+            hideHeader: allHaveIcon,
             onToggle: () => setState(() {
               if (isExpanded) {
                 _expandedCategories.remove(cat);
@@ -263,170 +269,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
   String _capitalizeFirst(String s) =>
       s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
-  // -- Drawer de categoria (menu hamburguer) --------------------------------
+  // -- Drawer de categoria (menu hamburguer) — chips visuais + busca ----------
   void _showCategoryDrawer(BuildContext context, ProductService ps) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: AppColors.cardBorder,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            // Título
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.category_rounded,
-                      color: AppColors.primary, size: 20),
-                ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Filtrar por Categoria',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                            color: AppColors.textPrimary)),
-                    Text('Selecione uma categoria',
-                        style: TextStyle(
-                            color: AppColors.textSecondary, fontSize: 12)),
-                  ],
-                ),
-                const Spacer(),
-                if (ps.selectedCategory != 'todos')
-                  TextButton(
-                    onPressed: () {
-                      ps.setCategory('todos');
-                      Navigator.pop(context);
-                    },
-                    child: const Text('Limpar',
-                        style: TextStyle(color: AppColors.error, fontSize: 12)),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 8),
-            // Lista de categorias
-            ...ps.categories.map((cat) {
-              final label = ProductService.categoryLabels[cat] ?? cat;
-              final color = _catColor(cat);
-              final isSelected = cat == ps.selectedCategory;
-              final count = cat == 'todos'
-                  ? ps.products.length
-                  : ps.products.where((p) => p.categoria == cat).length;
-
-              return InkWell(
-                onTap: () {
-                  ps.setCategory(cat);
-                  Navigator.pop(context);
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? color.withValues(alpha: 0.1)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    border: isSelected
-                        ? Border.all(color: color.withValues(alpha: 0.4))
-                        : null,
-                  ),
-                  child: Row(
-                    children: [
-                      // Ícone
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Center(
-                          child: Icon(
-                            _catIconData(cat),
-                            color: color,
-                            size: 22,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      // Label
-                      Expanded(
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: isSelected
-                                ? FontWeight.w800
-                                : FontWeight.w500,
-                            color: isSelected
-                                ? color
-                                : AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                      // Contagem
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? color.withValues(alpha: 0.15)
-                              : AppColors.surfaceVariant,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '$count',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isSelected ? color : AppColors.textHint,
-                          ),
-                        ),
-                      ),
-                      if (isSelected) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.check_circle_rounded,
-                            color: color, size: 20),
-                      ],
-                    ],
-                  ),
-                ),
-              );
-            }),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+      builder: (_) => _CategoryDrawerSheet(ps: ps),
     );
   }
 
@@ -455,6 +304,354 @@ class _ProductsScreenState extends State<ProductsScreen> {
       case 'garantias':      return const Color(0xFF00838F);
       default:               return AppColors.primary;
     }
+  }
+}
+
+// -- Bottom sheet de filtro por categoria — chips visuais + busca --------------
+class _CategoryDrawerSheet extends StatefulWidget {
+  final ProductService ps;
+  const _CategoryDrawerSheet({required this.ps});
+
+  @override
+  State<_CategoryDrawerSheet> createState() => _CategoryDrawerSheetState();
+}
+
+class _CategoryDrawerSheetState extends State<_CategoryDrawerSheet> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  // Helpers replicados localmente para evitar acesso à classe pai
+  static IconData _icon(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'seguros':        return Icons.security_rounded;
+      case 'capitalizacao':  return Icons.savings_rounded;
+      case 'assistencia':    return Icons.handshake_rounded;
+      case 'beneficios':     return Icons.card_giftcard_rounded;
+      case 'cursos':         return Icons.school_rounded;
+      case 'entretenimento': return Icons.movie_rounded;
+      case 'garantias':      return Icons.verified_user_rounded;
+      case 'todos':          return Icons.apps_rounded;
+      default:               return Icons.label_rounded;
+    }
+  }
+
+  static Color _color(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'seguros':        return const Color(0xFF1565C0);
+      case 'capitalizacao':  return const Color(0xFF6A1B9A);
+      case 'assistencia':    return const Color(0xFF00695C);
+      case 'beneficios':     return const Color(0xFFE65100);
+      case 'cursos':         return const Color(0xFF2E7D32);
+      case 'entretenimento': return const Color(0xFFAD1457);
+      case 'garantias':      return const Color(0xFF00838F);
+      default:               return AppColors.primary;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ps = widget.ps;
+
+    // Filtra categorias pelo texto de busca (excluindo 'todos' da lista filtrada)
+    final allCats = ps.categories.where((c) => c != 'todos').toList();
+    final filtered = _query.isEmpty
+        ? allCats
+        : allCats.where((c) {
+            final label =
+                ProductService.categoryLabels[c] ?? c;
+            return label.toLowerCase().contains(_query.toLowerCase());
+          }).toList();
+
+    return Padding(
+      // Sobe o sheet quando teclado abre
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Handle ─────────────────────────────────────────────────────
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+
+            // ── Título ─────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.category_rounded,
+                        color: AppColors.primary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Categorias',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                                color: AppColors.textPrimary)),
+                        Text('Toque para filtrar produtos',
+                            style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  // Botão Limpar filtro
+                  if (ps.selectedCategory != 'todos')
+                    TextButton.icon(
+                      onPressed: () {
+                        ps.setCategory('todos');
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.close_rounded,
+                          size: 14, color: AppColors.error),
+                      label: const Text('Limpar',
+                          style: TextStyle(
+                              color: AppColors.error,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700)),
+                      style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4)),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── Campo de busca ─────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
+                controller: _searchCtrl,
+                autofocus: false,
+                textInputAction: TextInputAction.search,
+                onChanged: (v) => setState(() => _query = v),
+                style: const TextStyle(
+                    fontSize: 14, color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Buscar categoria...',
+                  hintStyle: const TextStyle(
+                      color: AppColors.textHint, fontSize: 13),
+                  prefixIcon: const Icon(Icons.search_rounded,
+                      color: AppColors.textHint, size: 20),
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded,
+                              size: 18, color: AppColors.textHint),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _query = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: AppColors.surfaceVariant,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 11),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide:
+                        BorderSide(color: AppColors.cardBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide:
+                        BorderSide(color: AppColors.cardBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                        color: AppColors.primary, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── Chip "Todos" sempre visível ─────────────────────────────────
+            if (_query.isEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _buildChip(
+                  context: context,
+                  ps: ps,
+                  cat: 'todos',
+                  label: 'Todos os produtos',
+                  count: ps.products.length,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20),
+                child: Divider(
+                    height: 1, color: AppColors.cardBorder),
+              ),
+              const SizedBox(height: 10),
+            ],
+
+            // ── Grid de chips de categoria ──────────────────────────────────
+            if (filtered.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.search_off_rounded,
+                        color: AppColors.textHint, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Nenhuma categoria encontrada para "$_query"',
+                        style: const TextStyle(
+                            color: AppColors.textHint,
+                            fontSize: 13)),
+                  ],
+                ),
+              )
+            else
+              Flexible(
+                child: SingleChildScrollView(
+                  padding:
+                      const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: filtered.map((cat) {
+                      final label =
+                          ProductService.categoryLabels[cat] ?? cat;
+                      final count = ps.products
+                          .where((p) => p.categoria == cat)
+                          .length;
+                      return _buildChip(
+                        context: context,
+                        ps: ps,
+                        cat: cat,
+                        label: label,
+                        count: count,
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChip({
+    required BuildContext context,
+    required ProductService ps,
+    required String cat,
+    required String label,
+    required int count,
+  }) {
+    final color = _color(cat);
+    final icon = _icon(cat);
+    final isSelected = cat == ps.selectedCategory;
+
+    return GestureDetector(
+      onTap: () {
+        ps.setCategory(cat);
+        Navigator.pop(context);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? color
+              : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected
+                ? color
+                : AppColors.cardBorder,
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.30),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  )
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? Colors.white : color,
+            ),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected
+                    ? FontWeight.w800
+                    : FontWeight.w600,
+                color: isSelected
+                    ? Colors.white
+                    : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.white.withValues(alpha: 0.25)
+                    : color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? Colors.white : color,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -577,6 +774,7 @@ class _CategorySection extends StatelessWidget {
   final int comissao;
   final List<ProductModel> products;
   final bool isExpanded;
+  final bool hideHeader; // true quando todos os produtos têm iconName
   final VoidCallback onToggle;
 
   const _CategorySection({
@@ -589,6 +787,7 @@ class _CategorySection extends StatelessWidget {
     required this.products,
     required this.isExpanded,
     required this.onToggle,
+    this.hideHeader = false,
   });
 
   @override
@@ -617,6 +816,8 @@ class _CategorySection extends StatelessWidget {
         child: Column(
           children: [
             // ── Header da categoria ──────────────────────────────────────
+            // Quando hideHeader=true, exibe apenas uma barra compacta com
+            // ícone+seta (sem nome — o ícone já identifica a categoria)
             Material(
               color: Colors.transparent,
               child: InkWell(
@@ -624,9 +825,10 @@ class _CategorySection extends StatelessWidget {
                 splashColor: color.withValues(alpha: 0.08),
                 highlightColor: color.withValues(alpha: 0.04),
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
+                  padding: hideHeader
+                      ? const EdgeInsets.fromLTRB(14, 10, 12, 10)
+                      : const EdgeInsets.fromLTRB(14, 13, 12, 13),
                   decoration: BoxDecoration(
-                    // Faixa de fundo sutil no header
                     gradient: LinearGradient(
                       colors: [
                         color.withValues(alpha: isExpanded ? 0.09 : 0.05),
@@ -636,109 +838,165 @@ class _CategorySection extends StatelessWidget {
                       end: Alignment.centerRight,
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      // Ícone com fundo sólido colorido
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(11),
-                          boxShadow: [
-                            BoxShadow(
-                              color: color.withValues(alpha: 0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Icon(iconData,
-                            color: Colors.white, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      // Textos
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  child: hideHeader
+                      // ── Modo compacto: apenas ícone + contador + seta ──
+                      ? Row(
                           children: [
-                            Text(
-                              label,
-                              style: TextStyle(
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
                                 color: color,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.1,
+                                borderRadius: BorderRadius.circular(9),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: color.withValues(alpha: 0.30),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(iconData,
+                                  color: Colors.white, size: 17),
+                            ),
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '$count',
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 1),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 5,
-                                  height: 5,
-                                  decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.5),
-                                    shape: BoxShape.circle,
-                                  ),
+                            const Spacer(),
+                            AnimatedRotation(
+                              turns: isExpanded ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 250),
+                              child: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.10),
+                                  shape: BoxShape.circle,
                                 ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  '$count produto${count != 1 ? 's' : ''}',
-                                  style: TextStyle(
-                                    color: AppColors.textHint,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                child: Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: color,
+                                  size: 15,
                                 ),
-                                const SizedBox(width: 8),
-                                // Badge comissão inline
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.success
-                                        .withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: AppColors.success
-                                          .withValues(alpha: 0.25),
+                              ),
+                            ),
+                          ],
+                        )
+                      // ── Modo completo: ícone + nome + badges + seta ──
+                      : Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(11),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: color.withValues(alpha: 0.35),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(iconData,
+                                  color: Colors.white, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    label,
+                                    style: TextStyle(
+                                      color: color,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.1,
                                     ),
                                   ),
-                                  child: Text(
-                                    '$comissao% comissão',
-                                    style: const TextStyle(
-                                      color: AppColors.success,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                  const SizedBox(height: 1),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 5,
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          color: color.withValues(alpha: 0.5),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        '$count produto${count != 1 ? 's' : ''}',
+                                        style: TextStyle(
+                                          color: AppColors.textHint,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.success
+                                              .withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          border: Border.all(
+                                            color: AppColors.success
+                                                .withValues(alpha: 0.25),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '$comissao% comissão',
+                                          style: const TextStyle(
+                                            color: AppColors.success,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                                ],
+                              ),
+                            ),
+                            AnimatedRotation(
+                              turns: isExpanded ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 250),
+                              child: Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.10),
+                                  shape: BoxShape.circle,
                                 ),
-                              ],
+                                child: Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: color,
+                                  size: 18,
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                      // Seta animada
-                      AnimatedRotation(
-                        turns: isExpanded ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 250),
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.10),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            color: color,
-                            size: 18,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ),
@@ -765,7 +1023,7 @@ class _CategorySection extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Lista de produtos com linha lateral colorida
+                  // Lista de produtos
                   ...products.asMap().entries.map((e) {
                     final i = e.key;
                     final p = e.value;
