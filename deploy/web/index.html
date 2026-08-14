@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script>
+    // Redireciona acessos diretos ao domínio pages.dev para o domínio de produção.
+    // Razão: o pages.dev é a URL interna do Cloudflare Pages — usuários devem usar
+    // payment.sharewallet.com.br (ou sharewallet.com.br/app/).
+    // Além disso, o MercadoPago SDK captura o referer, e "pages.dev" pode causar
+    // problemas de allowlist no MP. Redirect garante domínio correto sempre.
+    (function() {
+      var host = window.location.hostname;
+      if (host === 'sharewallet-app.pages.dev' || host.endsWith('.sharewallet-app.pages.dev')) {
+        var newUrl = 'https://payment.sharewallet.com.br' + window.location.pathname + window.location.search + window.location.hash;
+        window.location.replace(newUrl);
+      }
+    })();
+  </script>
+  <script>
+    // Desregistra TODOS os Service Workers e limpa TODOS os caches do browser.
+    // O Service Worker do Flutter causa "prepareServiceWorker took more than 4000ms"
+    // quando uma nova versão do app é deployada (SW antigo ainda está ativo).
+    // Solução: desabilitar SW completamente — o Cloudflare Pages já serve os arquivos
+    // atualizados com Cache-Control: no-store, sem precisar de SW.
+    (function() {
+      if ('serviceWorker' in navigator) {
+        // Desregistra todos os SWs registrados
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          registrations.forEach(function(r) { r.unregister(); });
+        });
+        // Bloqueia novos registros substituindo a API (patched pelo flutter_bootstrap.js,
+        // mas o patch_build.py já remove serviceWorkerSettings antes do deploy)
+      }
+      // Limpa todos os caches (flutter e outros)
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          names.forEach(function(name) { caches.delete(name); });
+        });
+      }
+    })();
+  </script>
+
+  <script>
+    // Bloqueia window.open() do Firebase Auth em ambientes com COOP: same-origin.
+    // O Firebase SDK abre popups OAuth e faz polling de popup.closed, o que dispara
+    // "Cross-Origin-Opener-Policy policy would block the window.closed call" no Chrome.
+    // Como o Dart ja usa signInWithRedirect nesses ambientes, nenhum popup OAuth e
+    // necessario. Substituimos window.open por um stub com closed=true, fazendo o
+    // SDK desistir imediatamente do popup sem disparar COOP.
+    (function() {
+      var _isCOOPEnv = (
+        window.location.hostname.indexOf('sandbox.novita') !== -1 ||
+        window.location.hostname.indexOf('genspark')       !== -1 ||
+        window.location.hostname.indexOf('pages.dev')      !== -1 ||
+        window.location.hostname.indexOf('netlify')        !== -1 ||
+        window.location.hostname.indexOf('vercel')         !== -1
+      );
+      if (_isCOOPEnv) {
+        var _origOpen = window.open.bind(window);
+        window.open = function(url, name, features) {
+          if (url && typeof url === 'string' &&
+              (url.indexOf('accounts.google.com') !== -1 ||
+               url.indexOf('facebook.com/dialog') !== -1 ||
+               url.indexOf('appleid.apple.com')   !== -1 ||
+               url.indexOf('/__/auth/')            !== -1)) {
+            return { closed: true, close: function(){}, focus: function(){},
+                     postMessage: function(){}, location: { href: '' } };
+          }
+          return _origOpen(url, name, features);
+        };
+      }
+    })();
+  </script>
+
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/app/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="ShareWallet  -  Transforme conexões em receita recorrente.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="ShareWallet">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Google Sign-In Web OAuth Client ID -->
+  <meta name="google-signin-client_id" content="470218127330-d1tr5j60i6db3ui56jgdqhar039dilvh.apps.googleusercontent.com">
+
+  <!-- MercadoPago.JS V2 SDK  -  obrigatório para device_id e Secure Fields (PCI Compliance) -->
+  <!-- Requisito do Quality Score MP: SDK do frontend + Identificador do dispositivo -->
+  <script src="https://sdk.mercadopago.com/js/v2"></script>
+  <script>
+    // Inicializa MP SDK V2 com public key de produção.
+    // O SDK gera automaticamente um session fingerprint (device_id) logo após a
+    // instanciação. Esse id é lido pelo Flutter via dart:html e enviado no header
+    // X-Device-Session-Id de cada pagamento  -  campo obrigatório para o Quality Score.
+    (function initMpSdk() {
+      // Mesma public_key usada no defaultConfig() do Dart (MpConfig.defaultConfig)
+      var MP_PUBLIC_KEY = 'APP_USR-1ca2945d-477b-4691-8976-8a27dc2e806e';
+
+      function tryInit() {
+        if (typeof MercadoPago === 'undefined') return;
+        try {
+          window._mpInstance = new MercadoPago(MP_PUBLIC_KEY, { locale: 'pt-BR' });
+
+          // Aguarda o SDK popular o MP_DEVICE_SESSION_ID (pode levar até 2s)
+          var polls = 0;
+          var timer = setInterval(function() {
+            polls++;
+            var sid = window.MP_DEVICE_SESSION_ID
+                   || (window._mpInstance && window._mpInstance.deviceSessionId);
+            if (sid) {
+              // Normaliza: garante que window.MP_DEVICE_SESSION_ID esteja preenchido
+              window.MP_DEVICE_SESSION_ID = sid;
+              clearInterval(timer);
+            } else if (polls >= 20) {
+              // Timeout de 4s  -  gera um fallback local para não bloquear o checkout
+              window.MP_DEVICE_SESSION_ID = 'sw_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+              clearInterval(timer);
+            }
+          }, 200);
+        } catch(e) { /* SDK não carregado  -  checkout funciona sem device_id */ }
+      }
+
+      // Tenta agora; se o script ainda não foi parseado, tenta novamente após load
+      tryInit();
+      if (typeof MercadoPago === 'undefined') {
+        window.addEventListener('load', tryInit);
+      }
+    })();
+  </script>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png"/>
+  <link rel="shortcut icon" href="favicon.png"/>
+
+  <title>ShareWallet</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!--
+    Deep link handler: lê o hash da URL ANTES do Flutter carregar
+    e grava no sessionStorage para o Dart ler via dart:js.
+
+    URL esperada: /app/#/produto/p_xxx?ref=CODE
+    window.location.hash -> "#/produto/p_xxx?ref=CODE"
+  -->
+  <script>
+    (function() {
+      try {
+        var hash = window.location.hash; // "#/produto/p_xxx?ref=CODE"
+        if (hash && hash.length > 1) {
+          // Remove o "#" inicial
+          var fragment = hash.substring(1); // "/produto/p_xxx?ref=CODE"
+          // Guarda no sessionStorage para o Dart ler
+          sessionStorage.setItem('flutter_initial_route', fragment);
+        }
+      } catch(e) {}
+    })();
+  </script>
+
+  <script>
+    // Suprime o warning "Could not find a set of Noto fonts" do Flutter CanvasKit.
+    // Este warning e inofensivo: ocorre quando dados dinamicos (API/Firestore)
+    // contem caracteres Unicode (ex: em-dash, aspas tipograficas, setas)
+    // que o engine nao encontra na tabela interna de Noto fonts.
+    // O NotoColorEmoji.ttf esta carregado como fallback local (via FontLoader no
+    // main.dart), cobrindo a maioria dos casos. Para os demais, suprimimos o
+    // console.warn para evitar poluicao no console de producao.
+    //
+    // Tambem suprime "Cross-Origin-Opener-Policy policy would block the window.closed call"
+    // emitido pelo Firebase Auth SDK (popup.ts:309) quando o servidor de preview
+    // tem COOP: same-origin. O app ja usa signInWithRedirect nesses ambientes,
+    // portanto o warning e cosmético e inofensivo.
+    (function() {
+      var _origWarn = console.warn.bind(console);
+      console.warn = function() {
+        var msg = arguments[0];
+        if (typeof msg === 'string') {
+          if (msg.indexOf('Could not find a set of Noto fonts') !== -1) return;
+          if (msg.indexOf('Cross-Origin-Opener-Policy') !== -1 &&
+              msg.indexOf('window.closed') !== -1) return;
+        }
+        return _origWarn.apply(console, arguments);
+      };
+    })();
+
+    // Configura o Flutter Engine para buscar Noto fonts fallback do servidor local
+    // em vez de fonts.gstatic.com, evitando requests externos e erros de CORS.
+    // O servidor local retorna NotoColorEmoji.ttf para qualquer path solicitado,
+    // garantindo cobertura maxima de glyphs sem dependencia de CDN externo.
+    // Usa document.baseURI para respeitar o --base-href (/app/) do Flutter build.
+    (function() {
+      try {
+        // document.baseURI inclui o base href correto (ex: "https://host/app/")
+        // Isso garante que a URL inclua o prefixo /app/ em produção.
+        var base = document.baseURI || (window.location.origin + '/app/');
+        // Normaliza: garante que termine com /
+        if (!base.endsWith('/')) base += '/';
+        window.flutterConfiguration = {
+          fontFallbackBaseUrl: base + 'assets/fonts/'
+        };
+      } catch(e) {
+        window.flutterConfiguration = {
+          fontFallbackBaseUrl: window.location.origin + '/app/assets/fonts/'
+        };
+      }
+    })();
+  </script>
+</head>
+<body>
+  <!-- O login usa Firebase signInWithPopup com OAuth redirect nativo -->
+  <script src="flutter_bootstrap.js" async></script>
+
+  <!--
+    PWA Install / Update Manager
+    Detecta se o app está instalado, oferece instalação na primeira visita
+    e exibe banner de atualização quando uma nova versão é deployada.
+    Carregado de forma diferida (defer) para não bloquear o Flutter.
+  -->
+  <script src="pwa_install.js" defer></script>
+</body>
+</html>

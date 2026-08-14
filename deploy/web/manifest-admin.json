@@ -1,0 +1,40 @@
+{
+    "name": "ShareWallet Admin",
+    "short_name": "SW Admin",
+    "start_url": "/app/#/admin/login",
+    "scope": "/app/",
+    "display": "standalone",
+    "background_color": "#071A10",
+    "theme_color": "#C9A84C",
+    "description": "Painel Administrativo ShareWallet",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "categories": ["finance", "business"],
+    "lang": "pt-BR",
+    "icons": [
+        {
+            "src": "icons/Icon-v202606251651-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/Icon-v202606251651-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/Icon-v202606251651-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-v202606251651-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}
