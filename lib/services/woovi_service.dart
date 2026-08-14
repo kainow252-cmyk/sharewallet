@@ -9,7 +9,7 @@ import 'dart:convert';
 /// que detém o WOOVI_APP_ID em variável de ambiente segura.
 ///
 /// Fluxo Pix Avulso:
-///   Flutter → POST /api/charge/woovi → Worker → Woovi API
+///   Flutter → POST /api/charge → Worker → roteia para Woovi ou Mercado Pago
 ///   Woovi Webhook → Worker → D1 atualiza venda → Flutter polling
 ///
 /// Fluxo Pix Automático (Assinatura):
@@ -46,7 +46,7 @@ class WooviService {
       final cpfClean = customerCpf?.replaceAll(RegExp(r'\D'), '');
 
       final res = await http.post(
-        Uri.parse('$_base/api/charge/woovi'),
+        Uri.parse('$_base/api/charge'),  // Worker roteia para Woovi ou MP automaticamente
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'correlationID':    correlationID,
