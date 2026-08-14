@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 // ---------------------------------------------------------------------------
 // Modelos
@@ -69,7 +70,37 @@ class ChatConversation {
 class ChatService extends ChangeNotifier {
   final FirebaseFirestore _db;
 
-  ChatService() : _db = FirebaseFirestore.instance;
+  // Mesmo banco usado em firebase_user_service.dart
+  static const String _databaseId = 'affiliatewalletwallet';
+  static FirebaseFirestore? _dbInstance;
+
+  static FirebaseFirestore _getDb() {
+    if (_dbInstance != null) return _dbInstance!;
+    try {
+      _dbInstance = FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: _databaseId,
+      );
+      if (kIsWeb) {
+        _dbInstance!.settings = const Settings(
+          persistenceEnabled: false,
+          webExperimentalForceLongPolling: true,
+        );
+      } else {
+        _dbInstance!.settings = const Settings(
+          persistenceEnabled: true,
+          cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+        );
+      }
+    } catch (e) {
+      // fallback para instância padrão caso Firebase não inicializado ainda
+      _dbInstance = FirebaseFirestore.instance;
+      if (kDebugMode) debugPrint('[ChatService] _getDb fallback: $e');
+    }
+    return _dbInstance!;
+  }
+
+  ChatService() : _db = _getDb();
 
   // Total de não lidas (para badge na nav bar)
   int _totalUnread = 0;

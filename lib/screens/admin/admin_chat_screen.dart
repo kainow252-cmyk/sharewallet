@@ -1,6 +1,29 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: banco correto (mesmo que firebase_user_service.dart)
+// ─────────────────────────────────────────────────────────────────────────────
+FirebaseFirestore _getAffiliateDb() {
+  try {
+    final db = FirebaseFirestore.instanceFor(
+      app: Firebase.app(),
+      databaseId: 'affiliatewalletwallet',
+    );
+    if (kIsWeb) {
+      db.settings = const Settings(
+        persistenceEnabled: false,
+        webExperimentalForceLongPolling: true,
+      );
+    }
+    return db;
+  } catch (_) {
+    return FirebaseFirestore.instance;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN CHAT SCREEN — Gestão completa das conversas entre afiliados
@@ -16,7 +39,7 @@ class AdminChatScreen extends StatefulWidget {
 class _AdminChatScreenState extends State<AdminChatScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
-  final _db = FirebaseFirestore.instance;
+  final _db = _getAffiliateDb();
 
   @override
   void initState() {
