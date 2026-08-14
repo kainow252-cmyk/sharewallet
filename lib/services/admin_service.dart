@@ -625,6 +625,8 @@ class AdminService extends ChangeNotifier {
   //   (usado internamente por loadAll() para não bloquear tela de relatórios)
   // silent=false (padrão) -> seta _isLoadingProducts, usado pela tela de produtos
   Future<void> loadProducts({bool silent = false}) async {
+    // silent=true: não altera _isLoadingProducts (para não bloquear outras telas)
+    // MAS: sempre notifica no final para que a tela de produtos atualize
     if (!silent) {
       _isLoadingProducts = true;
       notifyListeners();
@@ -634,10 +636,14 @@ class AdminService extends ChangeNotifier {
       _products = rows.map((r) => ProductModel.fromJson(_normalizeProd(r))).toList();
       _products.sort((a, b) => a.nome.compareTo(b.nome));
       if (kDebugMode) debugPrint('[AdminService] ${_products.length} produtos (D1)');
+      // CRÍTICO: notifica mesmo em silent para que a tela de produtos atualize
+      if (silent) notifyListeners();
     } catch (e) {
       debugPrint('[AdminService] Erro produtos: $e');
       _error = 'Erro ao carregar produtos: $e';
       _products = [];
+      // Notifica mesmo em silent para que a tela reflita o estado de erro
+      if (silent) notifyListeners();
     }
     if (!silent) {
       _isLoadingProducts = false;

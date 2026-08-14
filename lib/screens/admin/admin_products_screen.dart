@@ -19,14 +19,12 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
   @override
   void initState() {
     super.initState();
-    // Garante carregamento mesmo quando tela é montada pelo IndexedStack
-    // antes de loadAll() terminar (timing race condition)
+    // CRÍTICO: sempre força recarregamento ao entrar na aba de produtos.
+    // O loadAll() usa silent=true — que não seta _isLoadingProducts — então
+    // verificar apenas `isEmpty && !isLoadingProducts` cria race condition.
+    // Forçar loadProducts() garante dados frescos e notifyListeners correto.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final svc = context.read<AdminService>();
-      // Recarrega se a lista estiver vazia (pode ser que loadAll ainda não terminou)
-      if (svc.products.isEmpty && !svc.isLoadingProducts) {
-        svc.loadProducts();
-      }
+      context.read<AdminService>().loadProducts();
     });
   }
 
