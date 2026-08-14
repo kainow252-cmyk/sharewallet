@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'utils/web_utils.dart';
@@ -61,13 +62,17 @@ void main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
-    // Web: configura o banco (default) com long-polling.
-    // NÃO inicializa o banco 'affiliatewalletwallet' aqui pois abriria conexão
-    // antes do login → Firestore Rules rejeitaria (auth == null) →
-    // SDK reportaria "Backend didn't respond within 10 seconds".
-    // O banco customizado é inicializado lazily nos serviços quando necessário
-    // (após o usuário estar autenticado via FirebaseAuth).
     if (kIsWeb) {
+      // PERSISTÊNCIA DE SESSÃO: LOCAL → salva no IndexedDB do navegador.
+      // Padrão do Firebase Auth Web é SESSION (perde ao fechar o tab).
+      // Com LOCAL: usuário fica logado ao fechar e reabrir o app/browser.
+      // Deve ser chamado ANTES de qualquer operação de auth.
+      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+
+      // Firestore banco default com long-polling para evitar WebChannel instável.
+      // NÃO inicializa 'affiliatewalletwallet' aqui: seria antes do login →
+      // Firestore Rules rejeitaria (auth == null) → "Backend didn't respond".
+      // O banco customizado é inicializado lazily nos serviços (após login).
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: false,
         webExperimentalForceLongPolling: true,

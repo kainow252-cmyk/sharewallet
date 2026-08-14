@@ -26,33 +26,45 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Tenta restaurar sessão Firebase (persiste entre aberturas)
+      // 1. Restaurar sessão Firebase (persiste entre aberturas via Persistence.LOCAL)
       final firebaseUser = FirebaseAuth.instance.currentUser;
       if (firebaseUser != null) {
         if (kDebugMode) {
-          debugPrint('[AuthService] Sessão Firebase: ${firebaseUser.email}');
+          debugPrint('[AuthService] Sessão Firebase restaurada: ${firebaseUser.email}');
         }
-        // TIMEOUT DE SEGURANÇA: se o Firestore travar (loop WebChannel),
-        // não bloqueia a splash indefinidamente. Máximo 4s para carregar perfil.
-        // Se der timeout, retorna null → usuário vê a landing page e faz login manual.
-        // (Reduzido de 8s → 4s: sessão restaurada deve ser rápida; cold start agora
-        //  tem timeout interno em _buscarOuCriarPerfil, então 4s é suficiente.)
-        final user = await FirebaseUserService.carregarUsuarioAtual()
+
+        // ESTRATÉGIA INSTANTÂNEA: monta UserModel mínimo com dados do Firebase Auth
+        // (uid, email, displayName) e retorna IMEDIATAMENTE → splash some em <100ms.
+        // Em paralelo, busca o perfil completo no Firestore em background e atualiza
+        // o state quando chegar (sem bloquear a navegação).
+        _currentUser = UserModel(
+          id: firebaseUser.uid,
+          nome: firebaseUser.displayName ?? firebaseUser.email!.split('@').first,
+          cpf: '',
+          email: firebaseUser.email ?? '',
+          telefone: '',
+          affiliateCode: '',
+          saldo: 0.0,
+          createdAt: DateTime.now(),
+        );
+        _isLoading = false;
+        notifyListeners();
+
+        // Background: atualiza perfil completo (Firestore) sem bloquear a tela
+        FirebaseUserService.carregarUsuarioAtual()
             .timeout(
-              const Duration(seconds: 4),
-              onTimeout: () {
-                if (kDebugMode) {
-                  debugPrint('[AuthService] Timeout ao carregar perfil — continuando sem usuário');
-                }
-                return null;
-              },
-            );
-        if (user != null) {
-          _currentUser = user;
-          _isLoading = false;
-          notifyListeners();
-          return;
-        }
+              const Duration(seconds: 8),
+              onTimeout: () => null,
+            )
+            .then((user) {
+              if (user != null) {
+                _currentUser = user;
+                notifyListeners();
+              }
+            })
+            .catchError((_) {});
+
+        return;
       }
 
       // 2. Fallback: token local (apenas quando Firebase NÃO está ativo)
