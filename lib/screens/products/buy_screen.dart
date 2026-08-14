@@ -62,7 +62,11 @@ class _BuyScreenState extends State<BuyScreen> {
   final _cpfCtrl      = TextEditingController();
   final _emailCtrl    = TextEditingController();
   final _celularCtrl  = TextEditingController();
-  final _nascCtrl     = TextEditingController();
+
+  // Nascimento — picker Ano / Mês / Dia
+  int? _nascAno;
+  int? _nascMes;
+  int? _nascDia;
 
   // Endereço
   final _cepCtrl      = TextEditingController();
@@ -123,7 +127,7 @@ class _BuyScreenState extends State<BuyScreen> {
     _pollingTimer?.cancel();
     _nomeCtrl.dispose();    _cpfCtrl.dispose();
     _emailCtrl.dispose();   _celularCtrl.dispose();
-    _nascCtrl.dispose();    _cepCtrl.dispose();
+    _cepCtrl.dispose();
     _ruaCtrl.dispose();     _numeroCtrl.dispose();
     _compCtrl.dispose();    _bairroCtrl.dispose();
     _cidadeCtrl.dispose();  _estadoCtrl.dispose();
@@ -153,7 +157,9 @@ class _BuyScreenState extends State<BuyScreen> {
         _cpfCtrl.text     = prefs.getString(_kCpf)     ?? '';
         _emailCtrl.text   = prefs.getString(_kEmail)   ?? '';
         _celularCtrl.text = prefs.getString(_kCelular) ?? '';
-        _nascCtrl.text    = prefs.getString(_kNasc)    ?? '';
+        // Nascimento salvo como dd/mm/yyyy → popula picker
+        final nascSalvo = prefs.getString(_kNasc) ?? '';
+        _parseNascimentoParaPicker(nascSalvo);
         _cepCtrl.text     = prefs.getString(_kCep)     ?? '';
         _ruaCtrl.text     = prefs.getString(_kRua)     ?? '';
         _numeroCtrl.text  = prefs.getString(_kNumero)  ?? '';
@@ -173,7 +179,7 @@ class _BuyScreenState extends State<BuyScreen> {
       await prefs.setString(_kCpf,     _cpfCtrl.text.trim());
       await prefs.setString(_kEmail,   _emailCtrl.text.trim());
       await prefs.setString(_kCelular, _celularCtrl.text.trim());
-      await prefs.setString(_kNasc,    _nascCtrl.text.trim());
+      await prefs.setString(_kNasc,    _nascFormatado());
       await prefs.setString(_kCep,     _cepCtrl.text.trim());
       await prefs.setString(_kRua,     _ruaCtrl.text.trim());
       await prefs.setString(_kNumero,  _numeroCtrl.text.trim());
@@ -245,17 +251,10 @@ class _BuyScreenState extends State<BuyScreen> {
             if (_nomeCtrl.text.trim().isEmpty)    _nomeCtrl.text    = c['nome']            as String? ?? '';
             if (_emailCtrl.text.trim().isEmpty)   _emailCtrl.text   = c['email']           as String? ?? '';
             if (_celularCtrl.text.trim().isEmpty) _celularCtrl.text = _formatarTel(c['telefone'] as String? ?? '');
-            // Data de nascimento: aceita dd/mm/yyyy direto
+            // Data de nascimento: popula picker
             final nascRaw = c['data_nascimento'] as String? ?? '';
-            if (_nascCtrl.text.trim().isEmpty && nascRaw.isNotEmpty) {
-              // Garante formato dd/mm/yyyy
-              if (RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(nascRaw)) {
-                _nascCtrl.text = nascRaw;
-              } else if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(nascRaw)) {
-                // ISO 8601 → dd/mm/yyyy
-                final parts = nascRaw.substring(0, 10).split('-');
-                _nascCtrl.text = '${parts[2]}/${parts[1]}/${parts[0]}';
-              }
+            if (_nascAno == null && nascRaw.isNotEmpty) {
+              _parseNascimentoParaPicker(nascRaw);
             }
             if (_cepCtrl.text.trim().isEmpty)     _cepCtrl.text     = _formatarCep(c['cep'] as String? ?? '');
             if (_ruaCtrl.text.trim().isEmpty)     _ruaCtrl.text     = c['rua']         as String? ?? '';
@@ -286,14 +285,14 @@ class _BuyScreenState extends State<BuyScreen> {
   Future<void> _salvarClienteBanco() async {
     try {
       final cpf  = _cpfCtrl.text.replaceAll(RegExp(r'\D'), '');
-      final nasc = _nascCtrl.text.trim();
-      if (cpf.length != 11 || !RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(nasc)) return;
+      final nasc = _nascFormatado();
+      if (cpf.length != 11 || nasc.isEmpty) return;
       await http.post(
         Uri.parse('$_workerBase/api/customer'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'cpf':            cpf,
-          'data_nascimento': nasc,
+          'data_nascimento': nasc, // dd/mm/yyyy
           'nome':       _nomeCtrl.text.trim(),
           'email':      _emailCtrl.text.trim(),
           'telefone':   _celularCtrl.text.replaceAll(RegExp(r'\D'), ''),
@@ -323,6 +322,37 @@ class _BuyScreenState extends State<BuyScreen> {
     final d = c.replaceAll(RegExp(r'\D'), '');
     if (d.length == 8) return '${d.substring(0,5)}-${d.substring(5)}';
     return c;
+  }
+
+  // -- Helpers de nascimento (picker ↔ string) --------------------------------
+  /// Reconstrói string dd/mm/yyyy a partir dos 3 selects.
+  String _nascFormatado() {
+    if (_nascAno == null || _nascMes == null || _nascDia == null) return '';
+    final d = _nascDia!.toString().padLeft(2, '0');
+    final m = _nascMes!.toString().padLeft(2, '0');
+    return '$d/$m/$_nascAno';
+  }
+
+  /// Popula os 3 pickers a partir de uma string dd/mm/yyyy ou yyyy-mm-dd.
+  void _parseNascimentoParaPicker(String raw) {
+    if (raw.isEmpty) return;
+    int? ano, mes, dia;
+    if (RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(raw)) {
+      final p = raw.split('/');
+      dia = int.tryParse(p[0]);
+      mes = int.tryParse(p[1]);
+      ano = int.tryParse(p[2]);
+    } else if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(raw)) {
+      final p = raw.substring(0, 10).split('-');
+      ano = int.tryParse(p[0]);
+      mes = int.tryParse(p[1]);
+      dia = int.tryParse(p[2]);
+    }
+    if (ano != null && mes != null && dia != null) {
+      _nascAno = ano;
+      _nascMes = mes;
+      _nascDia = dia;
+    }
   }
 
   // -- Validação de CPF (dígito verificador) ----------------------------------
@@ -406,6 +436,18 @@ class _BuyScreenState extends State<BuyScreen> {
   // Pix Automático: cria subscription → QR Code PAYMENT_ON_APPROVAL
   Future<void> _gerarPix() async {
     if (!_formKey.currentState!.validate()) return;
+    // Valida picker de nascimento (não está dentro do Form)
+    if (_nascAno == null || _nascMes == null || _nascDia == null) {
+      setState(() {}); // força rebuild para mostrar erro no picker
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe a data de nascimento completa (Ano / Mês / Dia).'),
+          backgroundColor: AppColors.error,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
 
     setState(() { _isSubmitting = true; _pixResult = null; _preapprovalResult = null; });
 
@@ -673,9 +715,10 @@ class _BuyScreenState extends State<BuyScreen> {
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 12),
+
+            // CPF — linha própria, full-width + spinner
             Row(children: [
               Expanded(
-                flex: 3,
                 child: _field(_cpfCtrl, 'CPF *', Icons.badge_rounded,
                     hint: '000.000.000-00',
                     keyboard: TextInputType.number,
@@ -687,15 +730,7 @@ class _BuyScreenState extends State<BuyScreen> {
                     },
                     onChanged: (_) => _buscarClienteBanco()),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: _field(_nascCtrl, 'Nascimento *', Icons.cake_rounded,
-                    hint: 'DD/MM/AAAA',
-                    keyboard: TextInputType.datetime,
-                    validator: (v) => v!.trim().isEmpty ? 'Obrigatório' : null),
-              ),
-              if (_buscandoCliente) ...[                          // spinner enquanto busca
+              if (_buscandoCliente) ...[
                 const SizedBox(width: 10),
                 const SizedBox(
                   width: 20, height: 20,
@@ -703,6 +738,20 @@ class _BuyScreenState extends State<BuyScreen> {
                 ),
               ],
             ]),
+            const SizedBox(height: 10),
+
+            // Nascimento — picker Ano / Mês / Dia em linha única
+            _NascimentoPicker(
+              anoSelecionado:  _nascAno,
+              mesSelecionado:  _nascMes,
+              diaSelecionado:  _nascDia,
+              onAnoChanged:    (v) => setState(() { _nascAno = v; _nascDia = null; }),
+              onMesChanged:    (v) => setState(() { _nascMes = v; _nascDia = null; }),
+              onDiaChanged:    (v) => setState(() => _nascDia = v),
+              validator:       () => (_nascAno == null || _nascMes == null || _nascDia == null)
+                                        ? 'Informe a data de nascimento'
+                                        : null,
+            ),
             const SizedBox(height: 10),
 
             // Banner: cliente encontrado no banco
@@ -1034,6 +1083,163 @@ class _BuyScreenState extends State<BuyScreen> {
         ),
         validator: validator,
       );
+}
+
+// --- Picker de Data de Nascimento (Ano → Mês → Dia) --------------------------
+class _NascimentoPicker extends StatelessWidget {
+  final int? anoSelecionado;
+  final int? mesSelecionado;
+  final int? diaSelecionado;
+  final ValueChanged<int?> onAnoChanged;
+  final ValueChanged<int?> onMesChanged;
+  final ValueChanged<int?> onDiaChanged;
+  final String? Function() validator;
+
+  const _NascimentoPicker({
+    required this.anoSelecionado,
+    required this.mesSelecionado,
+    required this.diaSelecionado,
+    required this.onAnoChanged,
+    required this.onMesChanged,
+    required this.onDiaChanged,
+    required this.validator,
+  });
+
+  static const _meses = [
+    'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+    'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
+  ];
+
+  int _diasNoMes(int? ano, int? mes) {
+    if (ano == null || mes == null) return 31;
+    return DateTime(ano, mes + 1, 0).day;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final anoAtual = DateTime.now().year;
+    final anos = List.generate(100, (i) => anoAtual - i); // atual → 100 anos atrás
+    final totalDias = _diasNoMes(anoSelecionado, mesSelecionado);
+    final dias = List.generate(totalDias, (i) => i + 1);
+
+    // Se dia selecionado passou do limite do mês, força null no pai
+    final diaValido = (diaSelecionado != null && diaSelecionado! <= totalDias)
+        ? diaSelecionado
+        : null;
+
+    final errorText = validator();
+
+    // Helper local para construir cada célula de dropdown
+    Widget dropCell({
+      required String label,
+      required int? selectedValue,
+      required List<int> values,
+      required String Function(int) itemLabel,
+      required ValueChanged<int?> onChanged,
+    }) {
+      return Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: errorText != null && selectedValue == null
+                ? AppColors.error
+                : AppColors.cardBorder,
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: DropdownButton<int>(
+          value: selectedValue,
+          isExpanded: true,
+          underline: const SizedBox.shrink(),
+          hint: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textHint)),
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w500,
+          ),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textSecondary),
+          menuMaxHeight: 280,
+          items: values
+              .map((v) => DropdownMenuItem(
+                    value: v,
+                    child: Text(itemLabel(v), style: const TextStyle(fontSize: 14)),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Rótulo da seção
+        Row(
+          children: [
+            Icon(Icons.cake_rounded, color: AppColors.primary, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Data de Nascimento *',
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // 3 dropdowns em linha
+        Row(
+          children: [
+            // ── ANO ──────────────────────────────────────
+            Expanded(
+              flex: 5,
+              child: dropCell(
+                label: 'Ano',
+                selectedValue: anoSelecionado,
+                values: anos,
+                itemLabel: (a) => '$a',
+                onChanged: onAnoChanged,
+              ),
+            ),
+            const SizedBox(width: 8),
+            // ── MÊS ──────────────────────────────────────
+            Expanded(
+              flex: 4,
+              child: dropCell(
+                label: 'Mês',
+                selectedValue: mesSelecionado,
+                values: List.generate(12, (i) => i + 1),
+                itemLabel: (m) => '${m.toString().padLeft(2, '0')} ${_meses[m - 1]}',
+                onChanged: onMesChanged,
+              ),
+            ),
+            const SizedBox(width: 8),
+            // ── DIA ──────────────────────────────────────
+            Expanded(
+              flex: 3,
+              child: dropCell(
+                label: 'Dia',
+                selectedValue: diaValido,
+                values: dias,
+                itemLabel: (d) => d.toString().padLeft(2, '0'),
+                onChanged: onDiaChanged,
+              ),
+            ),
+          ],
+        ),
+        // Mensagem de erro (se incompleto e form submetido)
+        if (errorText != null) ...[
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Text(
+              errorText,
+              style: const TextStyle(color: AppColors.error, fontSize: 11),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 // --- Campo de foto/documento personalizado -----------------------------------
