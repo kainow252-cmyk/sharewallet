@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
-import '../../services/customer_service.dart';
 import '../../services/firebase_auth_service.dart';
-import '../../services/firebase_customer_service.dart';
-import '../../models/customer_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
 
@@ -39,47 +36,14 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // ── Helper: redireciona para admin / home-afiliado / home-cliente ─────────
-  Future<void> _navegarAposLogin({String? sponsorRef}) async {
+  // ── Helper: redireciona para admin ou home conforme o email logado ────────
+  void _navegarAposLogin() {
     final auth = context.read<AuthService>();
     if (auth.isAdmin) {
       Navigator.pushReplacementNamed(context, '/admin');
-      return;
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
     }
-
-    // Detecta se é cliente puro (não afiliado)
-    try {
-      final uid = auth.currentUser?.id ?? '';
-      if (uid.isNotEmpty) {
-        final tipo = await FirebaseCustomerService.detectAccountType(uid)
-            .timeout(const Duration(seconds: 4),
-                onTimeout: () => UserAccountType.affiliate);
-        if (!mounted) return;
-
-        if (tipo == UserAccountType.customer) {
-          // Inicializa CustomerService com sponsorRef (se vier de link ?ref=)
-          final customerSvc = context.read<CustomerService>();
-          final affUser = auth.currentUser;
-          if (affUser != null) {
-            await customerSvc.loginWithFirebase(
-              uid: affUser.id,
-              email: affUser.email,
-              displayName: affUser.nome,
-              sponsorRef: sponsorRef,
-              provider: 'email',
-            );
-          }
-          if (!mounted) return;
-          Navigator.pushReplacementNamed(context, '/customer/home');
-          return;
-        }
-      }
-    } catch (_) {
-      // Em caso de erro, vai para home do afiliado
-    }
-
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(context, '/home');
   }
 
   // Verifica se voltou de um redirect do Google Sign-In
@@ -112,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
         provider: providerName,
       );
       if (!mounted) return;
-      if (ok) await _navegarAposLogin();
+      if (ok) _navegarAposLogin();
     }
   }
 
@@ -122,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final ok = await auth.login(_emailController.text.trim(), _senhaController.text);
     if (!mounted) return;
     if (ok) {
-      await _navegarAposLogin();
+      _navegarAposLogin();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -152,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       if (ok) {
-        await _navegarAposLogin();
+        _navegarAposLogin();
       } else {
         _showError(auth.error ?? 'Erro ao entrar com Google');
       }
@@ -202,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       if (ok) {
-        await _navegarAposLogin();
+        _navegarAposLogin();
       } else {
         _showError(auth.error ?? 'Erro ao entrar com Facebook');
       }

@@ -17,7 +17,6 @@ import 'services/product_service.dart';
 import 'services/subscription_service.dart';
 import 'services/admin_service.dart';
 import 'services/mercadopago_service.dart';
-import 'services/customer_service.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/auth/landing_screen.dart';
 import 'screens/auth/login_screen.dart';
@@ -35,7 +34,6 @@ import 'screens/admin/admin_login_screen.dart';
 import 'screens/admin/admin_nav_screen.dart';
 import 'screens/products/buy_screen.dart';
 import 'screens/download/apk_download_screen.dart';
-import 'screens/customer/customer_nav_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -158,7 +156,6 @@ class ShareWalletApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SubscriptionService()),
         ChangeNotifierProvider(create: (_) => AdminService()),
         ChangeNotifierProvider(create: (_) => MercadoPagoService()),
-        ChangeNotifierProvider(create: (_) => CustomerService()),
       ],
       child: MaterialApp(
         title: 'ShareWallet',
@@ -194,7 +191,6 @@ class ShareWalletApp extends StatelessWidget {
           '/admin/login': (_) => const AdminLoginScreen(),
           '/admin': (_) => const AdminNavScreen(),
           '/apk':   (_) => const ApkDownloadScreen(),
-          '/customer/home': (_) => const CustomerNavScreen(),
         },
         onGenerateRoute: (settings) {
           final name = settings.name ?? '';

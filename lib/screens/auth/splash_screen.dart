@@ -2,9 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
-import '../../services/customer_service.dart';
-import '../../services/firebase_customer_service.dart';
-import '../../models/customer_model.dart';
 import '../../services/update_service.dart';
 import '../../widgets/update_dialog.dart';
 
@@ -93,27 +90,6 @@ class _SplashScreenState extends State<SplashScreen>
       if (auth.isAdmin) {
         Navigator.pushReplacementNamed(context, '/admin');
       } else {
-        // Detecta tipo de conta: affiliate / customer / both
-        // Se SOMENTE cliente (não afiliado), vai para o portal do cliente.
-        // Se afiliado (ou both), vai para o home do afiliado.
-        try {
-          final uid = auth.currentUser?.id ?? '';
-          if (uid.isNotEmpty) {
-            final tipo = await FirebaseCustomerService.detectAccountType(uid)
-                .timeout(const Duration(seconds: 4),
-                    onTimeout: () => UserAccountType.affiliate);
-            if (!mounted) return;
-            if (tipo == UserAccountType.customer) {
-              // Somente cliente — inicializa CustomerService e vai para o portal
-              await context.read<CustomerService>().init();
-              if (!mounted) return;
-              Navigator.pushReplacementNamed(context, '/customer/home');
-              return;
-            }
-          }
-        } catch (_) {
-          // Em caso de erro na detecção, vai para home do afiliado
-        }
         Navigator.pushReplacementNamed(context, '/home');
       }
     } else {
