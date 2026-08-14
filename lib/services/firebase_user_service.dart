@@ -458,21 +458,30 @@ class FirebaseUserService {
       }, SetOptions(merge: true)).catchError((_) {});
 
       final affiliateCode = _toStr(aData['affiliate_code'], fallback: _gerarCodigo(uid));
-      final usernameResolvido = _toStr(aData['username']);
+      String usernameResolvido = _toStr(aData['username']);
 
       // -- Monta campos do perfil sem bloquear no D1 ------------------------
-      // OTIMIZAÇÃO DE LOGIN: NÃO fazemos request D1 aqui.
-      // O merge D1 agora acontece em background (após retornar o UserModel),
-      // eliminando 2-3 requests HTTP do caminho crítico do login.
       final String nomeResolvido     = _toStr(aData['nome'], fallback: displayName ?? email.split('@').first);
       final String cpfResolvido      = _toStr(aData['cpf']);
       final String telefoneResolvido = _toStr(aData['telefone']);
       final String pixKeyResolvido   = _toStr(aData['pix_key'], fallback: email);
       final String pixKeyTypeResolvido = _toStr(aData['pix_key_type'], fallback: 'EMAIL');
 
+      // ── AUTO-GERAR USERNAME para usuários antigos sem @handle ─────────────
+      // Se o usuário não tem username (campo vazio/nulo no Firestore),
+      // gera automaticamente em background e persiste no Firestore + D1.
+      if (usernameResolvido.isEmpty) {
+        final gerado = await _gerarUsernameUnico(nomeResolvido, uid);
+        usernameResolvido = gerado;
+        // Persiste no Firestore em background (não bloqueia o login)
+        db.collection('affiliates').doc(uid).set(
+          {'username': gerado, 'updated_at': FieldValue.serverTimestamp()},
+          SetOptions(merge: true),
+        ).catchError((_) {});
+        if (kDebugMode) debugPrint('[FirebaseUserService] Username gerado para $uid: @$gerado');
+      }
+
       // Sincronizar com D1 em background - NÃO bloqueia o login
-      // Garante que afiliados apareçam no Admin e mantém D1 atualizado.
-      // O merge D1->Firestore é feito dentro do _sincronizarD1 se campos estiverem vazios.
       Future.microtask(() => _sincronizarD1(
         uid: uid,
         nome: nomeResolvido,
@@ -480,6 +489,7 @@ class FirebaseUserService {
         cpf: cpfResolvido,
         telefone: telefoneResolvido,
         affiliateCode: affiliateCode,
+        username: usernameResolvido,
         sponsorCode: aData['sponsor_code']?.toString(),
         pixKey: pixKeyResolvido,
         pixKeyType: pixKeyTypeResolvido,
@@ -585,6 +595,7 @@ class FirebaseUserService {
     required String cpf,
     required String telefone,
     required String affiliateCode,
+    String username = '',
     String? sponsorCode,
     String pixKey = '',
     String pixKeyType = 'EMAIL',
@@ -623,6 +634,7 @@ class FirebaseUserService {
             'telefone': telefone,
             'pix_key': pixKey.isNotEmpty ? pixKey : email,
             'affiliate_code': affiliateCode,
+            if (username.isNotEmpty) 'username': username,
           });
           await CfApiService.updateAffiliate(uid, {
             'nome': nome,
@@ -633,6 +645,7 @@ class FirebaseUserService {
             'sponsor_code': sponsorCode,
             'pix_key': pixKey.isNotEmpty ? pixKey : email,
             'status': 'ativo',
+            if (username.isNotEmpty) 'username': username,
           });
         } else {
           // IDs iguais - apenas atualizar campos de perfil
@@ -643,6 +656,7 @@ class FirebaseUserService {
             'telefone': telefone,
             'pix_key': pixKey.isNotEmpty ? pixKey : email,
             'affiliate_code': affiliateCode,
+            if (username.isNotEmpty) 'username': username,
           });
         }
         if (kDebugMode) debugPrint('[FirebaseUserService] D1: perfil sincronizado ($email / uid=$uid / d1id=$d1Id)');

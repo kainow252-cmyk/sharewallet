@@ -256,22 +256,74 @@ class ChatService extends ChangeNotifier {
   }
 
   // ── Buscar afiliado por @username ─────────────────────────────────────────
+  // Estratégia em cascata:
+  //  1. Busca exata por username no Firestore (banco correto)
+  //  2. Busca por nome (case-insensitive) no Firestore como fallback
+  //  3. Busca por affiliate_code (maiúsculo) como último recurso
   Future<Map<String, String>?> findByUsername(String username) async {
     final limpo = username.toLowerCase().replaceFirst('@', '').trim();
     if (limpo.isEmpty) return null;
     try {
-      final snap = await _db
+      // 1. Busca exata por username
+      final snapUser = await _db
           .collection('affiliates')
           .where('username', isEqualTo: limpo)
           .limit(1)
-          .get();
-      if (snap.docs.isEmpty) return null;
-      final d = snap.docs.first.data();
-      return {
-        'uid': snap.docs.first.id,
-        'username': d['username']?.toString() ?? limpo,
-        'nome': d['nome']?.toString() ?? limpo,
-      };
+          .get()
+          .timeout(const Duration(seconds: 5));
+
+      if (snapUser.docs.isNotEmpty) {
+        final d = snapUser.docs.first.data();
+        return {
+          'uid': snapUser.docs.first.id,
+          'username': d['username']?.toString() ?? limpo,
+          'nome': d['nome']?.toString() ?? limpo,
+        };
+      }
+
+      // 2. Fallback: busca por nome (ex: "saulo" bate em nome="Saulo")
+      //    Busca case-insensitive usando range query
+      final nomeCapit = limpo[0].toUpperCase() + limpo.substring(1);
+      final snapNome = await _db
+          .collection('affiliates')
+          .where('nome', isGreaterThanOrEqualTo: nomeCapit)
+          .where('nome', isLessThanOrEqualTo: '$nomeCapit\uf8ff')
+          .limit(5)
+          .get()
+          .timeout(const Duration(seconds: 5));
+
+      if (snapNome.docs.isNotEmpty) {
+        // Pega o primeiro que tenha nome começando com o termo buscado
+        final doc = snapNome.docs.first;
+        final d = doc.data();
+        final usernameExistente = d['username']?.toString() ?? '';
+        return {
+          'uid': doc.id,
+          'username': usernameExistente.isNotEmpty ? usernameExistente : limpo,
+          'nome': d['nome']?.toString() ?? limpo,
+        };
+      }
+
+      // 3. Último recurso: busca por affiliate_code (ex: "LA1Z9K")
+      final codigoUpper = limpo.toUpperCase();
+      final snapCode = await _db
+          .collection('affiliates')
+          .where('affiliate_code', isEqualTo: codigoUpper)
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 5));
+
+      if (snapCode.docs.isNotEmpty) {
+        final d = snapCode.docs.first.data();
+        final usernameExistente = d['username']?.toString() ?? '';
+        return {
+          'uid': snapCode.docs.first.id,
+          'username': usernameExistente.isNotEmpty ? usernameExistente : limpo,
+          'nome': d['nome']?.toString() ?? limpo,
+        };
+      }
+
+      return null;
     } catch (e) {
       if (kDebugMode) debugPrint('[ChatService] findByUsername error: $e');
       return null;
