@@ -324,6 +324,34 @@ class _BuyScreenState extends State<BuyScreen> {
     return c;
   }
 
+  // -- Envia comprovante ao comprador via Worker (/api/send-receipt) ----------
+  Future<void> _enviarComprovante({
+    required String saleId,
+    required String status,
+    Map<String, dynamic>? responseData,
+  }) async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty || !email.contains('@')) return;
+    try {
+      await http.post(
+        Uri.parse('$_workerBase/api/send-receipt'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'saleId':       saleId,
+          'clienteNome':  _nomeCtrl.text.trim(),
+          'clienteEmail': email,
+          'productId':    _product?.id ?? '',
+          'productNome':  _product?.nome ?? '',
+          'valor':        _product?.valor ?? 0,
+          'chargeType':   _product?.isPixRecorrente == true ? 'pixRecorrente' : 'pixAvulso',
+          'dataPagamento': DateTime.now().toIso8601String(),
+        }),
+      ).timeout(const Duration(seconds: 12));
+    } catch (_) {
+      // fire-and-forget — não bloqueia a tela de sucesso
+    }
+  }
+
   // -- Helpers de nascimento (picker ↔ string) --------------------------------
   /// Reconstrói string dd/mm/yyyy a partir dos 3 selects.
   String _nascFormatado() {
@@ -425,6 +453,12 @@ class _BuyScreenState extends State<BuyScreen> {
               setState(() => _showSuccessScreen = true);
             }
             _salvarDadosCliente().catchError((_) {});
+            // Envia comprovante ao comprador via nosso Worker (fire-and-forget)
+            _enviarComprovante(
+              saleId:       paymentId,
+              status:       status,
+              responseData: data,
+            ).catchError((_) {});
           }
         }
       } catch (_) {}
@@ -731,9 +765,9 @@ class _BuyScreenState extends State<BuyScreen> {
                     onChanged: (_) => _buscarClienteBanco()),
               ),
               if (_buscandoCliente) ...[
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 const SizedBox(
-                  width: 20, height: 20,
+                  width: 18, height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                 ),
               ],
@@ -818,9 +852,10 @@ class _BuyScreenState extends State<BuyScreen> {
             // -- Endereço -----------------------------------------------------
             _sectionTitle(Icons.location_on_rounded, 'Endereço'),
             const SizedBox(height: 12),
+            // CEP + Número na mesma linha (campos menores, sem truncamento)
             Row(children: [
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: _field(_cepCtrl, 'CEP *', Icons.pin_drop_rounded,
                     hint: '00000-000',
                     keyboard: TextInputType.number,
@@ -835,25 +870,19 @@ class _BuyScreenState extends State<BuyScreen> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                flex: 3,
-                child: _field(_ruaCtrl, 'Rua / Logradouro *', Icons.streetview_rounded,
-                    validator: (v) => v!.trim().isEmpty ? 'Obrigatório' : null),
-              ),
-            ]),
-            const SizedBox(height: 10),
-            Row(children: [
-              Expanded(
-                flex: 1,
+                flex: 2,
                 child: _field(_numeroCtrl, 'Número *', Icons.tag_rounded,
                     keyboard: TextInputType.number,
                     validator: (v) => v!.trim().isEmpty ? 'Obrigatório' : null),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: _field(_compCtrl, 'Complemento', Icons.apartment_rounded),
-              ),
             ]),
+            const SizedBox(height: 10),
+            // Rua full-width
+            _field(_ruaCtrl, 'Rua / Logradouro *', Icons.streetview_rounded,
+                validator: (v) => v!.trim().isEmpty ? 'Obrigatório' : null),
+            const SizedBox(height: 10),
+            // Complemento full-width
+            _field(_compCtrl, 'Complemento', Icons.apartment_rounded),
             const SizedBox(height: 10),
             _field(_bairroCtrl, 'Bairro *', Icons.map_rounded,
                 validator: (v) => v!.trim().isEmpty ? 'Obrigatório' : null),
@@ -865,8 +894,9 @@ class _BuyScreenState extends State<BuyScreen> {
                     validator: (v) => v!.trim().isEmpty ? 'Obrigatório' : null),
               ),
               const SizedBox(width: 10),
-              Expanded(
-                flex: 1,
+              // UF: largura fixa — nunca trunca
+              SizedBox(
+                width: 72,
                 child: _field(_estadoCtrl, 'UF *', Icons.flag_rounded,
                     hint: 'SP',
                     validator: (v) => v!.trim().length < 2 ? 'Inválido' : null),
