@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/wallet_service.dart';
+import '../../services/extrato_export_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
 
@@ -37,11 +38,27 @@ class _ExtratoScreenState extends State<ExtratoScreen>
   Widget build(BuildContext context) {
     final wallet = context.watch<WalletService>();
     final extrato = wallet.extratoCompleto;
+    final totalSaques =
+        wallet.withdraws.fold(0.0, (s, w) => s + w.valor);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Extrato'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_rounded),
+            tooltip: 'Exportar',
+            onPressed: extrato.isEmpty
+                ? null
+                : () => _showExportSheet(
+                      context,
+                      extrato: extrato,
+                      totalComissoes: wallet.totalComissoes,
+                      totalSaques: totalSaques,
+                    ),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.gold,
@@ -74,7 +91,7 @@ class _ExtratoScreenState extends State<ExtratoScreen>
                     color: Colors.white.withValues(alpha: 0.2)),
                 _SummaryItem(
                   label: 'Total Saques',
-                  value: 'R\$ ${wallet.withdraws.fold(0.0, (s, w) => s + w.valor).toStringAsFixed(2).replaceAll('.',',')}',
+                  value: 'R\$ ${totalSaques.toStringAsFixed(2).replaceAll('.',',')}',
                   color: Colors.white,
                 ),
                 Container(
@@ -180,6 +197,31 @@ class _ExtratoScreenState extends State<ExtratoScreen>
       },
     );
   }
+
+  // ── Bottom sheet de exportação ──────────────────────────────────────────────
+  void _showExportSheet(
+    BuildContext context, {
+    required List<Map<String, dynamic>> extrato,
+    required double totalComissoes,
+    required double totalSaques,
+  }) {
+    final user = FirebaseAuth.instance.currentUser;
+    final nomeAfiliado = user?.displayName ?? user?.email ?? 'Afiliado';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _ExportSheet(
+        extrato: extrato,
+        totalComissoes: totalComissoes,
+        totalSaques: totalSaques,
+        nomeAfiliado: nomeAfiliado,
+      ),
+    );
+  }
 }
 
 class _SummaryItem extends StatelessWidget {
@@ -211,6 +253,242 @@ class _SummaryItem extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.w800),
                 textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _ExportSheet — bottom sheet com opções de exportação
+// ─────────────────────────────────────────────────────────────────────────────
+class _ExportSheet extends StatefulWidget {
+  final List<Map<String, dynamic>> extrato;
+  final double totalComissoes;
+  final double totalSaques;
+  final String nomeAfiliado;
+
+  const _ExportSheet({
+    required this.extrato,
+    required this.totalComissoes,
+    required this.totalSaques,
+    required this.nomeAfiliado,
+  });
+
+  @override
+  State<_ExportSheet> createState() => _ExportSheetState();
+}
+
+class _ExportSheetState extends State<_ExportSheet> {
+  bool _loadingCsv = false;
+  bool _loadingPdf = false;
+
+  Future<void> _downloadCsv() async {
+    if (_loadingCsv) return;
+    setState(() => _loadingCsv = true);
+    try {
+      await ExtratoExportService.downloadCsv(
+        extrato: widget.extrato,
+        nomeAfiliado: widget.nomeAfiliado,
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao gerar CSV: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingCsv = false);
+    }
+  }
+
+  Future<void> _openPdf() async {
+    if (_loadingPdf) return;
+    setState(() => _loadingPdf = true);
+    try {
+      await ExtratoExportService.openPdf(
+        extrato: widget.extrato,
+        totalComissoes: widget.totalComissoes,
+        totalSaques: widget.totalSaques,
+        nomeAfiliado: widget.nomeAfiliado,
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao gerar PDF: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingPdf = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.extrato.length;
+    final fmtMoney = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Título
+            const Row(
+              children: [
+                Icon(Icons.download_rounded, color: AppColors.gold, size: 22),
+                SizedBox(width: 10),
+                Text(
+                  'Exportar Extrato',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+
+            // Info resumo
+            Text(
+              '$count transações  •  Comissões: ${fmtMoney.format(widget.totalComissoes)}  •  Saques: ${fmtMoney.format(widget.totalSaques)}',
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textHint,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Opção CSV
+            _ExportOption(
+              icon: Icons.table_chart_rounded,
+              iconColor: const Color(0xFF1B8A4A),
+              title: 'Baixar CSV',
+              subtitle: 'Planilha compatível com Excel, Google Sheets e outros',
+              loading: _loadingCsv,
+              onTap: _downloadCsv,
+            ),
+            const SizedBox(height: 12),
+
+            // Opção PDF
+            _ExportOption(
+              icon: Icons.picture_as_pdf_rounded,
+              iconColor: const Color(0xFFC0392B),
+              title: 'Visualizar / Salvar PDF',
+              subtitle: 'Abre em nova aba — use Ctrl+P para salvar como PDF',
+              loading: _loadingPdf,
+              onTap: _openPdf,
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _ExportOption — card clicável de cada formato
+// ─────────────────────────────────────────────────────────────────────────────
+class _ExportOption extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final bool loading;
+  final VoidCallback onTap;
+
+  const _ExportOption({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.loading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: loading ? null : onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: loading
+                  ? Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: iconColor,
+                      ),
+                    )
+                  : Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: loading ? AppColors.cardBorder : AppColors.textHint,
+            ),
           ],
         ),
       ),
