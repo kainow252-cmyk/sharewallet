@@ -1314,9 +1314,8 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
 </body>
 </html>''';
 
-      final encoded = base64Encode(utf8.encode(htmlContent));
-      final dataUri = 'data:text/html;charset=utf-8;base64,$encoded';
-      openUrlInNewTab(dataUri);
+      // Usa Blob URL em vez de data: URI — evita bloqueio do Chrome em contexto async
+      openHtmlBlobInNewTab(htmlContent);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

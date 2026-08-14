@@ -54,3 +54,14 @@ void downloadFileWeb(String dataUri, String filename) {
   anchor.click();
   anchor.remove();
 }
+
+/// Abre HTML como Blob URL em nova aba (não usa data: URI — evita bloqueio do Chrome).
+/// Usa window.open com Blob URL que o browser aceita mesmo em contexto async.
+void openHtmlBlobInNewTab(String htmlContent) {
+  // ignore: avoid_web_libraries_in_flutter, deprecated_member_use
+  final blob = html.Blob([htmlContent], 'text/html;charset=utf-8');
+  final url  = html.Url.createObjectUrlFromBlob(blob);
+  html.window.open(url, '_blank');
+  // Revoga após 2 minutos (tempo suficiente para a aba carregar e imprimir)
+  Future.delayed(const Duration(minutes: 2), () => html.Url.revokeObjectUrl(url));
+}
