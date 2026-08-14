@@ -99,7 +99,10 @@ class ChatService extends ChangeNotifier {
         _totalUnread = total;
         notifyListeners();
       }
-    }, onError: (_) {});
+    }, onError: (e) {
+      // Silencia erros de Firestore (ex: regras, índice) — badge fica em 0
+      if (kDebugMode) debugPrint('[ChatService] unread error: $e');
+    });
   }
 
   void stopListeningUnread() {
@@ -110,27 +113,32 @@ class ChatService extends ChangeNotifier {
   // ── Stream de conversas do usuário ────────────────────────────────────────
   Stream<List<ChatConversation>> conversationsStream(String myUid) {
     if (myUid.isEmpty) return const Stream.empty();
+    // Sem orderBy para evitar índice composto no Firestore — ordena em memória
     return _db
         .collection('chat_conversations')
         .where('participants', arrayContains: myUid)
-        .orderBy('last_at', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) {
-              final d = doc.data();
-              final participants = List<String>.from(d['participants'] ?? []);
-              final otherUid =
-                  participants.firstWhere((u) => u != myUid, orElse: () => '');
-              final usernames = Map<String, dynamic>.from(d['usernames'] ?? {});
-              final unreadMap = Map<String, dynamic>.from(d['unread_count'] ?? {});
-              return ChatConversation(
-                id: doc.id,
-                otherUid: otherUid,
-                otherUsername: usernames[otherUid]?.toString() ?? '@?',
-                lastMessage: d['last_message']?.toString() ?? '',
-                lastAt: (d['last_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
-                unreadCount: (unreadMap[myUid] as num?)?.toInt() ?? 0,
-              );
-            }).toList());
+        .map((snap) {
+          final list = snap.docs.map((doc) {
+            final d = doc.data();
+            final participants = List<String>.from(d['participants'] ?? []);
+            final otherUid =
+                participants.firstWhere((u) => u != myUid, orElse: () => '');
+            final usernames = Map<String, dynamic>.from(d['usernames'] ?? {});
+            final unreadMap = Map<String, dynamic>.from(d['unread_count'] ?? {});
+            return ChatConversation(
+              id: doc.id,
+              otherUid: otherUid,
+              otherUsername: usernames[otherUid]?.toString() ?? '@?',
+              lastMessage: d['last_message']?.toString() ?? '',
+              lastAt: (d['last_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
+              unreadCount: (unreadMap[myUid] as num?)?.toInt() ?? 0,
+            );
+          }).toList();
+          // Ordena por mais recente primeiro (sem índice composto)
+          list.sort((a, b) => b.lastAt.compareTo(a.lastAt));
+          return list;
+        });
   }
 
   // ── Stream de mensagens de uma conversa ───────────────────────────────────

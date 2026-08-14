@@ -92,6 +92,11 @@ class _MainNavScreenState extends State<MainNavScreen> {
   @override
   void initState() {
     super.initState();
+    // Garante índice válido ao montar (singleton pode ter índice de sessão anterior)
+    if (_ctrl.index >= _screens.length) {
+      _ctrl.goTo(0);
+    }
+    _visitadas.add(_ctrl.index);
     _ctrl.addListener(_onNavChange);
     // Inicia escuta de não lidas após o primeiro frame (aguarda auth carregar)
     WidgetsBinding.instance.addPostFrameCallback((_) => _startChatListener());
@@ -135,7 +140,8 @@ class _MainNavScreenState extends State<MainNavScreen> {
 
     return Scaffold(
       body: IndexedStack(
-        index: idx,
+        // Clamp defensivo: garante que índice nunca ultrapassa o tamanho da lista
+        index: idx.clamp(0, _screens.length - 1),
         children: List.generate(_screens.length, (i) {
           if (!_visitadas.contains(i)) return const SizedBox.shrink();
           return _screens[i];
