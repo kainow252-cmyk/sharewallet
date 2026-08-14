@@ -8,6 +8,7 @@ import 'admin_affiliates_screen.dart';
 import 'admin_subscriptions_screen.dart';
 import 'admin_withdrawals_screen.dart';
 import '../../services/woovi_admin_service.dart';
+import '../../services/mp_admin_service.dart';
 import 'admin_woovi_settings_screen.dart';
 import 'admin_sales_screen.dart';
 import 'admin_reports_screen.dart';
@@ -46,6 +47,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
   // causava recriação da instância toda vez que setState() era chamado,
   // perdendo os dados carregados e mostrando AppID vazio após login.
   final WooviAdminService _wooviService = WooviAdminService();
+  final MpAdminService    _mpService    = MpAdminService();
 
   @override
   void initState() {
@@ -60,6 +62,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
   @override
   void dispose() {
     _wooviService.dispose();
+    _mpService.dispose();
     super.dispose();
   }
 
@@ -89,8 +92,11 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     const AdminSubscriptionsScreen(),
     const AdminWithdrawalsScreen(),
     const AdminSalesScreen(),
-    ChangeNotifierProvider.value(
-      value: _wooviService,          // reutiliza a instância fixa
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: _wooviService),
+        ChangeNotifierProvider.value(value: _mpService),
+      ],
       child: const AdminWooviSettingsScreen(),
     ),
     const AdminReportsScreen(),

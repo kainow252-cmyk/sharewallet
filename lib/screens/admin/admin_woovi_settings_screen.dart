@@ -2,17 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../services/woovi_admin_service.dart';
+import '../../services/mp_admin_service.dart';
 import '../../theme/app_theme.dart';
 
 // ignore_for_file: use_build_context_synchronously
 
-const _wooviPurple  = Color(0xFF6C3CE1);
-const _wooviDark    = Color(0xFF4A1FA8);
-const _wooviGreen   = Color(0xFF00C851);
+// ── Cores ──────────────────────────────────────────────────────────────────
+const _wooviPurple = Color(0xFF6C3CE1);
+const _wooviGreen  = Color(0xFF00C851);
+const _mpBlue      = Color(0xFF009EE3);
 
-// ---------------------------------------------------------------------------
-// AdminWooviSettingsScreen
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// AdminWooviSettingsScreen (agora multi-gateway)
+// ===========================================================================
 
 class AdminWooviSettingsScreen extends StatefulWidget {
   const AdminWooviSettingsScreen({super.key});
@@ -31,8 +33,8 @@ class _AdminWooviSettingsScreenState extends State<AdminWooviSettingsScreen>
     super.initState();
     _tab = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // resetAndReload garante dados frescos do servidor mesmo após logout/login
       context.read<WooviAdminService>().resetAndReload();
+      context.read<MpAdminService>().resetAndReload();
     });
   }
 
@@ -46,14 +48,17 @@ class _AdminWooviSettingsScreenState extends State<AdminWooviSettingsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Consumer<WooviAdminService>(
-        builder: (_, svc, __) {
-          if (!svc.isConfigLoaded) {
+      body: Consumer2<WooviAdminService, MpAdminService>(
+        builder: (_, wooviSvc, mpSvc, __) {
+          final loading = !wooviSvc.isConfigLoaded || !mpSvc.isLoaded;
+          if (loading) {
             return const Center(child: CircularProgressIndicator());
           }
           return Column(
             children: [
-              // ── Barra de abas ─────────────────────────────────────────────
+              // ── Seletor de gateway ativo ──────────────────────────────────
+              _GatewaySelectorBar(mpSvc: mpSvc),
+              // ── Abas ─────────────────────────────────────────────────────
               Container(
                 color: const Color(0xFF071A10),
                 child: TabBar(
@@ -71,8 +76,8 @@ class _AdminWooviSettingsScreenState extends State<AdminWooviSettingsScreen>
                 child: TabBarView(
                   controller: _tab,
                   children: [
-                    const _CredentialsTab(),  // usa context.watch internamente
-                    _SettingsTab(svc: svc),
+                    _CredentialsTab(mpSvc: mpSvc),
+                    _SettingsTab(svc: wooviSvc),
                   ],
                 ),
               ),
@@ -85,24 +90,325 @@ class _AdminWooviSettingsScreenState extends State<AdminWooviSettingsScreen>
 }
 
 // ===========================================================================
-// Aba 1 — Credenciais
+// _GatewaySelectorBar — escolher Woovi ou Mercado Pago
+// ===========================================================================
+
+class _GatewaySelectorBar extends StatefulWidget {
+  final MpAdminService mpSvc;
+  const _GatewaySelectorBar({required this.mpSvc});
+
+  @override
+  State<_GatewaySelectorBar> createState() => _GatewaySelectorBarState();
+}
+
+class _GatewaySelectorBarState extends State<_GatewaySelectorBar> {
+  bool _switching = false;
+
+  Future<void> _switchGateway(GatewayType gw) async {
+    if (_switching) return;
+    if (gw == widget.mpSvc.activeGateway) return;
+
+    // Confirmação ao desativar
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(
+          'Ativar ${gw.label}?',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          gw == GatewayType.woovi
+              ? 'O gateway Woovi (PIX nativo) será ativado.\nMercado Pago ficará inativo.'
+              : gw == GatewayType.mercadopago
+                  ? 'O Mercado Pago será ativado como gateway principal.\nWoovi ficará inativo.'
+                  : 'Todos os gateways serão desativados.\nNovos pagamentos não serão processados.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: gw == GatewayType.woovi ? _wooviPurple : _mpBlue,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirmar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    setState(() => _switching = true);
+    await widget.mpSvc.setActiveGateway(gw);
+    if (mounted) {
+      setState(() => _switching = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gateway ativo: ${gw.label}'),
+          backgroundColor: gw == GatewayType.woovi
+              ? _wooviPurple
+              : gw == GatewayType.mercadopago
+                  ? _mpBlue
+                  : AppColors.warning,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final active = context.watch<MpAdminService>().activeGateway;
+
+    return Container(
+      color: const Color(0xFF0A1A0F),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.swap_horiz_rounded, size: 16, color: AppColors.gold),
+              const SizedBox(width: 6),
+              Text(
+                'Gateway de Pagamento Ativo',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              if (_switching) ...const [
+                SizedBox(width: 8),
+                SizedBox(
+                  width: 12, height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.gold),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Woovi
+              Expanded(
+                child: _GatewayChip(
+                  label: 'Woovi / PIX',
+                  icon: 'W',
+                  color: _wooviPurple,
+                  active: active == GatewayType.woovi,
+                  onTap: () => _switchGateway(GatewayType.woovi),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Mercado Pago
+              Expanded(
+                child: _GatewayChip(
+                  label: 'Mercado Pago',
+                  icon: 'MP',
+                  color: _mpBlue,
+                  active: active == GatewayType.mercadopago,
+                  onTap: () => _switchGateway(GatewayType.mercadopago),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Nenhum
+              _GatewayChip(
+                label: 'Off',
+                icon: '✕',
+                color: Colors.grey,
+                active: active == GatewayType.none,
+                compact: true,
+                onTap: () => _switchGateway(GatewayType.none),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GatewayChip extends StatelessWidget {
+  final String label;
+  final String icon;
+  final Color  color;
+  final bool   active;
+  final bool   compact;
+  final VoidCallback onTap;
+
+  const _GatewayChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.active,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 10 : 12,
+          vertical: 10,
+        ),
+        decoration: BoxDecoration(
+          color: active ? color.withValues(alpha: 0.15) : AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: active ? color : Colors.white12,
+            width: active ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: compact
+              ? MainAxisAlignment.center
+              : MainAxisAlignment.start,
+          mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
+          children: [
+            Container(
+              width: 26, height: 26,
+              decoration: BoxDecoration(
+                color: active ? color : Colors.white10,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                icon,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: icon.length > 1 ? 10 : 13,
+                ),
+              ),
+            ),
+            if (!compact) ...[ 
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: active ? Colors.white : AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (active)
+                      Text(
+                        'ATIVO',
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// Aba 1 — Credenciais (Woovi + Mercado Pago unificado)
 // ===========================================================================
 
 class _CredentialsTab extends StatefulWidget {
-  // Não recebe mais 'svc' por parâmetro — usa context.watch para reagir a mudanças
-  const _CredentialsTab();
+  final MpAdminService mpSvc;
+  const _CredentialsTab({required this.mpSvc});
 
   @override
   State<_CredentialsTab> createState() => _CredentialsTabState();
 }
 
-class _CredentialsTabState extends State<_CredentialsTab> {
-  final _appIdCtrl = TextEditingController();
-  bool _obscure    = true;
-  bool _saving     = false;
+class _CredentialsTabState extends State<_CredentialsTab>
+    with SingleTickerProviderStateMixin {
+  late TabController _innerTab;
+
+  @override
+  void initState() {
+    super.initState();
+    _innerTab = TabController(length: 2, vsync: this);
+    // Abre na aba do gateway ativo
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.mpSvc.activeGateway == GatewayType.mercadopago) {
+        _innerTab.animateTo(1);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _innerTab.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Inner tabs
+        Container(
+          color: const Color(0xFF050F08),
+          child: TabBar(
+            controller: _innerTab,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white38,
+            indicatorColor: _wooviPurple,
+            labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            tabs: const [
+              Tab(text: 'Woovi / OpenPix'),
+              Tab(text: 'Mercado Pago'),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _innerTab,
+            children: [
+              const _WooviCredTab(),
+              _MpCredTab(mpSvc: widget.mpSvc),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Sub-aba Woovi ────────────────────────────────────────────────────────────
+
+class _WooviCredTab extends StatefulWidget {
+  const _WooviCredTab();
+
+  @override
+  State<_WooviCredTab> createState() => _WooviCredTabState();
+}
+
+class _WooviCredTabState extends State<_WooviCredTab> {
+  final _appIdCtrl  = TextEditingController();
+  bool  _obscure    = true;
+  bool  _saving     = false;
   String? _erro;
   String? _sucesso;
-  bool _initialized = false;
+  bool  _initialized = false;
 
   @override
   void dispose() {
@@ -110,18 +416,13 @@ class _CredentialsTabState extends State<_CredentialsTab> {
     super.dispose();
   }
 
-  // ── Inicializa campo uma única vez quando config carrega ───────────────────
-  void _initFieldIfNeeded(WooviConfig cfg) {
-    if (!_initialized && cfg.appId.isNotEmpty) {
-      _appIdCtrl.text = cfg.appId;
-      _initialized = true;
-    } else if (!_initialized && cfg.appId.isEmpty) {
-      // Config carregada mas vazia — marca como inicializado mesmo assim
+  void _initIfNeeded(WooviConfig cfg) {
+    if (!_initialized) {
+      if (cfg.appId.isNotEmpty) _appIdCtrl.text = cfg.appId;
       _initialized = true;
     }
   }
 
-  // ── Verifica + Salva ──────────────────────────────────────────────────────
   Future<void> _salvar(WooviAdminService svc) async {
     final appId = _appIdCtrl.text.trim();
     if (appId.isEmpty) {
@@ -129,83 +430,80 @@ class _CredentialsTabState extends State<_CredentialsTab> {
       return;
     }
     setState(() { _saving = true; _erro = null; _sucesso = null; });
-
-    // 1. Verificar AppID
     final res = await svc.verifyAppId(appId);
     if (!mounted) return;
     if (!res.ok) {
       setState(() { _saving = false; _erro = res.error; });
       return;
     }
-
-    // 2. Salvar config verificada
     final newCfg = svc.config.copyWith(
-      appId:       appId,
-      verified:    true,
-      accountName: res.accountName,
+      appId: appId, verified: true, accountName: res.accountName,
     );
     final ok = await svc.saveConfig(newCfg);
     if (!mounted) return;
     setState(() {
       _saving  = false;
-      _sucesso = ok
-          ? 'AppID verificado e salvo com sucesso!'
-          : 'Verificado, mas houve erro ao salvar. Tente novamente.';
-      _erro    = ok ? null : 'Erro ao persistir configuração.';
+      _sucesso = ok ? 'AppID verificado e salvo!' : null;
+      _erro    = ok ? null : 'Erro ao salvar.';
     });
   }
 
-  // ── Remover credenciais ────────────────────────────────────────────────────
   Future<void> _remover(WooviAdminService svc) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Remover AppID?'),
+        backgroundColor: AppColors.surface,
+        title: const Text('Remover AppID Woovi?',
+            style: TextStyle(color: Colors.white)),
         content: const Text(
-            'A integração Woovi será desativada. Pagamentos PIX deixarão de funcionar.'),
+          'A integração Woovi será desativada.',
+          style: TextStyle(color: Colors.white70),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Remover', style: TextStyle(color: Colors.red))),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remover', style: TextStyle(color: Colors.red)),
+          ),
         ],
       ),
     );
     if (confirm != true || !mounted) return;
-
-    setState(() { _saving = true; _erro = null; _sucesso = null; });
-    final newCfg = svc.config.copyWith(
-      appId: '', verified: false, accountName: '',
-    );
-    await svc.saveConfig(newCfg);
+    setState(() { _saving = true; });
+    await svc.saveConfig(
+        svc.config.copyWith(appId: '', verified: false, accountName: ''));
     if (!mounted) return;
     _appIdCtrl.clear();
-    _initialized = false; // reseta para inicializar novamente se necessário
-    setState(() {
-      _saving  = false;
-      _sucesso = 'AppID removido.';
-    });
+    _initialized = false;
+    setState(() { _saving = false; _sucesso = 'AppID removido.'; });
   }
 
   @override
   Widget build(BuildContext context) {
-    // ⚡ context.watch garante rebuild automático quando saveConfig chama notifyListeners()
     final svc        = context.watch<WooviAdminService>();
     final cfg        = svc.config;
     final configured = cfg.verified && cfg.appId.isNotEmpty;
-
-    // Inicializa campo de texto com valor do servidor (só na primeira vez)
-    _initFieldIfNeeded(cfg);
+    _initIfNeeded(cfg);
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ── Modo Produção banner ────────────────────────────────────────────
-        _ModoBanner(isProducao: true),
+        // Banner
+        _ModoBanner(
+          label: configured ? 'Modo Produção Ativo' : 'Não Configurado',
+          subtitle: configured
+              ? 'Processando pagamentos reais via Woovi'
+              : 'Configure o AppID para ativar pagamentos PIX',
+          icon: 'W',
+          color: _wooviPurple,
+          isActive: configured,
+        ),
         const SizedBox(height: 16),
 
-        // ── Seção AppID ─────────────────────────────────────────────────────
+        // Card AppID
         _SectionCard(
           title: 'AppID de Produção',
           badge: configured ? 'CONFIGURADO' : 'PENDENTE',
@@ -213,7 +511,6 @@ class _CredentialsTabState extends State<_CredentialsTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Campo AppID
               TextFormField(
                 controller: _appIdCtrl,
                 obscureText: _obscure,
@@ -234,22 +531,18 @@ class _CredentialsTabState extends State<_CredentialsTab> {
                             : Icons.visibility_rounded),
                         onPressed: () =>
                             setState(() => _obscure = !_obscure),
-                        tooltip: _obscure ? 'Mostrar' : 'Ocultar',
                       ),
                       if (cfg.appId.isNotEmpty)
                         IconButton(
                           icon: const Icon(Icons.copy_rounded, size: 18),
                           onPressed: () {
-                            Clipboard.setData(
-                                ClipboardData(text: cfg.appId));
+                            Clipboard.setData(ClipboardData(text: cfg.appId));
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('AppID copiado!'),
-                                duration: Duration(seconds: 2),
-                              ),
+                                  content: Text('AppID copiado!'),
+                                  duration: Duration(seconds: 2)),
                             );
                           },
-                          tooltip: 'Copiar',
                         ),
                     ],
                   ),
@@ -259,12 +552,8 @@ class _CredentialsTabState extends State<_CredentialsTab> {
               Text(
                 'Encontre o AppID no Dashboard Woovi → API/Plugins → AppID',
                 style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textHint,
-                    height: 1.4),
+                    fontSize: 11, color: AppColors.textHint, height: 1.4),
               ),
-
-              // -- Feedback --------------------------------------------------
               if (_erro != null) ...[
                 const SizedBox(height: 10),
                 _AlertBox(
@@ -280,8 +569,6 @@ class _CredentialsTabState extends State<_CredentialsTab> {
                     text: _sucesso!),
               ],
               const SizedBox(height: 16),
-
-              // -- Botões ----------------------------------------------------
               Row(
                 children: [
                   Expanded(
@@ -298,17 +585,16 @@ class _CredentialsTabState extends State<_CredentialsTab> {
                       ),
                       icon: (_saving || svc.isVerifying)
                           ? const SizedBox(
-                              width: 18,
-                              height: 18,
+                              width: 18, height: 18,
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.verified_rounded, size: 18),
                       label: Text(
-                          (_saving || svc.isVerifying)
-                              ? 'Verificando...'
-                              : 'Verificar e Salvar',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700)),
+                        (_saving || svc.isVerifying)
+                            ? 'Verificando...'
+                            : 'Verificar e Salvar',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
                   if (configured) ...[
@@ -323,8 +609,7 @@ class _CredentialsTabState extends State<_CredentialsTab> {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
-                      icon: const Icon(Icons.delete_outline_rounded,
-                          size: 18),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
                       label: const Text('Remover'),
                     ),
                   ],
@@ -333,29 +618,350 @@ class _CredentialsTabState extends State<_CredentialsTab> {
             ],
           ),
         ),
-
         const SizedBox(height: 16),
 
-        // ── Status Atual ───────────────────────────────────────────────────
+        // Status
         _SectionCard(
           title: 'Status Atual',
-          child: _StatusTable(cfg: cfg),
+          child: _WooviStatusTable(cfg: cfg),
         ),
-
         const SizedBox(height: 16),
 
-        // ── Webhook URL ─────────────────────────────────────────────────────
+        // Webhook
         _SectionCard(
           title: 'Webhook Woovi',
           child: _WebhookInfo(webhookUrl: cfg.webhookUrl),
         ),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+}
+
+// ── Sub-aba Mercado Pago ─────────────────────────────────────────────────────
+
+class _MpCredTab extends StatefulWidget {
+  final MpAdminService mpSvc;
+  const _MpCredTab({required this.mpSvc});
+
+  @override
+  State<_MpCredTab> createState() => _MpCredTabState();
+}
+
+class _MpCredTabState extends State<_MpCredTab> {
+  final _tokenCtrl  = TextEditingController();
+  final _pubKeyCtrl = TextEditingController();
+  bool  _obscure    = true;
+  bool  _saving     = false;
+  bool  _sandbox    = false;
+  String? _erro;
+  String? _sucesso;
+  bool  _initialized = false;
+
+  @override
+  void dispose() {
+    _tokenCtrl.dispose();
+    _pubKeyCtrl.dispose();
+    super.dispose();
+  }
+
+  void _initIfNeeded(MpConfig cfg) {
+    if (!_initialized) {
+      // token mascarado — não preenche campo por segurança
+      _pubKeyCtrl.text = cfg.publicKey;
+      _sandbox = cfg.sandbox;
+      _initialized = true;
+    }
+  }
+
+  Future<void> _salvar() async {
+    final token  = _tokenCtrl.text.trim();
+    if (token.isEmpty) {
+      setState(() => _erro = 'Informe o Access Token do Mercado Pago.');
+      return;
+    }
+    if (!token.startsWith('APP_USR-') && !token.startsWith('TEST-')) {
+      setState(() => _erro =
+          'Token inválido. Deve iniciar com APP_USR- (produção) ou TEST- (sandbox).');
+      return;
+    }
+    setState(() { _saving = true; _erro = null; _sucesso = null; });
+
+    final res = await widget.mpSvc.saveMpConfig(
+      accessToken: token,
+      publicKey:   _pubKeyCtrl.text.trim(),
+      sandbox:     _sandbox,
+    );
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      if (res.ok) {
+        _sucesso = res.email.isNotEmpty
+            ? 'Credenciais verificadas! Conta: ${res.email}'
+            : 'Credenciais salvas!';
+        _tokenCtrl.clear(); // limpa por segurança
+      } else {
+        _erro = res.error.isNotEmpty ? res.error : 'Erro ao salvar credenciais.';
+      }
+    });
+  }
+
+  Future<void> _remover() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Remover credenciais MP?',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'As credenciais do Mercado Pago serão removidas.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remover', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() { _saving = true; });
+    await widget.mpSvc.removeMpConfig();
+    if (!mounted) return;
+    _tokenCtrl.clear();
+    _pubKeyCtrl.clear();
+    _initialized = false;
+    setState(() { _saving = false; _sucesso = 'Credenciais removidas.'; });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cfg        = context.watch<MpAdminService>().config;
+    final configured = cfg.isConfigured;
+    _initIfNeeded(cfg);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Banner
+        _ModoBanner(
+          label: configured
+              ? (_sandbox ? 'Modo Sandbox (Testes)' : 'Modo Produção Ativo')
+              : 'Não Configurado',
+          subtitle: configured
+              ? 'Conta: ${cfg.accountEmail.isNotEmpty ? cfg.accountEmail : cfg.accountId}'
+              : 'Configure as credenciais para ativar o Mercado Pago',
+          icon: 'MP',
+          color: _mpBlue,
+          isActive: configured,
+        ),
+        const SizedBox(height: 16),
+
+        // Card credenciais
+        _SectionCard(
+          title: 'Credenciais Mercado Pago',
+          badge: configured ? 'CONFIGURADO' : 'PENDENTE',
+          badgeColor: configured ? _wooviGreen : AppColors.warning,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Modo sandbox
+              SwitchListTile.adaptive(
+                value: _sandbox,
+                onChanged: (v) => setState(() => _sandbox = v),
+                title: const Text('Modo Sandbox (Testes)',
+                    style: TextStyle(color: Colors.white, fontSize: 14)),
+                subtitle: Text(
+                  _sandbox
+                      ? 'Usando credenciais de teste (TEST-...)'
+                      : 'Usando credenciais de produção (APP_USR-...)',
+                  style: TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary),
+                ),
+                activeColor: _mpBlue,
+                contentPadding: EdgeInsets.zero,
+              ),
+              const Divider(color: Colors.white12),
+              const SizedBox(height: 8),
+
+              // Access Token
+              TextFormField(
+                controller: _tokenCtrl,
+                obscureText: _obscure,
+                maxLines: 1,
+                decoration: InputDecoration(
+                  labelText: 'Access Token',
+                  hintText: _sandbox ? 'TEST-...' : 'APP_USR-...',
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscure
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (configured && cfg.accountEmail.isNotEmpty)
+                _InfoRow(
+                  icon: Icons.account_circle_rounded,
+                  color: _mpBlue,
+                  label: 'Conta atual',
+                  value: cfg.accountEmail,
+                ),
+              const SizedBox(height: 8),
+
+              // Public Key (opcional)
+              TextFormField(
+                controller: _pubKeyCtrl,
+                maxLines: 1,
+                decoration: InputDecoration(
+                  labelText: 'Public Key (opcional)',
+                  hintText: _sandbox ? 'TEST-...' : 'APP_USR-...',
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Encontre as credenciais em: mercadopago.com → '
+                'Seu negócio → Configurações → Credenciais da aplicação',
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textHint, height: 1.4),
+              ),
+
+              if (_erro != null) ...[
+                const SizedBox(height: 10),
+                _AlertBox(
+                    icon: Icons.error_rounded,
+                    color: AppColors.error,
+                    text: _erro!),
+              ],
+              if (_sucesso != null) ...[
+                const SizedBox(height: 10),
+                _AlertBox(
+                    icon: Icons.check_circle_rounded,
+                    color: _wooviGreen,
+                    text: _sucesso!),
+              ],
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _salvar,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _mpBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 18, height: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.verified_rounded, size: 18),
+                      label: Text(
+                        _saving ? 'Verificando...' : 'Verificar e Salvar',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                  if (configured) ...[
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: _saving ? null : _remover,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: BorderSide(color: AppColors.error),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 14, horizontal: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                      label: const Text('Remover'),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Status
+        if (configured)
+          _SectionCard(
+            title: 'Status Atual',
+            child: Column(
+              children: [
+                _StatusRow(label: 'Modo',       value: _sandbox ? 'Sandbox (Testes)' : 'Produção'),
+                const Divider(height: 12, color: Colors.white10),
+                _StatusRow(label: 'Conta',      value: cfg.accountEmail.isNotEmpty ? cfg.accountEmail : '—'),
+                const Divider(height: 12, color: Colors.white10),
+                _StatusRow(label: 'ID da conta',value: cfg.accountId.isNotEmpty ? cfg.accountId : '—'),
+                const Divider(height: 12, color: Colors.white10),
+                _StatusRow(label: 'Gateway',    value: 'Mercado Pago'),
+                const Divider(height: 12, color: Colors.white10),
+                _StatusRow(label: 'Split',      value: 'Split por afiliado (% variável)'),
+              ],
+            ),
+          ),
+        const SizedBox(height: 16),
+
+        // Info taxas MP
+        _SectionCard(
+          title: 'Taxas Mercado Pago',
+          child: Column(
+            children: [
+              _TaxaRow(
+                titulo: 'PIX',
+                valor: '0,99% por transação',
+                icon: Icons.pix_rounded,
+              ),
+              const Divider(height: 16),
+              _TaxaRow(
+                titulo: 'Cartão de crédito (parcelado)',
+                valor: 'A partir de 3,49% + parcelas',
+                icon: Icons.credit_card_rounded,
+              ),
+              const Divider(height: 16),
+              _TaxaRow(
+                titulo: 'Boleto',
+                valor: 'R\$ 3,49 por boleto pago',
+                icon: Icons.receipt_long_rounded,
+              ),
+              const Divider(height: 16),
+              _TaxaRow(
+                titulo: 'Recorrência / Assinatura',
+                valor: 'A partir de 4,99% por cobrança',
+                icon: Icons.autorenew_rounded,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
       ],
     );
   }
 }
 
 // ===========================================================================
-// Aba 2 — Configurações
+// Aba 2 — Configurações (Woovi — mantida igual)
 // ===========================================================================
 
 class _SettingsTab extends StatefulWidget {
@@ -367,8 +973,8 @@ class _SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<_SettingsTab> {
-  final _webhookCtrl    = TextEditingController();
-  final _comissaoCtrl   = TextEditingController();
+  final _webhookCtrl  = TextEditingController();
+  final _comissaoCtrl = TextEditingController();
   bool _saving = false;
   String? _erro;
   String? _sucesso;
@@ -378,8 +984,7 @@ class _SettingsTabState extends State<_SettingsTab> {
     super.initState();
     final cfg = widget.svc.config;
     _webhookCtrl.text  = cfg.webhookUrl;
-    _comissaoCtrl.text =
-        (cfg.comissaoPercent * 100).toStringAsFixed(0);
+    _comissaoCtrl.text = (cfg.comissaoPercent * 100).toStringAsFixed(0);
   }
 
   @override
@@ -414,15 +1019,14 @@ class _SettingsTabState extends State<_SettingsTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ── Webhook ────────────────────────────────────────────────────────
+        // Webhook
         _SectionCard(
-          title: 'URL do Webhook',
+          title: 'URL do Webhook (Woovi)',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Registre esta URL no Dashboard Woovi → API/Plugins → Webhook. '
-                'Ela receberá todos os eventos de pagamento.',
+                'Registre esta URL no Dashboard Woovi → API/Plugins → Webhook.',
                 style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
@@ -453,8 +1057,6 @@ class _SettingsTabState extends State<_SettingsTab> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // Eventos suportados
               const Text('Eventos registrados:',
                   style: TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 13)),
@@ -475,7 +1077,8 @@ class _SettingsTabState extends State<_SettingsTab> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(e,
-                              style: const TextStyle(fontSize: 12,
+                              style: const TextStyle(
+                                  fontSize: 12,
                                   color: AppColors.textSecondary,
                                   height: 1.4)),
                         ),
@@ -485,18 +1088,16 @@ class _SettingsTabState extends State<_SettingsTab> {
             ],
           ),
         ),
-
         const SizedBox(height: 16),
 
-        // ── Comissão ───────────────────────────────────────────────────────
+        // Comissão
         _SectionCard(
           title: 'Comissão Padrão dos Afiliados',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Percentual creditado na subconta do afiliado via split Woovi '
-                'para cada venda aprovada.',
+                'Percentual creditado na subconta do afiliado para cada venda aprovada.',
                 style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
@@ -512,8 +1113,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                       keyboardType: const TextInputType.numberWithOptions(
                           decimal: true),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                            RegExp(r'[0-9.]'))
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
                       ],
                       decoration: InputDecoration(
                         labelText: 'Comissão (%)',
@@ -538,15 +1138,14 @@ class _SettingsTabState extends State<_SettingsTab> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Split Woovi — GRÁTIS',
+                          const Text('Split — automático',
                               style: TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12,
                                   color: _wooviPurple)),
                           const SizedBox(height: 2),
                           Text(
-                            'A comissão é creditada instantaneamente '
-                            'na subconta do afiliado sem custo adicional.',
+                            'A comissão é creditada automaticamente na conta do afiliado.',
                             style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textSecondary,
@@ -561,10 +1160,9 @@ class _SettingsTabState extends State<_SettingsTab> {
             ],
           ),
         ),
-
         const SizedBox(height: 16),
 
-        // ── Preços Woovi ───────────────────────────────────────────────────
+        // Taxas Woovi
         _SectionCard(
           title: 'Taxas Woovi',
           child: Column(
@@ -583,44 +1181,31 @@ class _SettingsTabState extends State<_SettingsTab> {
               const Divider(height: 16),
               _TaxaRow(
                 titulo: 'Split / Subcontas',
-                valor: 'GRÁTIS — sem custo adicional',
+                valor: 'GRÁTIS',
                 icon: Icons.account_tree_rounded,
                 destaque: true,
               ),
               const Divider(height: 16),
               _TaxaRow(
                 titulo: 'Saque do afiliado',
-                valor: 'R\$ 1,00 por saque (deduzido do saldo)',
+                valor: 'R\$ 1,00 por saque',
                 icon: Icons.payments_rounded,
-              ),
-              const Divider(height: 16),
-              _TaxaRow(
-                titulo: 'Pix Automático (assinatura)',
-                valor: 'Mesma taxa por cobrança recorrente',
-                icon: Icons.autorenew_rounded,
               ),
             ],
           ),
         ),
 
-        // ── Feedback ───────────────────────────────────────────────────────
         if (_erro != null) ...[
           const SizedBox(height: 12),
-          _AlertBox(
-              icon: Icons.error_rounded,
-              color: AppColors.error,
-              text: _erro!),
+          _AlertBox(icon: Icons.error_rounded, color: AppColors.error, text: _erro!),
         ],
         if (_sucesso != null) ...[
           const SizedBox(height: 12),
           _AlertBox(
-              icon: Icons.check_circle_rounded,
-              color: _wooviGreen,
-              text: _sucesso!),
+              icon: Icons.check_circle_rounded, color: _wooviGreen, text: _sucesso!),
         ],
         const SizedBox(height: 16),
 
-        // ── Botão Salvar ───────────────────────────────────────────────────
         SizedBox(
           height: 50,
           child: ElevatedButton.icon(
@@ -633,8 +1218,7 @@ class _SettingsTabState extends State<_SettingsTab> {
             ),
             icon: _saving
                 ? const SizedBox(
-                    width: 18,
-                    height: 18,
+                    width: 18, height: 18,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.save_rounded, size: 18),
@@ -654,73 +1238,89 @@ class _SettingsTabState extends State<_SettingsTab> {
 // ===========================================================================
 
 class _ModoBanner extends StatelessWidget {
-  final bool isProducao;
-  const _ModoBanner({required this.isProducao});
+  final String   label;
+  final String   subtitle;
+  final String   icon;
+  final Color    color;
+  final bool     isActive;
+
+  const _ModoBanner({
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.isActive,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final bg = isActive
+        ? _wooviGreen.withValues(alpha: 0.08)
+        : AppColors.warning.withValues(alpha: 0.08);
+    final border = isActive
+        ? _wooviGreen.withValues(alpha: 0.4)
+        : AppColors.warning.withValues(alpha: 0.4);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: isProducao
-            ? _wooviGreen.withValues(alpha: 0.08)
-            : AppColors.warning.withValues(alpha: 0.08),
+        color: bg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: isProducao
-                ? _wooviGreen.withValues(alpha: 0.4)
-                : AppColors.warning.withValues(alpha: 0.4)),
+        border: Border.all(color: border),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: _wooviPurple,
+              color: color,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text('W',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14)),
+            child: Text(
+              icon,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: icon.length > 1 ? 11 : 14,
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  isProducao ? 'Modo Produção Ativo' : 'Modo Sandbox Ativo',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: isProducao ? _wooviGreen : AppColors.warning,
-                      fontSize: 14),
-                ),
-                Text(
-                  isProducao
-                      ? 'Processando pagamentos reais via Woovi'
-                      : 'Ambiente de testes — nenhum cobrança real',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
-                ),
+                Text(label,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary)),
               ],
             ),
           ),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color:
-                  isProducao ? _wooviGreen : AppColors.warning,
+              color: isActive
+                  ? _wooviGreen.withValues(alpha: 0.15)
+                  : AppColors.warning.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                  color: isActive ? _wooviGreen : AppColors.warning),
             ),
             child: Text(
-              isProducao ? 'LIVE' : 'TEST',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12),
+              isActive ? 'LIVE' : 'OFF',
+              style: TextStyle(
+                color: isActive ? _wooviGreen : AppColors.warning,
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
         ],
@@ -730,10 +1330,10 @@ class _ModoBanner extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  final String title;
-  final Widget child;
+  final String  title;
+  final Widget  child;
   final String? badge;
-  final Color? badgeColor;
+  final Color?  badgeColor;
 
   const _SectionCard({
     required this.title,
@@ -745,236 +1345,185 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.cardBorder),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(title,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
                     style: const TextStyle(
+                        color: Colors.white,
                         fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: AppColors.textPrimary)),
-              ),
-              if (badge != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: badgeColor?.withValues(alpha: 0.12) ??
-                        AppColors.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: badgeColor?.withValues(alpha: 0.5) ??
-                            AppColors.primary.withValues(alpha: 0.5)),
+                        fontSize: 14),
                   ),
-                  child: Text(badge!,
+                ),
+                if (badge != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (badgeColor ?? Colors.grey).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: (badgeColor ?? Colors.grey).withValues(alpha: 0.5)),
+                    ),
+                    child: Text(
+                      badge!,
                       style: TextStyle(
+                          color: badgeColor ?? Colors.grey,
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: badgeColor ?? AppColors.primary)),
-                ),
-            ],
+                          letterSpacing: 0.5),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
-          child,
+          const Divider(color: Colors.white10, height: 20),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: child,
+          ),
         ],
       ),
     );
   }
 }
 
-class _StatusTable extends StatelessWidget {
+class _WooviStatusTable extends StatelessWidget {
   final WooviConfig cfg;
-  const _StatusTable({required this.cfg});
-
-  @override
-  Widget build(BuildContext context) {
-    return Table(
-      columnWidths: const {
-        0: IntrinsicColumnWidth(),
-        1: FlexColumnWidth(),
-      },
-      children: [
-        _row('Modo', 'Produção (Pagamentos Reais)'),
-        _row('AppID',
-            cfg.appId.isNotEmpty ? cfg.appIdMasked : '— não configurado —'),
-        if (cfg.accountName.isNotEmpty)
-          _row('Conta', cfg.accountName),
-        _row(
-          'Verificado',
-          cfg.verified ? 'Sim' : 'Não',
-          valueColor: cfg.verified ? _wooviGreen : AppColors.error,
-        ),
-        _row(
-          'Comissão',
-          '${(cfg.comissaoPercent * 100).toStringAsFixed(0)}%',
-        ),
-        _row('Gateway', 'Woovi / OpenPix'),
-        _row('Split', 'Subconta por afiliado (GRÁTIS)'),
-      ],
-    );
-  }
-
-  TableRow _row(String label, String value, {Color? valueColor}) =>
-      TableRow(children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Text('$label   ',
-              style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Text(value,
-              style: TextStyle(
-                  color: valueColor ?? AppColors.textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
-        ),
-      ]);
-}
-
-class _WebhookInfo extends StatelessWidget {
-  final String webhookUrl;
-  const _WebhookInfo({required this.webhookUrl});
+  const _WooviStatusTable({required this.cfg});
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Registre esta URL no Dashboard Woovi → API/Plugins → Webhook.',
-          style: TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-              height: 1.5),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.cardBorder),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  webhookUrl.isNotEmpty
-                      ? webhookUrl
-                      : 'https://api.sharewallet.com.br/api/webhook/woovi',
-                  style: const TextStyle(
-                      fontSize: 12,
-                      color: _wooviPurple,
-                      fontFamily: 'monospace'),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.copy_rounded, size: 16),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(
-                      text: webhookUrl.isNotEmpty
-                          ? webhookUrl
-                          : 'https://api.sharewallet.com.br/api/webhook/woovi'));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('URL do webhook copiada!'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
-                tooltip: 'Copiar',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        // Instruções passo a passo
-        _Step(numero: '1', texto: 'Acesse dashboard.woovi.com → API/Plugins'),
-        _Step(numero: '2', texto: 'Clique em "Webhook" e depois "Adicionar"'),
-        _Step(numero: '3', texto: 'Cole a URL acima e selecione os 5 eventos'),
-        _Step(numero: '4', texto: 'Salve — a Woovi enviará um teste de verificação'),
+        _StatusRow(label: 'Modo',      value: 'Produção (Pagamentos Reais)'),
+        const Divider(height: 12, color: Colors.white10),
+        _StatusRow(
+            label: 'AppID',
+            value: cfg.appId.isNotEmpty
+                ? '${cfg.appId.substring(0, cfg.appId.length.clamp(0, 12))}...'
+                : 'Não configurado'),
+        const Divider(height: 12, color: Colors.white10),
+        _StatusRow(
+            label: 'Verificado',
+            value: cfg.verified ? 'Sim' : 'Não',
+            highlight: cfg.verified),
+        const Divider(height: 12, color: Colors.white10),
+        _StatusRow(label: 'Comissão', value: '${(cfg.comissaoPercent * 100).toStringAsFixed(0)}%'),
+        const Divider(height: 12, color: Colors.white10),
+        _StatusRow(label: 'Gateway',  value: 'Woovi / OpenPix'),
+        const Divider(height: 12, color: Colors.white10),
+        _StatusRow(label: 'Split',    value: 'Subconta por afiliado (GRÁTIS)'),
       ],
     );
   }
 }
 
-class _Step extends StatelessWidget {
-  final String numero;
-  final String texto;
-  const _Step({required this.numero, required this.texto});
+class _StatusRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool   highlight;
+
+  const _StatusRow({
+    required this.label,
+    required this.value,
+    this.highlight = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              color: _wooviPurple,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Center(
-              child: Text(numero,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800)),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(
+            label,
+            style: TextStyle(
+                fontSize: 13, color: AppColors.textSecondary),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              color: highlight ? _wooviGreen : Colors.white,
+              fontWeight: highlight ? FontWeight.w700 : FontWeight.normal,
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(texto,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary)),
-          ),
-        ],
-      ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final Color    color;
+  final String   label;
+  final String   value;
+
+  const _InfoRow({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 6),
+        Text('$label: ',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        Expanded(
+          child: Text(value,
+              style: const TextStyle(
+                  fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+        ),
+      ],
     );
   }
 }
 
 class _AlertBox extends StatelessWidget {
   final IconData icon;
-  final Color color;
-  final String text;
-  const _AlertBox(
-      {required this.icon, required this.color, required this.text});
+  final Color    color;
+  final String   text;
+
+  const _AlertBox({required this.icon, required this.color, required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: color, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(text,
-                style: TextStyle(
-                    fontSize: 12, color: color, height: 1.4)),
+                style: TextStyle(color: color, fontSize: 13, height: 1.4)),
           ),
         ],
       ),
@@ -983,10 +1532,10 @@ class _AlertBox extends StatelessWidget {
 }
 
 class _TaxaRow extends StatelessWidget {
-  final String titulo;
-  final String valor;
+  final String   titulo;
+  final String   valor;
   final IconData icon;
-  final bool destaque;
+  final bool     destaque;
 
   const _TaxaRow({
     required this.titulo,
@@ -1000,19 +1549,82 @@ class _TaxaRow extends StatelessWidget {
     return Row(
       children: [
         Icon(icon,
-            size: 18,
+            size: 20,
             color: destaque ? _wooviGreen : AppColors.textSecondary),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
-          child: Text(titulo,
-              style: const TextStyle(
-                  fontSize: 13, color: AppColors.textSecondary)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(titulo,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
+              Text(valor,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: destaque ? _wooviGreen : AppColors.textSecondary,
+                    fontWeight:
+                        destaque ? FontWeight.w700 : FontWeight.normal,
+                  )),
+            ],
+          ),
         ),
-        Text(valor,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: destaque ? _wooviGreen : AppColors.textPrimary)),
+      ],
+    );
+  }
+}
+
+class _WebhookInfo extends StatelessWidget {
+  final String webhookUrl;
+  const _WebhookInfo({required this.webhookUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Registre esta URL no Dashboard Woovi para receber eventos:',
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  webhookUrl,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white70,
+                      fontFamily: 'monospace'),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.copy_rounded, size: 16),
+                color: AppColors.gold,
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: webhookUrl));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('URL copiada!'),
+                        duration: Duration(seconds: 2)),
+                  );
+                },
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
