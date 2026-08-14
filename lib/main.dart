@@ -17,6 +17,7 @@ import 'services/product_service.dart';
 import 'services/subscription_service.dart';
 import 'services/admin_service.dart';
 import 'services/mercadopago_service.dart';
+import 'services/chat_service.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/auth/landing_screen.dart';
 import 'screens/auth/login_screen.dart';
@@ -156,6 +157,7 @@ class ShareWalletApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SubscriptionService()),
         ChangeNotifierProvider(create: (_) => AdminService()),
         ChangeNotifierProvider(create: (_) => MercadoPagoService()),
+        ChangeNotifierProvider(create: (_) => ChatService()),
       ],
       child: MaterialApp(
         title: 'ShareWallet',

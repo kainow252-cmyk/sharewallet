@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../services/chat_service.dart';
+import '../../services/auth_service.dart';
 import 'home_screen.dart';
 import '../products/products_screen.dart';
 import '../wallet/carteira_screen.dart';
 import '../indicacoes/indicacoes_screen.dart';
 import '../ranking/ranking_screen.dart';
+import '../chat/chat_screen.dart';
 import '../profile/profile_screen.dart';
 
 // -- Controlador global de navegação ------------------------------------------
@@ -23,12 +27,13 @@ class MainNavController extends ChangeNotifier {
     }
   }
 
-  void goHome() => goTo(0);
-  void goProducts() => goTo(1);
-  void goCarteira() => goTo(2);
+  void goHome()       => goTo(0);
+  void goProducts()   => goTo(1);
+  void goCarteira()   => goTo(2);
   void goIndicacoes() => goTo(3);
-  void goRanking() => goTo(4);
-  void goProfile() => goTo(5); // Perfil é o índice 5
+  void goRanking()    => goTo(4);
+  void goChat()       => goTo(5);   // aba Chat
+  void goProfile()    => goTo(6);   // aba Perfil
 }
 
 class MainNavScreen extends StatefulWidget {
@@ -44,12 +49,13 @@ class _MainNavScreenState extends State<MainNavScreen> {
   final Set<int> _visitadas = {0}; // começa só com Home
 
   final List<Widget> _screens = const [
-    HomeScreen(),
-    ProductsScreen(),
-    CarteiraScreen(),
-    IndicacoesScreen(),
-    RankingScreen(),
-    ProfileScreen(),
+    HomeScreen(),       // 0
+    ProductsScreen(),   // 1
+    CarteiraScreen(),   // 2
+    IndicacoesScreen(), // 3
+    RankingScreen(),    // 4
+    ChatScreen(),       // 5
+    ProfileScreen(),    // 6
   ];
 
   final List<_NavItem> _navItems = const [
@@ -79,6 +85,11 @@ class _MainNavScreenState extends State<MainNavScreen> {
       label: 'Ranking',
     ),
     _NavItem(
+      icon: Icons.chat_bubble_outline_rounded,
+      activeIcon: Icons.chat_bubble_rounded,
+      label: 'Chat',
+    ),
+    _NavItem(
       icon: Icons.person_outline_rounded,
       activeIcon: Icons.person_rounded,
       label: 'Perfil',
@@ -89,11 +100,33 @@ class _MainNavScreenState extends State<MainNavScreen> {
   void initState() {
     super.initState();
     _ctrl.addListener(_onNavChange);
+    // Inicia escuta de não lidas após o primeiro frame (aguarda auth carregar)
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startChatListener());
+  }
+
+  void _startChatListener() {
+    if (!mounted) return;
+    final auth = context.read<AuthService>();
+    final uid = auth.currentUser?.id ?? '';
+    if (uid.isNotEmpty) {
+      context.read<ChatService>().startListeningUnread(uid);
+    }
+    // Escuta mudanças de auth para (re)iniciar listener quando fizer login
+    auth.addListener(_onAuthChanged);
+  }
+
+  void _onAuthChanged() {
+    if (!mounted) return;
+    final uid = context.read<AuthService>().currentUser?.id ?? '';
+    context.read<ChatService>().startListeningUnread(uid);
   }
 
   @override
   void dispose() {
     _ctrl.removeListener(_onNavChange);
+    try {
+      context.read<AuthService>().removeListener(_onAuthChanged);
+    } catch (_) {}
     super.dispose();
   }
 
@@ -105,21 +138,20 @@ class _MainNavScreenState extends State<MainNavScreen> {
   @override
   Widget build(BuildContext context) {
     final idx = _ctrl.index;
+    final totalUnread = context.watch<ChatService>().totalUnread;
 
     return Scaffold(
       body: IndexedStack(
         index: idx,
         children: List.generate(_screens.length, (i) {
-          // Lazy: só monta a tela quando for visitada pela 1a vez
-          if (!_visitadas.contains(i)) {
-            return const SizedBox.shrink();
-          }
+          if (!_visitadas.contains(i)) return const SizedBox.shrink();
           return _screens[i];
         }),
       ),
-      bottomNavigationBar: _BottomNav(
+      bottomNavigationBar: _BottomNavWithBadge(
         currentIndex: idx,
         items: _navItems,
+        chatBadge: totalUnread,
         onTap: (i) {
           _visitadas.add(i);
           _ctrl.goTo(i);
@@ -129,15 +161,17 @@ class _MainNavScreenState extends State<MainNavScreen> {
   }
 }
 
-// -- Bottom Nav personalizado --------------------------------------------------
-class _BottomNav extends StatelessWidget {
+// -- Bottom Nav com badge de mensagens não lidas ------------------------------
+class _BottomNavWithBadge extends StatelessWidget {
   final int currentIndex;
   final List<_NavItem> items;
+  final int chatBadge;   // contagem de mensagens não lidas (índice 5)
   final void Function(int) onTap;
 
-  const _BottomNav({
+  const _BottomNavWithBadge({
     required this.currentIndex,
     required this.items,
+    required this.chatBadge,
     required this.onTap,
   });
 
@@ -164,9 +198,16 @@ class _BottomNav extends StatelessWidget {
               final item = entry.value;
               final isActive = currentIndex == i;
 
+              // Cores por aba:
+              // 4 = Ranking (amarelo), 5 = Chat (azul claro), demais = primary
               final Color activeColor = i == 4
                   ? const Color(0xFFFFD740)
-                  : AppColors.primary;
+                  : i == 5
+                      ? const Color(0xFF29B6F6)
+                      : AppColors.primary;
+
+              // Badge de não lidas somente no Chat (índice 5)
+              final bool showBadge = i == 5 && chatBadge > 0;
 
               return Expanded(
                 child: GestureDetector(
@@ -176,18 +217,53 @@ class _BottomNav extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Icon(
-                        isActive ? item.activeIcon : item.icon,
-                        color: isActive ? activeColor : AppColors.textHint,
-                        size: 22,
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(
+                            isActive ? item.activeIcon : item.icon,
+                            color: isActive ? activeColor : AppColors.textHint,
+                            size: 22,
+                          ),
+                          if (showBadge)
+                            Positioned(
+                              right: -6,
+                              top: -4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 1),
+                                constraints: const BoxConstraints(
+                                    minWidth: 16, minHeight: 16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.error,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: AppColors.surface, width: 1.5),
+                                ),
+                                child: Text(
+                                  chatBadge > 99 ? '99+' : '$chatBadge',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.1,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 3),
                       Text(
                         item.label,
                         style: TextStyle(
                           fontSize: 10,
-                          fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                          color: isActive ? activeColor : AppColors.textHint,
+                          fontWeight: isActive
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color:
+                              isActive ? activeColor : AppColors.textHint,
                         ),
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,

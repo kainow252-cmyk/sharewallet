@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../services/cf_api_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/chat_service.dart';
 import '../../theme/app_theme.dart';
+import '../chat/chat_screen.dart';
+import '../dashboard/main_nav_screen.dart';
 
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
@@ -123,19 +128,28 @@ class _RankingScreenState extends State<RankingScreen> {
                           const Icon(Icons.emoji_events_rounded,
                               color: Color(0xFFFFD740), size: 32),
                           const SizedBox(width: 12),
-                          const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('Ranking',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w800)),
-                              Text('Top 10 Afiliados do Mês',
-                                  style: TextStyle(
-                                      color: Colors.white60, fontSize: 13)),
-                            ],
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text('Ranking',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w800)),
+                                Text('Top 10 Afiliados do Mês',
+                                    style: TextStyle(
+                                        color: Colors.white60, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          // Botão Chat: vai direto para aba Chat
+                          IconButton(
+                            icon: const Icon(Icons.chat_bubble_outline_rounded,
+                                color: Colors.white70, size: 26),
+                            tooltip: 'Chat Afiliados',
+                            onPressed: () => MainNavController().goChat(),
                           ),
                         ],
                       ),
@@ -210,6 +224,8 @@ class _RankingScreenState extends State<RankingScreen> {
                               nivel: item['nivel']?.toString() ?? 'Bronze',
                               nivelColor: _nivelColor(item['nivel']?.toString() ?? 'Bronze'),
                               fmt: _fmt,
+                              affiliateUid: item['uid']?.toString() ?? item['affiliate_uid']?.toString() ?? '',
+                              affiliateUsername: item['username']?.toString() ?? '',
                             );
                           }),
 
@@ -412,12 +428,14 @@ class _PodiumItem extends StatelessWidget {
 // -- Tile de ranking (pos 4-10) ------------------------------------------------
 class _RankingTile extends StatelessWidget {
   final int position;
-  final String codigo;   // código do afiliado (preserva privacidade)
+  final String codigo;           // código do afiliado (preserva privacidade)
   final int assinaturas;
   final double comissaoTotal;
   final String nivel;
   final Color nivelColor;
   final NumberFormat fmt;
+  final String affiliateUid;     // uid para abrir chat
+  final String affiliateUsername; // @username para chat
 
   const _RankingTile({
     required this.position,
@@ -427,7 +445,52 @@ class _RankingTile extends StatelessWidget {
     required this.nivel,
     required this.nivelColor,
     required this.fmt,
+    this.affiliateUid = '',
+    this.affiliateUsername = '',
   });
+
+  void _openChat(BuildContext context) {
+    final auth = context.read<AuthService>();
+    final myUid = auth.currentUser?.id ?? '';
+    final myUsername = auth.currentUser?.username ?? '';
+
+    if (myUid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Faça login para usar o chat')),
+      );
+      return;
+    }
+
+    if (affiliateUid.isEmpty || affiliateUid == myUid) {
+      // Sem UID disponível → abre a aba Chat para buscar manualmente
+      MainNavController().goChat();
+      return;
+    }
+
+    final chat = context.read<ChatService>();
+    // Abre/cria conversa e navega direto para a sala
+    chat
+        .openConversation(
+      myUid: myUid,
+      myUsername: myUsername,
+      otherUid: affiliateUid,
+      otherUsername:
+          affiliateUsername.isNotEmpty ? affiliateUsername : codigo,
+    )
+        .then((convId) {
+      if (!context.mounted) return;
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ChatRoomScreen(
+          convId: convId,
+          myUid: myUid,
+          myUsername: myUsername,
+          otherUid: affiliateUid,
+          otherUsername:
+              affiliateUsername.isNotEmpty ? affiliateUsername : codigo,
+        ),
+      ));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -470,11 +533,15 @@ class _RankingTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(codigo,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: AppColors.textPrimary)),
+                Text(
+                  affiliateUsername.isNotEmpty
+                      ? '@$affiliateUsername'
+                      : codigo,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: AppColors.textPrimary),
+                ),
                 Row(
                   children: [
                     Icon(Icons.military_tech_rounded,
@@ -505,6 +572,26 @@ class _RankingTile extends StatelessWidget {
                   style: TextStyle(
                       color: AppColors.textHint, fontSize: 10)),
             ],
+          ),
+          const SizedBox(width: 8),
+          // Botão Chat
+          GestureDetector(
+            onTap: () => _openChat(context),
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: const Color(0xFF29B6F6).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: const Color(0xFF29B6F6).withValues(alpha: 0.30)),
+              ),
+              child: const Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: Color(0xFF29B6F6),
+                size: 18,
+              ),
+            ),
           ),
         ],
       ),
