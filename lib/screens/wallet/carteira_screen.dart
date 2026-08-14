@@ -162,6 +162,8 @@ class _CarteiraScreenState extends State<CarteiraScreen>
       builder: (_) => _SaqueModal(
         saldoDisponivel: wallet.saldoCarteira,
         pixKey: user?.email ?? '',
+        saqueMinimo: wallet.saqueMinimo,
+        saqueMaximo: wallet.saqueMaximo,
         onConfirm: (valor, pixKey, pixType) async {
           Navigator.pop(context);
           final result = await context.read<WalletService>().solicitarSaque(
@@ -1010,12 +1012,16 @@ class _TransacaoTile extends StatelessWidget {
 class _SaqueModal extends StatefulWidget {
   final double saldoDisponivel;
   final String pixKey;
+  final double saqueMinimo;
+  final double saqueMaximo;
   final void Function(double valor, String pixKey, String pixType) onConfirm;
 
   const _SaqueModal({
     required this.saldoDisponivel,
     required this.pixKey,
     required this.onConfirm,
+    this.saqueMinimo = 0.0,
+    this.saqueMaximo = 0.0,
   });
 
   @override
@@ -1081,6 +1087,34 @@ class _SaqueModalState extends State<_SaqueModal> {
                 color: AppColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 20),
+          // Linha de limites (mínimo / máximo)
+          if (widget.saqueMinimo > 0 || widget.saqueMaximo > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: AppColors.gold.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.gold.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (widget.saqueMinimo > 0)
+                    Text('Mín: ${_fmt.format(widget.saqueMinimo)}',
+                        style: const TextStyle(
+                            color: AppColors.gold,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600)),
+                  if (widget.saqueMaximo > 0)
+                    Text('Máx: ${_fmt.format(widget.saqueMaximo)}',
+                        style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
           const Text('Valor do saque',
               style: TextStyle(
                   color: AppColors.textSecondary,
@@ -1139,6 +1173,24 @@ class _SaqueModalState extends State<_SaqueModal> {
                         _valorController.text.replaceAll(',', '.')) ??
                     0;
                 if (valor <= 0 || _pixController.text.isEmpty) return;
+                // Valida mínimo
+                if (widget.saqueMinimo > 0 && valor < widget.saqueMinimo) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(
+                        'Valor mínimo para saque: ${_fmt.format(widget.saqueMinimo)}'),
+                    backgroundColor: AppColors.error,
+                  ));
+                  return;
+                }
+                // Valida máximo
+                if (widget.saqueMaximo > 0 && valor > widget.saqueMaximo) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(
+                        'Valor máximo por saque: ${_fmt.format(widget.saqueMaximo)}'),
+                    backgroundColor: AppColors.error,
+                  ));
+                  return;
+                }
                 widget.onConfirm(valor, _pixController.text, _pixType);
               },
               style: ElevatedButton.styleFrom(

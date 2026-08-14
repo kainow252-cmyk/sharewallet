@@ -17,7 +17,8 @@ class WalletService extends ChangeNotifier {
   double _saldoPendente = 0.0;
   double _totalRecebido = 0.0;
   double _totalSacado = 0.0;
-  double _saqueMinimo = 0.0; // dinâmico: vem do Worker (affiliates.saque_minimo)
+  double _saqueMinimo = 0.0; // dinâmico: vem do Worker (max entre individual e global)
+  double _saqueMaximo = 0.0; // dinâmico: máximo global configurado pelo admin
 
   List<SaleModel> get sales => _sales;
   List<SaleModel> get salesCompleted => _sales.where((s) => s.isCompleted).toList();
@@ -30,9 +31,10 @@ class WalletService extends ChangeNotifier {
   double get saldoPendente => _saldoPendente;
   double get totalRecebido => _totalRecebido;
   double get totalSacado => _totalSacado;
-  /// Limite mínimo de saque do afiliado (configurável pelo admin).
-  /// Retorna o valor do Worker; 0 significa sem limite configurado.
+  /// Limite mínimo de saque do afiliado (maior entre individual e global).
   double get saqueMinimo => _saqueMinimo;
+  /// Limite máximo de saque global (0 = sem limite).
+  double get saqueMaximo => _saqueMaximo;
   /// Retorna true se o afiliado tem saldo suficiente para sacar
   bool get podeSacar => _saqueMinimo <= 0 || _saldoCarteira >= _saqueMinimo;
 
@@ -128,10 +130,16 @@ class WalletService extends ChangeNotifier {
         _totalIndicados = _toInt(wallet['total_indicados']);
       }
 
-      // Carrega saque_minimo dinâmico (retornado junto com a wallet pelo Worker)
-      if (walletRaw != null && walletRaw.containsKey('saque_minimo')) {
-        final sm = walletRaw['saque_minimo'];
-        if (sm != null) _saqueMinimo = _toDouble(sm);
+      // Carrega saque_minimo e saque_maximo dinâmicos (retornados junto com a wallet pelo Worker)
+      if (walletRaw != null) {
+        if (walletRaw.containsKey('saque_minimo')) {
+          final sm = walletRaw['saque_minimo'];
+          if (sm != null) _saqueMinimo = _toDouble(sm);
+        }
+        if (walletRaw.containsKey('saque_maximo')) {
+          final sx = walletRaw['saque_maximo'];
+          if (sx != null) _saqueMaximo = _toDouble(sx);
+        }
       }
 
       // Sales: usa walletData['sales'] se existir, senão resultado separado
