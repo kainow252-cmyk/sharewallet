@@ -408,6 +408,7 @@ class AuthService extends ChangeNotifier {
     String? cpf,
     String? pixKey,
     String? pixKeyType,
+    String? username,
   }) {
     if (_currentUser != null) {
       _currentUser = _currentUser!.copyWith(
@@ -416,6 +417,7 @@ class AuthService extends ChangeNotifier {
         cpf: cpf,
         pixKey: pixKey,
         pixKeyType: pixKeyType,
+        username: username,
       );
       notifyListeners();
     }

@@ -11,6 +11,10 @@ class UserModel {
   final String email;
   final String telefone;
   final String affiliateCode;
+  /// Handle único estilo rede social (sem @). Ex: "gelcisilva", "joao.silva", "mktguru"
+  /// Gerado automaticamente no cadastro, editável pelo usuário.
+  /// Usado para busca (@gelcisilva), indicação, chat futuro.
+  final String username;
   final String? sponsorId;
   final String? wooviSubaccountId;
   final double saldo;
@@ -27,6 +31,7 @@ class UserModel {
     required this.email,
     required this.telefone,
     required this.affiliateCode,
+    this.username = '',
     this.sponsorId,
     this.wooviSubaccountId,
     this.saldo = 0.0,
@@ -39,6 +44,16 @@ class UserModel {
   // ── Getter de admin: email-based, sem necessidade de campo extra no banco ──
   bool get isAdmin => _adminEmails.contains(email.trim().toLowerCase());
 
+  /// Handle exibível com @ prefix. Ex: "@gelcisilva"
+  /// Se username vazio, usa affiliateCode como fallback.
+  String get handle {
+    if (username.isNotEmpty) return '@$username';
+    return affiliateCode.isNotEmpty ? affiliateCode : '@user';
+  }
+
+  /// Verifica se o username já foi configurado (não é o valor gerado automático)
+  bool get hasCustomUsername => username.isNotEmpty;
+
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id']?.toString() ?? '',
@@ -47,6 +62,7 @@ class UserModel {
       email: json['email'] ?? '',
       telefone: json['telefone'] ?? '',
       affiliateCode: json['affiliate_code'] ?? '',
+      username: json['username']?.toString() ?? '',
       sponsorId: json['sponsor_id']?.toString(),
       wooviSubaccountId: json['woovi_subaccount_id']?.toString(),
       saldo: (json['saldo'] ?? 0).toDouble(),
@@ -66,6 +82,7 @@ class UserModel {
         'email': email,
         'telefone': telefone,
         'affiliate_code': affiliateCode,
+        'username': username,
         'sponsor_id': sponsorId,
         'woovi_subaccount_id': wooviSubaccountId,
         'saldo': saldo,
@@ -84,6 +101,7 @@ class UserModel {
     String? email,
     String? telefone,
     String? affiliateCode,
+    String? username,
     String? sponsorId,
     String? wooviSubaccountId,
     double? saldo,
@@ -99,6 +117,7 @@ class UserModel {
       email: email ?? this.email,
       telefone: telefone ?? this.telefone,
       affiliateCode: affiliateCode ?? this.affiliateCode,
+      username: username ?? this.username,
       sponsorId: sponsorId ?? this.sponsorId,
       wooviSubaccountId: wooviSubaccountId ?? this.wooviSubaccountId,
       saldo: saldo ?? this.saldo,

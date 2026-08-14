@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
@@ -23,6 +24,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _telefoneCtrl;
   late TextEditingController _cpfCtrl;
   late TextEditingController _pixCtrl;
+  late TextEditingController _usernameCtrl;
+
+  // Estado de validação do @username em tempo real
+  bool _usernameChecking = false;
+  bool? _usernameDisponivel;   // null = não verificado, true = ok, false = ocupado
+  String? _usernameErro;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -37,6 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // pixKey: usa pix_key salvo; se vazio cai pro email como fallback
     _pixCtrl      = TextEditingController(
         text: (user?.pixKey.isNotEmpty == true) ? user!.pixKey : (user?.email ?? ''));
+    _usernameCtrl = TextEditingController(text: user?.username ?? '');
 
     // Recarrega perfil ao abrir - usa D1 como fonte de verdade
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -95,17 +103,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _telefoneCtrl.dispose();
     _cpfCtrl.dispose();
     _pixCtrl.dispose();
+    _usernameCtrl.dispose();
     super.dispose();
+  }
+
+  // -- Verifica disponibilidade do @username com debounce -------------------
+  Future<void> _verificarUsername(String valor) async {
+    final limpo = valor.toLowerCase().trim();
+    if (limpo.length < 3) {
+      setState(() {
+        _usernameDisponivel = null;
+        _usernameErro = limpo.isEmpty ? null : 'Mínimo 3 caracteres';
+        _usernameChecking = false;
+      });
+      return;
+    }
+    if (!RegExp(r'^[a-z0-9._]+$').hasMatch(limpo)) {
+      setState(() {
+        _usernameDisponivel = false;
+        _usernameErro = 'Use apenas letras, números, ponto ou _';
+        _usernameChecking = false;
+      });
+      return;
+    }
+    final uid = context.read<AuthService>().currentUser?.id ?? '';
+    final usernameAtual = context.read<AuthService>().currentUser?.username ?? '';
+    if (limpo == usernameAtual) {
+      setState(() { _usernameDisponivel = true; _usernameErro = null; _usernameChecking = false; });
+      return;
+    }
+    setState(() { _usernameChecking = true; _usernameErro = null; });
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    final disponivel = await FirebaseUserService.verificarUsernameDisponivel(limpo, uid);
+    if (!mounted) return;
+    setState(() {
+      _usernameChecking = false;
+      _usernameDisponivel = disponivel;
+      _usernameErro = disponivel ? null : 'Este @$limpo já está em uso';
+    });
   }
 
   Future<void> _salvar() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
-    final nome     = _nomeCtrl.text.trim();
-    final telefone = _telefoneCtrl.text.trim();
-    final cpf      = _cpfCtrl.text.trim();
-    final pixKey   = _pixCtrl.text.trim();
+    final nome         = _nomeCtrl.text.trim();
+    final telefone     = _telefoneCtrl.text.trim();
+    final cpf          = _cpfCtrl.text.trim();
+    final pixKey       = _pixCtrl.text.trim();
+    final novoUsername = _usernameCtrl.text.toLowerCase().trim();
+
+    // Bloqueia se username inválido
+    if (_usernameErro != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_usernameErro!), backgroundColor: AppColors.error),
+      );
+      setState(() => _saving = false);
+      return;
+    }
 
     try {
       final auth = context.read<AuthService>();
@@ -122,6 +178,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
         affiliateCode: auth.currentUser?.affiliateCode ?? '',
       );
 
+      // 1b. Atualiza @username se mudou
+      final usernameAtual = auth.currentUser?.username ?? '';
+      if (novoUsername.isNotEmpty && novoUsername != usernameAtual) {
+        final res = await FirebaseUserService.atualizarUsername(
+          uid: uid,
+          novoUsername: novoUsername,
+        );
+        if (!res.success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(res.error ?? 'Erro ao salvar @username'),
+                backgroundColor: AppColors.error),
+          );
+          setState(() => _saving = false);
+          return;
+        }
+      }
+
       // 2. Sincroniza no D1 - aguarda para garantir consistência
       await CfApiService.updateAffiliate(uid, {
         'nome': nome,
@@ -130,15 +203,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'cpf': cpf,
         'pix_key': pixKey,
         'affiliate_code': auth.currentUser?.affiliateCode ?? '',
+        if (novoUsername.isNotEmpty) 'username': novoUsername,
       }).catchError((_) => null);
 
       // 3. Atualiza o currentUser DIRETAMENTE no AuthService
-      // Evita depender do cache Firestore que pode retornar dados antigos
       auth.updateCurrentUser(
         nome: nome,
         telefone: telefone,
         cpf: cpf,
         pixKey: pixKey,
+        username: novoUsername.isNotEmpty ? novoUsername : null,
       );
 
       // 4. Tenta refreshProfile em background para sincronizar com servidor
@@ -267,20 +341,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.pix_rounded,
-                                color: AppColors.goldLight, size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              user?.affiliateCode ?? 'ABC123',
-                              style: const TextStyle(
-                                  color: AppColors.goldLight,
-                                  fontWeight: FontWeight.w600),
+                        const SizedBox(height: 6),
+                        // @handle — toca para copiar
+                        GestureDetector(
+                          onTap: () {
+                            final handle = user?.handle ?? '';
+                            if (handle.isNotEmpty) {
+                              Clipboard.setData(ClipboardData(text: handle));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('$handle copiado!'),
+                                  duration: const Duration(seconds: 1),
+                                  backgroundColor: AppColors.primary,
+                                ),
+                              );
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: AppColors.goldLight.withValues(alpha: 0.5),
+                                  width: 1),
                             ),
-                          ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.alternate_email_rounded,
+                                    color: AppColors.goldLight, size: 13),
+                                const SizedBox(width: 3),
+                                Text(
+                                  user?.username.isNotEmpty == true
+                                      ? user!.handle          // @gelcisilva
+                                      : user?.affiliateCode ?? 'ABC123',
+                                  style: const TextStyle(
+                                    color: AppColors.goldLight,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                const Icon(Icons.copy_rounded,
+                                    color: AppColors.goldLight, size: 10),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -332,6 +441,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               value: user?.nome.isNotEmpty == true
                                   ? user!.nome
                                   : ' - ',
+                            ),
+                      const Divider(height: 1, indent: 52),
+                      // -- @username (sempre vis\u00edvel, edit\u00e1vel em modo edi\u00e7\u00e3o) --------
+                      _editMode
+                          ? _UsernameEditField(
+                              ctrl: _usernameCtrl,
+                              checking: _usernameChecking,
+                              disponivel: _usernameDisponivel,
+                              erro: _usernameErro,
+                              onChanged: _verificarUsername,
+                            )
+                          : _InfoRow(
+                              icon: Icons.alternate_email_rounded,
+                              label: 'Usuário',
+                              value: user?.username.isNotEmpty == true
+                                  ? user!.handle
+                                  : 'Não definido — toque em Editar',
+                              valueColor: user?.username.isNotEmpty == true
+                                  ? AppColors.primary
+                                  : AppColors.textHint,
                             ),
                       const Divider(height: 1, indent: 52),
                       _InfoRow(
@@ -763,6 +892,85 @@ class _EditField extends StatelessWidget {
               const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
         ),
         validator: validator,
+      ),
+    );
+  }
+}
+
+// -- Campo especial para @username com validação em tempo real ----------------
+
+class _UsernameEditField extends StatelessWidget {
+  final TextEditingController ctrl;
+  final bool checking;
+  final bool? disponivel;
+  final String? erro;
+  final ValueChanged<String> onChanged;
+
+  const _UsernameEditField({
+    required this.ctrl,
+    required this.checking,
+    required this.disponivel,
+    required this.erro,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Ícone de status à direita do campo
+    Widget? suffixIcon;
+    if (checking) {
+      suffixIcon = const Padding(
+        padding: EdgeInsets.all(12),
+        child: SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+        ),
+      );
+    } else if (disponivel == true) {
+      suffixIcon = const Icon(Icons.check_circle_rounded,
+          color: AppColors.success, size: 20);
+    } else if (disponivel == false) {
+      suffixIcon =
+          const Icon(Icons.cancel_rounded, color: AppColors.error, size: 20);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: ctrl,
+            keyboardType: TextInputType.text,
+            textInputAction: TextInputAction.done,
+            autocorrect: false,
+            inputFormatters: [
+              // Permite apenas letras minúsculas, números, ponto e _
+              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9._]')),
+            ],
+            onChanged: (v) => onChanged(v.toLowerCase()),
+            decoration: InputDecoration(
+              labelText: 'Usuário (@handle)',
+              hintText: 'ex: gelcisilva ou gelci.silva',
+              prefixIcon: const Icon(Icons.alternate_email_rounded,
+                  color: AppColors.primary, size: 18),
+              prefixText: '',
+              suffixIcon: suffixIcon,
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              helperText: disponivel == true
+                  ? 'Disponível!'
+                  : 'Mín. 3 chars, letras, números, ponto ou _',
+              helperStyle: TextStyle(
+                color: disponivel == true ? AppColors.success : AppColors.textHint,
+                fontSize: 11,
+              ),
+              errorText: erro,
+            ),
+          ),
+        ],
       ),
     );
   }

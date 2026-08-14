@@ -73,6 +73,7 @@ class FirebaseUserService {
 
       final uid = authResult.uid!;
       final affiliateCode = _gerarCodigo(nome);
+      final username = await _gerarUsernameUnico(nome, uid);
       final pixFinal = pixKey.isNotEmpty ? pixKey : email;
       final now = DateTime.now();
 
@@ -111,6 +112,7 @@ class FirebaseUserService {
         'cpf': cpf,
         'telefone': telefone,
         'affiliate_code': affiliateCode,
+        'username': username,
         'sponsor_id': sponsorId,
         'sponsor_code': sponsorCode,
         'pix_key': pixFinal,
@@ -169,6 +171,7 @@ class FirebaseUserService {
           email: email,
           telefone: telefone,
           affiliateCode: affiliateCode,
+          username: username,
           sponsorId: sponsorId,
           saldo: 0.0,
           createdAt: now,
@@ -455,6 +458,7 @@ class FirebaseUserService {
       }, SetOptions(merge: true)).catchError((_) {});
 
       final affiliateCode = _toStr(aData['affiliate_code'], fallback: _gerarCodigo(uid));
+      final usernameResolvido = _toStr(aData['username']);
 
       // -- Monta campos do perfil sem bloquear no D1 ------------------------
       // OTIMIZAÇÃO DE LOGIN: NÃO fazemos request D1 aqui.
@@ -489,6 +493,7 @@ class FirebaseUserService {
         email: email,
         telefone: telefoneResolvido,
         affiliateCode: affiliateCode,
+        username: usernameResolvido,
         sponsorId: aData['sponsor_id']?.toString(),
         saldo: saldoDisponivel,
         status: _toStr(aData['status'], fallback: 'ativo'),
@@ -691,6 +696,147 @@ class FirebaseUserService {
       buffer.write(chars[idx % chars.length]);
     }
     return buffer.toString();
+  }
+
+  // ── USERNAME (@handle) ──────────────────────────────────────────────────────
+
+  /// Gera um @username único a partir do nome completo.
+  /// Ex: "Gelci Silva" → "gelcisilva" → se ocupado → "gelcisilva2" → etc.
+  static Future<String> _gerarUsernameUnico(String nome, String uid) async {
+    final base = _nomeParaUsername(nome);
+    final db = _getDb();
+    if (db == null) return base;
+
+    // Tenta o base primeiro, depois vai numerando
+    for (int sufixo = 0; sufixo <= 99; sufixo++) {
+      final candidato = sufixo == 0 ? base : '$base$sufixo';
+      final existe = await _usernameExiste(db, candidato);
+      if (!existe) return candidato;
+    }
+    // Fallback com uid curto (nunca colide)
+    return '${base}_${uid.substring(0, 4)}';
+  }
+
+  /// Converte nome completo em username válido (lowercase, sem espaços/acentos).
+  /// "Gelci José Silva" → "gelcisilva"
+  static String _nomeParaUsername(String nome) {
+    final semAcentos = _removerAcentos(nome.toLowerCase());
+    // Pega apenas letras e números, remove espaços
+    final limpo = semAcentos.replaceAll(RegExp(r'[^a-z0-9]'), '');
+    // Limita a 20 chars
+    return limpo.length > 20 ? limpo.substring(0, 20) : limpo;
+  }
+
+  /// Remove acentos/diacríticos do texto.
+  static String _removerAcentos(String texto) {
+    const acentos    = 'áàãâäéèêëíìîïóòõôöúùûüçñ';
+    const semAcentos = 'aaaaaaeeeeiiiiooooouuuucn';
+    var resultado = texto;
+    for (int i = 0; i < acentos.length; i++) {
+      resultado = resultado.replaceAll(acentos[i], semAcentos[i]);
+    }
+    return resultado;
+  }
+
+  /// Verifica se um username já está em uso no Firestore.
+  static Future<bool> _usernameExiste(FirebaseFirestore db, String username) async {
+    try {
+      final snap = await db
+          .collection('affiliates')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 3), onTimeout: () => throw Exception('timeout'));
+      return snap.docs.isNotEmpty;
+    } catch (_) {
+      return false; // em caso de erro, assume disponível (não bloqueia o cadastro)
+    }
+  }
+
+  /// Verifica se um username está disponível para o usuário atual.
+  /// [uid] é o uid do usuário que está tentando mudar — exclui ele próprio da busca.
+  static Future<bool> verificarUsernameDisponivel(String username, String uid) async {
+    final db = _getDb();
+    if (db == null) return true;
+
+    final limpo = username.toLowerCase().trim();
+    if (limpo.isEmpty || limpo.length < 3) return false;
+
+    try {
+      final snap = await db
+          .collection('affiliates')
+          .where('username', isEqualTo: limpo)
+          .limit(2)
+          .get()
+          .timeout(const Duration(seconds: 4));
+
+      // Disponível se nenhum doc encontrado, ou apenas o próprio usuário
+      if (snap.docs.isEmpty) return true;
+      if (snap.docs.length == 1 && snap.docs.first.id == uid) return true;
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Atualiza o username do usuário no Firestore.
+  /// Valida disponibilidade antes de gravar.
+  static Future<({bool success, String? error})> atualizarUsername({
+    required String uid,
+    required String novoUsername,
+  }) async {
+    final db = _getDb();
+    if (db == null) return (success: false, error: 'Serviço indisponível');
+
+    final limpo = novoUsername.toLowerCase().trim();
+
+    // Validações
+    if (limpo.length < 3) return (success: false, error: 'Mínimo 3 caracteres');
+    if (limpo.length > 30) return (success: false, error: 'Máximo 30 caracteres');
+    if (!RegExp(r'^[a-z0-9._]+$').hasMatch(limpo)) {
+      return (success: false, error: 'Use apenas letras, números, ponto ou _');
+    }
+    if (limpo.startsWith('.') || limpo.endsWith('.')) {
+      return (success: false, error: 'Não pode começar ou terminar com ponto');
+    }
+
+    // Verifica disponibilidade
+    final disponivel = await verificarUsernameDisponivel(limpo, uid);
+    if (!disponivel) return (success: false, error: 'Este @$limpo já está em uso');
+
+    try {
+      await db.collection('affiliates').doc(uid).set(
+        {'username': limpo, 'updated_at': FieldValue.serverTimestamp()},
+        SetOptions(merge: true),
+      );
+      return (success: true, error: null);
+    } catch (e) {
+      return (success: false, error: 'Erro ao salvar: $e');
+    }
+  }
+
+  /// Busca um usuário pelo @username (para futuro chat/busca social).
+  static Future<UserModel?> buscarPorUsername(String username) async {
+    final db = _getDb();
+    if (db == null) return null;
+
+    final limpo = username.toLowerCase().replaceFirst('@', '').trim();
+    if (limpo.isEmpty) return null;
+
+    try {
+      final snap = await db
+          .collection('affiliates')
+          .where('username', isEqualTo: limpo)
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 5));
+
+      if (snap.docs.isEmpty) return null;
+      final data = snap.docs.first.data();
+      return UserModel.fromJson({...data, 'id': snap.docs.first.id});
+    } catch (_) {
+      return null;
+    }
   }
 
   // -- Helpers inline (substitui FirestoreService helpers) ----------------
