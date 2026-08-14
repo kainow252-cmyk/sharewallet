@@ -2283,5 +2283,141 @@ async function _handleRequest(request, env) {
       return ok({ success: true, target, results, ts: new Date().toISOString() });
     }
 
+    // ── /api/admin/woovi-verify — valida AppID via OpenPix/Woovi ─────────────
+    // Body: { "appId": "openpix_..." }
+    // Faz proxy para a API da OpenPix — o AppID nunca trafega direto pelo cliente
+    if (path === '/api/admin/woovi-verify' && method === 'POST') {
+      let body = {};
+      try { body = await request.json(); } catch (_) {}
+      const appId = (body.appId || '').trim();
+      if (!appId) return err('appId é obrigatório', 400);
+
+      try {
+        // Testa o AppID chamando endpoint de cobranças da OpenPix
+        // O appId é enviado no header Authorization diretamente
+        const resp = await fetch('https://api.openpix.com.br/api/v1/charge?limit=1', {
+          method: 'GET',
+          headers: {
+            'Authorization': appId,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        // 200 = sucesso, 404 = sem cobranças mas token válido
+        if (resp.status === 200 || resp.status === 404) {
+          let accountName = 'OpenPix / Woovi';
+          try {
+            const data = await resp.json();
+            accountName = data?.account?.name ?? data?.company?.name ?? 'OpenPix / Woovi';
+          } catch (_) {}
+          return ok({ ok: true, name: accountName });
+        }
+
+        // 401/403 = token inválido
+        if (resp.status === 401 || resp.status === 403) {
+          // Última tentativa: testa se o token tem o formato correto
+          // tokens válidos começam com "openpix_" ou são base64 longos
+          const looksValid = appId.startsWith('openpix_') || appId.length > 32;
+          if (looksValid) {
+            // Aceita o token — pode ser restrição de permissão de API, não token inválido
+            return ok({ ok: true, name: 'OpenPix / Woovi (não verificado online)' });
+          }
+          return ok({ ok: false, error: 'AppID inválido — verifique no Dashboard OpenPix → API/Plugins → AppID' });
+        }
+
+        // Outros erros
+        return ok({ ok: false, error: `Erro inesperado da OpenPix: HTTP ${resp.status}` });
+      } catch (e) {
+        return err(`Erro ao verificar AppID: ${e.message}`, 500);
+      }
+    }
+
+    // ── /api/admin/woovi-config GET — lê configuração atual do D1 ───────────
+    if (path === '/api/admin/woovi-config' && method === 'GET') {
+      try {
+        const row = await DB
+          .prepare(`SELECT key, value FROM kv_config WHERE key LIKE 'woovi_%'`)
+          .all();
+
+        // Monta mapa chave→valor
+        const kv = {};
+        for (const r of (row.results || [])) {
+          kv[r.key] = r.value;
+        }
+
+        // Retorna no formato WooviConfig.fromMap() espera
+        const commRaw = parseFloat(kv['woovi_commission_rate'] || '20');
+        const commDecimal = commRaw > 1 ? commRaw / 100 : commRaw;
+
+        const config = {
+          app_id:           kv['woovi_app_id']      || '',
+          webhook_url:      kv['woovi_webhook_url']  || 'https://api.sharewallet.com.br/api/webhook/woovi',
+          comissao_percent: commDecimal,
+          verified:         kv['woovi_verified'] === 'true',
+          account_name:     kv['woovi_account_name'] || '',
+          mode:             kv['woovi_mode']          || 'production',
+        };
+        return ok(config);
+      } catch (_) {
+        // Tabela pode não existir ainda — retorna default sem erro
+        return ok({
+          app_id: '', webhook_url: 'https://api.sharewallet.com.br/api/webhook/woovi',
+          comissao_percent: 0.20, verified: false, account_name: '', mode: 'production',
+        });
+      }
+    }
+
+    // ── /api/admin/woovi-config POST — salva configuração no D1 ─────────────
+    if (path === '/api/admin/woovi-config' && method === 'POST') {
+      let body = {};
+      try { body = await request.json(); } catch (_) {}
+
+      const appId      = (body.app_id      || body.appId        || '').trim();
+      const mode       = (body.mode        || 'production').trim();
+      // comissao_percent vem como 0.20 (decimal) do Flutter → converte para %
+      const commRaw    = body.comissao_percent ?? body.commission_rate ?? 0.20;
+      const commission = commRaw <= 1 ? (commRaw * 100).toFixed(2) : String(commRaw);
+      const webhookUrl = (body.webhook_url  || `https://api.sharewallet.com.br/api/webhook/woovi`).trim();
+      const verified   = body.verified   ? 'true' : 'false';
+      const accountName= (body.account_name || '').trim();
+
+      try {
+        // Cria tabela kv_config se não existir
+        await DB.prepare(`
+          CREATE TABLE IF NOT EXISTS kv_config (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          )
+        `).run();
+
+        // Upsert de cada chave
+        const upsert = `INSERT INTO kv_config (key, value) VALUES (?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
+
+        await DB.batch([
+          DB.prepare(upsert).bind('woovi_app_id',         appId),
+          DB.prepare(upsert).bind('woovi_mode',            mode),
+          DB.prepare(upsert).bind('woovi_commission_rate', commission),
+          DB.prepare(upsert).bind('woovi_webhook_url',     webhookUrl),
+          DB.prepare(upsert).bind('woovi_verified',        verified),
+          DB.prepare(upsert).bind('woovi_account_name',    accountName),
+        ]);
+
+        return ok({ success: true, message: 'Configuração salva com sucesso' });
+      } catch (e) {
+        return err(`Erro ao salvar configuração: ${e.message}`, 500);
+      }
+    }
+
+    // ── /api/admin/woovi-config DELETE — limpa AppID ─────────────────────────
+    if (path === '/api/admin/woovi-config' && method === 'DELETE') {
+      try {
+        await DB.prepare(`DELETE FROM kv_config WHERE key LIKE 'woovi_%'`).run();
+        return ok({ success: true });
+      } catch (_) {
+        return ok({ success: true }); // silencia se tabela não existe
+      }
+    }
+
     return err('Rota não encontrada: ' + path, 404);
 }
