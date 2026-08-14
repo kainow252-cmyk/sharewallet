@@ -75,6 +75,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (d1Tel.isNotEmpty)  _telefoneCtrl.text = d1Tel;
             if (d1Pix.isNotEmpty)  _pixCtrl.text  = d1Pix;
             else if (email.isNotEmpty) _pixCtrl.text = email;
+            // D1 não tem 'username' ainda — busca do Firestore / AuthService
+            final usernameD1 = d1Data['username']?.toString() ?? '';
+            final usernameFallback = auth.currentUser?.username ?? '';
+            final usernameResolvido = usernameD1.isNotEmpty ? usernameD1 : usernameFallback;
+            if (usernameResolvido.isNotEmpty && _usernameCtrl.text.isEmpty) {
+              _usernameCtrl.text = usernameResolvido;
+              auth.updateCurrentUser(username: usernameResolvido);
+            }
             if (mounted) setState(() {});
             return; // D1 carregou com sucesso  -  não precisa do Firestore
           }
@@ -91,6 +99,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _telefoneCtrl.text = u.telefone;
         _cpfCtrl.text      = u.cpf;
         _pixCtrl.text      = u.pixKey.isNotEmpty ? u.pixKey : u.email;
+        if (u.username.isNotEmpty && _usernameCtrl.text.isEmpty) {
+          _usernameCtrl.text = u.username;
+        }
         setState(() {});
       }
     });
@@ -110,31 +121,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // -- Verifica disponibilidade do @username com debounce -------------------
   Future<void> _verificarUsername(String valor) async {
     final limpo = valor.toLowerCase().trim();
+
+    // Campo vazio → limpa estado sem erro
+    if (limpo.isEmpty) {
+      setState(() { _usernameDisponivel = null; _usernameErro = null; _usernameChecking = false; });
+      return;
+    }
+
+    // Muito curto
     if (limpo.length < 3) {
-      setState(() {
-        _usernameDisponivel = null;
-        _usernameErro = limpo.isEmpty ? null : 'Mínimo 3 caracteres';
-        _usernameChecking = false;
-      });
+      setState(() { _usernameDisponivel = null; _usernameErro = 'Mínimo 3 caracteres'; _usernameChecking = false; });
       return;
     }
+
+    // Caracteres inválidos
     if (!RegExp(r'^[a-z0-9._]+$').hasMatch(limpo)) {
-      setState(() {
-        _usernameDisponivel = false;
-        _usernameErro = 'Use apenas letras, números, ponto ou _';
-        _usernameChecking = false;
-      });
+      setState(() { _usernameDisponivel = false; _usernameErro = 'Use apenas letras, números, ponto ou _'; _usernameChecking = false; });
       return;
     }
-    final uid = context.read<AuthService>().currentUser?.id ?? '';
-    final usernameAtual = context.read<AuthService>().currentUser?.username ?? '';
-    if (limpo == usernameAtual) {
+
+    final auth = context.read<AuthService>();
+    final uid = auth.currentUser?.id ?? '';
+
+    // É o mesmo username que o usuário já tem gravado → disponível sem checar Firestore
+    // Verifica tanto no AuthService quanto no controller (para usuários antigos que carregam depois)
+    final usernameNoAuthService = auth.currentUser?.username ?? '';
+    if (limpo == usernameNoAuthService && usernameNoAuthService.isNotEmpty) {
       setState(() { _usernameDisponivel = true; _usernameErro = null; _usernameChecking = false; });
       return;
     }
-    setState(() { _usernameChecking = true; _usernameErro = null; });
+
+    // Inicia verificação assíncrona com debounce
+    setState(() { _usernameChecking = true; _usernameErro = null; _usernameDisponivel = null; });
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
+
+    // Após debounce, verifica de novo se o valor ainda é o mesmo digitado
+    final valorAtual = _usernameCtrl.text.toLowerCase().trim();
+    if (valorAtual != limpo) return; // usuário continuou digitando — cancela este ciclo
+
+    // Verificação final no Firestore
     final disponivel = await FirebaseUserService.verificarUsernameDisponivel(limpo, uid);
     if (!mounted) return;
     setState(() {
@@ -257,7 +283,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               actions: [
                 if (!_editMode)
                   TextButton.icon(
-                    onPressed: () => setState(() => _editMode = true),
+                    onPressed: () {
+                      setState(() {
+                        _editMode = true;
+                        // Ao abrir edição, se o usuário já tem @username, marca como disponível
+                        final usernameAtual = context.read<AuthService>().currentUser?.username ?? '';
+                        if (usernameAtual.isNotEmpty) {
+                          _usernameCtrl.text = usernameAtual;
+                          _usernameDisponivel = true;
+                          _usernameErro = null;
+                        }
+                      });
+                    },
                     icon: const Icon(Icons.edit_rounded,
                         color: Colors.white, size: 18),
                     label: const Text('Editar',
@@ -409,7 +446,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     trailing: _editMode
                         ? null
                         : GestureDetector(
-                            onTap: () => setState(() => _editMode = true),
+                            onTap: () {
+                              setState(() {
+                                _editMode = true;
+                                final usernameAtual = context.read<AuthService>().currentUser?.username ?? '';
+                                if (usernameAtual.isNotEmpty) {
+                                  _usernameCtrl.text = usernameAtual;
+                                  _usernameDisponivel = true;
+                                  _usernameErro = null;
+                                }
+                              });
+                            },
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [

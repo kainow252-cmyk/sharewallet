@@ -770,12 +770,30 @@ class FirebaseUserService {
           .get()
           .timeout(const Duration(seconds: 4));
 
-      // Disponível se nenhum doc encontrado, ou apenas o próprio usuário
+      // Disponível se nenhum doc encontrado
       if (snap.docs.isEmpty) return true;
-      if (snap.docs.length == 1 && snap.docs.first.id == uid) return true;
-      return false;
+
+      // Verifica se TODOS os docs encontrados pertencem ao próprio usuário.
+      // Checa tanto o doc ID (= firebase_uid) quanto o campo 'uid'/'firebase_uid'
+      // dentro do doc — garante que usuários antigos sem doc ID == uid também passem.
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final docOwnerUid = doc.id;
+        final fieldUid = data['uid']?.toString() ?? '';
+        final fieldFirebaseUid = data['firebase_uid']?.toString() ?? '';
+
+        // Se este doc pertence a outro usuário → username ocupado
+        final pertenceAoProprioUsuario =
+            docOwnerUid == uid || fieldUid == uid || fieldFirebaseUid == uid;
+
+        if (!pertenceAoProprioUsuario) return false;
+      }
+
+      // Todos os docs encontrados são do próprio usuário → disponível
+      return true;
     } catch (_) {
-      return false;
+      // Em caso de erro de rede/timeout, libera para não travar o usuário
+      return true;
     }
   }
 
