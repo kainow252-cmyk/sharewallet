@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/update_service.dart';
 import '../../widgets/update_dialog.dart';
+import '../../utils/web_utils.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -57,6 +58,13 @@ class _SplashScreenState extends State<SplashScreen>
     _pulse = Tween<double>(begin: 0.6, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    // ── Notifica o splash nativo (HTML) que o Flutter já renderizou ──────────
+    // Dispara imediatamente após o primeiro frame ser pintado na tela.
+    // O HTML/CSS splash escuta 'flutter-first-frame' e faz fade-out suave.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (kIsWeb) notifyFlutterReady();
+    });
 
     _startSequence();
   }

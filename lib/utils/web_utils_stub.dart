@@ -24,3 +24,6 @@ void openUrlInNewTab(String url) {}
 void downloadFileWeb(String dataUri, String filename) {}
 
 void openHtmlBlobInNewTab(String htmlContent) {}
+
+/// Stub — no-op em mobile/desktop
+void notifyFlutterReady() {}

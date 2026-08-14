@@ -74,6 +74,9 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!-- Fundo escuro imediato para NUNCA mostrar fundo branco do browser -->
+  <meta name="theme-color" content="#0E1631">
+  <style>html,body{background:#0E1631;margin:0;padding:0;}</style>
   <meta name="description" content="ShareWallet  -  Transforme conexões em receita recorrente.">
 
   <!-- iOS meta tags & icons -->
@@ -208,6 +211,209 @@
   </script>
 </head>
 <body>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       NATIVE HTML SPLASH — aparece INSTANTANEAMENTE antes do Flutter carregar
+       Cores: bg=#0E1631 (azul noite), accent=#C9A84C (dourado ShareWallet)
+       Remove-se automaticamente quando o Flutter dispara "flutter-first-frame"
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <style>
+    html, body { margin: 0; padding: 0; background: #0E1631; }
+
+    #sw-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(160deg, #0E1631 0%, #1A2550 60%, #0B1124 100%);
+      opacity: 1;
+      transition: opacity 0.45s ease-out;
+    }
+
+    #sw-splash.sw-fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Glow circular atrás do logo */
+    .sw-glow {
+      position: absolute;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(201,168,76,0.18) 0%, transparent 70%);
+      animation: swPulseGlow 2.4s ease-in-out infinite;
+    }
+
+    /* Logo container */
+    .sw-logo-wrap {
+      position: relative;
+      width: 110px;
+      height: 110px;
+      margin-bottom: 28px;
+      animation: swLogoIn 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards;
+    }
+
+    .sw-logo-img {
+      width: 110px;
+      height: 110px;
+      border-radius: 26px;
+      object-fit: cover;
+      box-shadow:
+        0 0 40px rgba(201,168,76,0.35),
+        0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    /* Fallback caso a imagem não carregue */
+    .sw-logo-fallback {
+      width: 110px;
+      height: 110px;
+      border-radius: 26px;
+      background: linear-gradient(135deg, #1A237E 0%, #7B1FA2 50%, #00BCD4 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 52px;
+      box-shadow:
+        0 0 40px rgba(201,168,76,0.35),
+        0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    /* Textos */
+    .sw-brand {
+      font-family: -apple-system, 'SF Pro Display', 'Segoe UI', sans-serif;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #FFFFFF;
+      margin: 0 0 6px 0;
+      animation: swTextIn 0.5s ease-out 0.3s both;
+    }
+
+    .sw-tagline {
+      font-family: -apple-system, 'SF Pro Text', 'Segoe UI', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.55);
+      margin: 0 0 48px 0;
+      letter-spacing: 0.3px;
+      animation: swTextIn 0.5s ease-out 0.45s both;
+    }
+
+    /* Barra de progresso na base */
+    .sw-progress-track {
+      position: absolute;
+      bottom: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 140px;
+      height: 3px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 99px;
+      overflow: hidden;
+      animation: swTextIn 0.5s ease-out 0.5s both;
+    }
+
+    .sw-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #C9A84C, #F0D070, #C9A84C);
+      background-size: 200% 100%;
+      border-radius: 99px;
+      animation:
+        swProgressFill 3.5s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards,
+        swShimmer 1.4s linear infinite;
+    }
+
+    /* Copyright */
+    .sw-copy {
+      position: absolute;
+      bottom: 22px;
+      font-family: -apple-system, 'Segoe UI', sans-serif;
+      font-size: 11px;
+      color: rgba(255,255,255,0.2);
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Keyframes ─────────────────────────────────────────── */
+    @keyframes swLogoIn {
+      from { opacity: 0; transform: scale(0.55); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes swTextIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes swPulseGlow {
+      0%, 100% { transform: scale(0.92); opacity: 0.7; }
+      50%       { transform: scale(1.08); opacity: 1; }
+    }
+
+    @keyframes swProgressFill {
+      0%   { width: 0%; }
+      30%  { width: 45%; }
+      60%  { width: 72%; }
+      85%  { width: 88%; }
+      100% { width: 94%; }   /* Para em 94% — Flutter completa ao chegar */
+    }
+
+    @keyframes swShimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+
+  <div id="sw-splash">
+    <div class="sw-glow"></div>
+
+    <div class="sw-logo-wrap">
+      <img
+        class="sw-logo-img"
+        src="icons/Icon-v202606251651-192.png"
+        alt="ShareWallet"
+        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+      />
+      <div class="sw-logo-fallback" style="display:none;">💰</div>
+    </div>
+
+    <p class="sw-brand">ShareWallet</p>
+    <p class="sw-tagline">Transforme conexões em receita</p>
+
+    <div class="sw-progress-track">
+      <div class="sw-progress-bar"></div>
+    </div>
+
+    <span class="sw-copy">© 2025 ShareWallet</span>
+  </div>
+
+  <script>
+    // Remove o splash nativo quando o Flutter terminar de renderizar o 1º frame.
+    // O Flutter dispara o evento "flutter-first-frame" no window quando o
+    // primeiro frame do app é pintado na tela.
+    (function() {
+      function removeSplash() {
+        var splash = document.getElementById('sw-splash');
+        if (!splash) return;
+        splash.classList.add('sw-fade-out');
+        setTimeout(function() {
+          if (splash.parentNode) splash.parentNode.removeChild(splash);
+        }, 500);
+      }
+
+      // Método 1: evento padrão do Flutter
+      window.addEventListener('flutter-first-frame', removeSplash, { once: true });
+
+      // Método 2: fallback — se o Flutter não disparar o evento em 8s, remove mesmo assim
+      // (ex: conexão muito lenta, mas app já está visível)
+      setTimeout(removeSplash, 8000);
+    })();
+  </script>
+
   <!-- O login usa Firebase signInWithPopup com OAuth redirect nativo -->
   <script src="flutter_bootstrap.js" async></script>
 

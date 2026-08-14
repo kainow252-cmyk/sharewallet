@@ -60,6 +60,14 @@ void downloadFileWeb(String dataUri, String filename) {
   anchor.remove();
 }
 
+/// Dispara o evento 'flutter-first-frame' no window para remover o splash nativo.
+/// Deve ser chamado quando o primeiro frame do app estiver visível.
+void notifyFlutterReady() {
+  try {
+    html.window.dispatchEvent(html.Event('flutter-first-frame'));
+  } catch (_) {}
+}
+
 /// Abre HTML como Blob URL em nova aba (não usa data: URI — evita bloqueio do Chrome).
 /// Usa window.open com Blob URL que o browser aceita mesmo em contexto async.
 void openHtmlBlobInNewTab(String htmlContent) {
