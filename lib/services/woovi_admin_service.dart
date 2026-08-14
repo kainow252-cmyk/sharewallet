@@ -116,6 +116,17 @@ class WooviAdminService extends ChangeNotifier {
   bool get isVerifying         => _isVerifying;
 
   // ---------------------------------------------------------------------------
+  // reset — força recarregar config do servidor (usar após logout/login)
+  // ---------------------------------------------------------------------------
+  Future<void> resetAndReload() async {
+    _config = WooviConfig.defaultConfig();
+    _isConfigLoaded = false;
+    _isLoading = false;
+    notifyListeners();
+    await loadConfig();
+  }
+
+  // ---------------------------------------------------------------------------
   // loadConfig
   // ---------------------------------------------------------------------------
   Future<void> loadConfig() async {
@@ -129,8 +140,13 @@ class WooviAdminService extends ChangeNotifier {
           Uri.parse('https://api.sharewallet.com.br/api/admin/woovi-config'),
         ).timeout(const Duration(seconds: 5));
         if (resp.statusCode == 200) {
-          final j = jsonDecode(resp.body) as Map<String, dynamic>?;
-          if (j != null) _config = WooviConfig.fromMap(j);
+          final body = jsonDecode(resp.body) as Map<String, dynamic>?;
+          if (body != null) {
+            // Worker retorna { "success": true, "result": { ... } }
+            // Suporta também resposta flat (retrocompatibilidade)
+            final data = (body['result'] as Map<String, dynamic>?) ?? body;
+            _config = WooviConfig.fromMap(data);
+          }
         }
       } catch (_) {/* mantém default */}
       _isConfigLoaded = true;

@@ -38,6 +38,12 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
   int _selectedIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // ⚡ WooviAdminService criado UMA ÚNICA VEZ no State — não recria a cada rebuild
+  // Antes estava no getter _screens (List<Widget> get _screens => [...]) o que
+  // causava recriação da instância toda vez que setState() era chamado,
+  // perdendo os dados carregados e mostrando AppID vazio após login.
+  final WooviAdminService _wooviService = WooviAdminService();
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +52,12 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AdminService>().initFromExistingSession();
     });
+  }
+
+  @override
+  void dispose() {
+    _wooviService.dispose();
+    super.dispose();
   }
 
   static const List<_NavItem> _items = [
@@ -61,15 +73,18 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     _NavItem(icon: Icons.delete_sweep_rounded,            label: 'Reset', isReset: true),
   ];
 
-  List<Widget> get _screens => [
+  // ⚡ _screens é uma lista FIXA (late final) — construída uma única vez
+  // Garante que o WooviAdminService (e outros stateful providers) nunca
+  // sejam recriados quando setState() é chamado na navegação.
+  late final List<Widget> _screens = [
     AdminDashboardScreen(onNavigateTo: _onDestinationSelected),
     const AdminProductsScreen(),
     const AdminAffiliatesScreen(),
     const AdminSubscriptionsScreen(),
     const AdminWithdrawalsScreen(),
     const AdminSalesScreen(),
-    ChangeNotifierProvider(
-      create: (_) => WooviAdminService(),
+    ChangeNotifierProvider.value(
+      value: _wooviService,          // reutiliza a instância fixa
       child: const AdminWooviSettingsScreen(),
     ),
     const AdminReportsScreen(),

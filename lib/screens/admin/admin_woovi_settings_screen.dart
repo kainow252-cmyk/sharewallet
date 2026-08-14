@@ -31,7 +31,8 @@ class _AdminWooviSettingsScreenState extends State<AdminWooviSettingsScreen>
     super.initState();
     _tab = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<WooviAdminService>().loadConfig();
+      // resetAndReload garante dados frescos do servidor mesmo após logout/login
+      context.read<WooviAdminService>().resetAndReload();
     });
   }
 
