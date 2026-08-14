@@ -30,9 +30,9 @@ class MainNavController extends ChangeNotifier {
   void goProducts()   => goTo(1);
   void goCarteira()   => goTo(2);
   void goIndicacoes() => goTo(3);
-  void goRanking()    => goTo(4);
-  void goChat()       => goTo(5);   // aba Chat
-  void goProfile()    => goTo(6);   // aba Perfil
+  void goRanking()    => goTo(3); // compatibilidade → redireciona Indicações
+  void goChat()       => goTo(4);
+  void goProfile()    => goTo(5);
 }
 
 class MainNavScreen extends StatefulWidget {
@@ -76,11 +76,6 @@ class _MainNavScreenState extends State<MainNavScreen> {
       icon: Icons.people_outline_rounded,
       activeIcon: Icons.people_alt_rounded,
       label: 'Indicações',
-    ),
-    _NavItem(
-      icon: Icons.emoji_events_outlined,
-      activeIcon: Icons.emoji_events_rounded,
-      label: 'Ranking',
     ),
     _NavItem(
       icon: Icons.chat_bubble_outline_rounded,
