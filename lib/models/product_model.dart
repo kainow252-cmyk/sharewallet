@@ -78,6 +78,7 @@ class ProductModel {
   final String? beneficios;    // lista de benefícios separada por '|'
   final List<String> docsRequired;       // documentos obrigatórios antes do pagamento
   final List<CustomField> customFields;   // campos de texto livres definidos pelo admin
+  final String? iconName;      // nome do ícone personalizado (ex: 'two_wheeler_rounded')
 
   ProductModel({
     required this.id,
@@ -94,6 +95,7 @@ class ProductModel {
     this.beneficios,
     this.docsRequired = const [],
     this.customFields = const [],
+    this.iconName,
   });
 
   // Atalhos
@@ -157,6 +159,7 @@ class ProductModel {
       beneficios: json['beneficios'] as String?,
       docsRequired: _parseDocsRequired(json['docs_required'] ?? json['docsRequired']),
       customFields: _parseCustomFields(json['custom_fields'] ?? json['customFields']),
+      iconName: json['icon_name'] as String?,
     );
   }
 
@@ -223,6 +226,9 @@ class ProductModel {
     }
   }
 
+  /// Ícone efetivo: usa iconName personalizado (se definido) ou fallback para chargeTypeIcon
+  IconData get effectiveIcon => ProductIconHelper.fromName(iconName) ?? chargeTypeIcon;
+
   /// Converte docsRequired em string '|'-separada para salvar na API
   String get docsRequiredRaw => docsRequired.join('|');
 
@@ -247,6 +253,7 @@ class ProductModel {
         'custom_fields': customFields.isEmpty
             ? null
             : jsonEncode(customFields.map((f) => f.toMap()).toList()),
+        'icon_name': iconName,
       };
 
   // -- Produtos mock - todos somente Pix -------------------------------------
@@ -339,4 +346,63 @@ class ProductModel {
               'Celulares e tablets|Notebooks|Smart TVs|Assistência técnica|Reposição garantida',
         ),
       ];
+}
+
+// ---------------------------------------------------------------------------
+/// Helper para converter nome de ícone (string) → IconData
+/// Mantido fora de ProductModel para ser usado tanto pelo model quanto pela UI
+// ---------------------------------------------------------------------------
+class ProductIconHelper {
+  /// Catálogo de ícones disponíveis para admin escolher
+  static const List<({String name, IconData icon, String label})> catalog = [
+    // Seguros / Proteção
+    (name: 'security_rounded',          icon: Icons.security_rounded,          label: 'Segurança'),
+    (name: 'shield_rounded',            icon: Icons.shield_rounded,            label: 'Escudo'),
+    (name: 'verified_user_rounded',     icon: Icons.verified_user_rounded,     label: 'Verificado'),
+    (name: 'health_and_safety_rounded', icon: Icons.health_and_safety_rounded, label: 'Saúde'),
+    // Veículos
+    (name: 'two_wheeler_rounded',       icon: Icons.two_wheeler_rounded,       label: 'Moto'),
+    (name: 'directions_car_rounded',    icon: Icons.directions_car_rounded,    label: 'Carro'),
+    (name: 'local_shipping_rounded',    icon: Icons.local_shipping_rounded,    label: 'Caminhão'),
+    (name: 'pedal_bike_rounded',        icon: Icons.pedal_bike_rounded,        label: 'Bicicleta'),
+    // Finanças
+    (name: 'savings_rounded',           icon: Icons.savings_rounded,           label: 'Poupança'),
+    (name: 'monetization_on_rounded',   icon: Icons.monetization_on_rounded,   label: 'Monetização'),
+    (name: 'account_balance_rounded',   icon: Icons.account_balance_rounded,   label: 'Banco'),
+    (name: 'credit_card_rounded',       icon: Icons.credit_card_rounded,       label: 'Cartão'),
+    (name: 'pix_rounded',               icon: Icons.pix_rounded,               label: 'Pix'),
+    // Pessoas / Casa
+    (name: 'home_rounded',              icon: Icons.home_rounded,              label: 'Casa'),
+    (name: 'family_restroom_rounded',   icon: Icons.family_restroom_rounded,   label: 'Família'),
+    (name: 'person_rounded',            icon: Icons.person_rounded,            label: 'Pessoa'),
+    (name: 'handshake_rounded',         icon: Icons.handshake_rounded,         label: 'Parceria'),
+    // Serviços
+    (name: 'medical_services_rounded',  icon: Icons.medical_services_rounded,  label: 'Médico'),
+    (name: 'local_hospital_rounded',    icon: Icons.local_hospital_rounded,    label: 'Hospital'),
+    (name: 'phone_in_talk_rounded',     icon: Icons.phone_in_talk_rounded,     label: 'Telefone'),
+    (name: 'smartphone_rounded',        icon: Icons.smartphone_rounded,        label: 'Celular'),
+    (name: 'wifi_rounded',              icon: Icons.wifi_rounded,              label: 'Internet'),
+    // Benefícios / Lazer
+    (name: 'card_giftcard_rounded',     icon: Icons.card_giftcard_rounded,     label: 'Presente'),
+    (name: 'star_rounded',              icon: Icons.star_rounded,              label: 'Estrela'),
+    (name: 'local_offer_rounded',       icon: Icons.local_offer_rounded,       label: 'Oferta'),
+    (name: 'movie_rounded',             icon: Icons.movie_rounded,             label: 'Filme'),
+    (name: 'sports_esports_rounded',    icon: Icons.sports_esports_rounded,    label: 'Jogos'),
+    (name: 'school_rounded',            icon: Icons.school_rounded,            label: 'Escola'),
+    // Sorteios / Capitalização
+    (name: 'casino_rounded',            icon: Icons.casino_rounded,            label: 'Sorteio'),
+    (name: 'workspace_premium_rounded', icon: Icons.workspace_premium_rounded, label: 'Premium'),
+    (name: 'emoji_events_rounded',      icon: Icons.emoji_events_rounded,      label: 'Troféu'),
+    (name: 'celebration_rounded',       icon: Icons.celebration_rounded,       label: 'Celebração'),
+  ];
+
+  /// Retorna IconData pelo nome armazenado (null se não encontrado → usar fallback)
+  static IconData? fromName(String? name) {
+    if (name == null || name.isEmpty) return null;
+    try {
+      return catalog.firstWhere((e) => e.name == name).icon;
+    } catch (_) {
+      return null;
+    }
+  }
 }

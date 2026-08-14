@@ -195,7 +195,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
-  // -- Seções por categoria --------------------------------------------------
+  // -- Controle de seções abertas/fechadas
+  final Set<String> _expandedCategories = {};
+
+  // -- Seções por categoria colapsáveis ----------------------------------------
   List<Widget> _buildCategorySections(
       ProductService ps, List<ProductModel> baseList) {
     final Map<String, List<ProductModel>> grouped = {};
@@ -210,39 +213,67 @@ class _ProductsScreenState extends State<ProductsScreen> {
       ...grouped.keys.where((k) => !catOrder.contains(k)),
     ];
 
+    // Inicializa expandido por padrão na primeira renderização
+    if (_expandedCategories.isEmpty && orderedKeys.isNotEmpty) {
+      _expandedCategories.addAll(orderedKeys);
+    }
+
     for (final cat in orderedKeys) {
       final products = grouped[cat]!;
-      final label = ProductService.categoryLabels[cat] ?? cat;
+      final label = ProductService.categoryLabels[cat] ?? _capitalizeFirst(cat);
       final iconData = _catIconData(cat);
       final color = _catColor(cat);
+      final isExpanded = _expandedCategories.contains(cat);
+
+      // Calcula comissão média da categoria para o badge
+      final avgComissao = products.isEmpty
+          ? 0
+          : (products.map((p) => p.comissaoPercent).reduce((a, b) => a + b) /
+              products.length)
+              .round();
 
       widgets.add(
         SliverToBoxAdapter(
-          child: _CategoryHeader(
+          child: _CollapsibleCategoryHeader(
             iconData: iconData,
             label: label,
             color: color,
             count: products.length,
+            comissao: avgComissao,
+            isExpanded: isExpanded,
+            onToggle: () => setState(() {
+              if (isExpanded) {
+                _expandedCategories.remove(cat);
+              } else {
+                _expandedCategories.add(cat);
+              }
+            }),
           ),
         ),
       );
-      widgets.add(
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (ctx, i) => _ProductCard(product: products[i]),
-              childCount: products.length,
+
+      if (isExpanded) {
+        widgets.add(
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (ctx, i) => _ProductCard(product: products[i]),
+                childCount: products.length,
+              ),
             ),
           ),
-        ),
-      );
+        );
+      }
     }
 
     // Espaço no final
     widgets.add(const SliverToBoxAdapter(child: SizedBox(height: 80)));
     return widgets;
   }
+
+  String _capitalizeFirst(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
   // -- Drawer de categoria (menu hamburguer) --------------------------------
   void _showCategoryDrawer(BuildContext context, ProductService ps) {
@@ -547,106 +578,129 @@ class _ChargeFilterBar extends StatelessWidget {
   }
 }
 
-// -- Cabeçalho de categoria ----------------------------------------------------
-
-class _CategoryHeader extends StatelessWidget {
+// -- Cabeçalho de categoria colapsável ----------------------------------------
+class _CollapsibleCategoryHeader extends StatelessWidget {
   final IconData iconData;
   final String label;
   final Color color;
   final int count;
+  final int comissao;
+  final bool isExpanded;
+  final VoidCallback onToggle;
 
-  const _CategoryHeader({
+  const _CollapsibleCategoryHeader({
     required this.iconData,
     required this.label,
     required this.color,
     required this.count,
+    required this.comissao,
+    required this.isExpanded,
+    required this.onToggle,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Ícone categoria — Icon Material real
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  color.withValues(alpha: 0.25),
-                  color.withValues(alpha: 0.12),
+    return GestureDetector(
+      onTap: onToggle,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: isExpanded
+              ? color.withValues(alpha: 0.10)
+              : color.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: isExpanded
+                  ? color.withValues(alpha: 0.35)
+                  : color.withValues(alpha: 0.18),
+              width: isExpanded ? 1.5 : 1),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: isExpanded ? 0.08 : 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Ícone categoria
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    color.withValues(alpha: 0.22),
+                    color.withValues(alpha: 0.10),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withValues(alpha: 0.28)),
+              ),
+              child: Center(child: Icon(iconData, color: color, size: 22)),
+            ),
+            const SizedBox(width: 12),
+            // Label + contagem
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+                  Text(
+                    '$count produto${count != 1 ? 's' : ''} disponíve${count != 1 ? 'is' : 'l'}',
+                    style: TextStyle(
+                      color: color.withValues(alpha: 0.7),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: color.withValues(alpha: 0.3)),
-            ),
-            child: Center(
-              child: Icon(iconData, color: color, size: 22),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Label + contagem
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                Text(
-                  '$count produto${count > 1 ?'s':''} disponíve${count > 1 ?'is':'l'}',
-                  style: TextStyle(
-                    color: color.withValues(alpha: 0.7),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Badge comissão
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.success.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: AppColors.success.withValues(alpha: 0.3)),
-            ),
-            child: const Text(
-              '20% comissão',
-              style: TextStyle(
-                color: AppColors.success,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-        ],
+            // Badge comissão
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                '$comissao% comissão',
+                style: const TextStyle(
+                  color: AppColors.success,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Seta animada
+            AnimatedRotation(
+              turns: isExpanded ? 0.5 : 0,
+              duration: const Duration(milliseconds: 220),
+              child: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: color.withValues(alpha: 0.8),
+                size: 22,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -694,7 +748,8 @@ class _ProductCard extends StatelessWidget {
           iconColor: AppColors.textHint,
           collapsedIconColor: AppColors.textHint,
           // ── Linha resumo ────────────────────────────────────────────────────
-          leading: _CategoryIconAvatarSmall(categoria: p.categoria),
+          leading: _CategoryIconAvatarSmall(
+              categoria: p.categoria, iconName: p.iconName),
           title: Row(
             children: [
               Expanded(
@@ -1085,12 +1140,14 @@ class _ProductCard extends StatelessWidget {
 // -- Avatar de ícone da categoria no card de produto (versão compacta 38px) ----
 class _CategoryIconAvatarSmall extends StatelessWidget {
   final String categoria;
-  const _CategoryIconAvatarSmall({required this.categoria});
+  final String? iconName; // ícone personalizado do produto (sobrepõe categoria)
+  const _CategoryIconAvatarSmall({required this.categoria, this.iconName});
 
   @override
   Widget build(BuildContext context) {
     final color = _CategoryIconAvatar._color(categoria);
-    final icon  = _CategoryIconAvatar._icon(categoria);
+    // Usa iconName personalizado se existir, senão usa ícone da categoria
+    final icon = ProductIconHelper.fromName(iconName) ?? _CategoryIconAvatar._icon(categoria);
     return Container(
       width: 38,
       height: 38,

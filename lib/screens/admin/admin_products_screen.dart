@@ -230,7 +230,7 @@ class _ProductCard extends StatelessWidget {
               color: typeColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(product.chargeTypeIcon, color: typeColor, size: 17),
+            child: Icon(product.effectiveIcon, color: typeColor, size: 17),
           ),
           title: Row(
             children: [
@@ -417,6 +417,8 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
   List<String> _docsRequired = [];
   // Campos de texto personalizados criados pelo admin
   List<CustomField> _customFields = [];
+  // Ícone personalizado do produto
+  String? _selectedIconName;
 
   // Documentos disponíveis para seleção
   static const _docOpts = [
@@ -456,6 +458,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
     _ativo = p?.ativo ?? true;
     _docsRequired = List<String>.from(p?.docsRequired ?? []);
     _customFields = List<CustomField>.from(p?.customFields ?? []);
+    _selectedIconName = p?.iconName;
   }
 
   @override
@@ -495,6 +498,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
       imagemUrl: imgUrl.isEmpty ? null : imgUrl,
       docsRequired: _docsRequired,
       customFields: _customFields,
+      iconName: _selectedIconName,
     );
 
     final ok = await svc.saveProduct(produto, isNew: isNew);
@@ -677,6 +681,14 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                       controller: _categoria,
                       label: 'Categoria',
                       icon: Icons.category_rounded,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // -- Símbolo / Ícone do produto -----------------------
+                    _IconPickerSection(
+                      selectedIconName: _selectedIconName,
+                      onChanged: (name) =>
+                          setState(() => _selectedIconName = name),
                     ),
                     const SizedBox(height: 12),
                     _Field(
@@ -1538,6 +1550,211 @@ class _CustomFieldsEditorState extends State<_CustomFieldsEditor> {
                     fontStyle: FontStyle.italic),
               ),
             ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// -- Seletor de ícone do produto (admin) ---------------------------------------
+class _IconPickerSection extends StatelessWidget {
+  final String? selectedIconName;
+  final ValueChanged<String?> onChanged;
+
+  const _IconPickerSection({
+    required this.selectedIconName,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final catalog = ProductIconHelper.catalog;
+    final selectedEntry = selectedIconName != null
+        ? catalog.where((e) => e.name == selectedIconName).firstOrNull
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Cabeçalho
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  selectedEntry?.icon ?? Icons.apps_rounded,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Símbolo do Produto',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: AppColors.textPrimary),
+                    ),
+                    Text(
+                      'Ícone exibido no card do produto para o afiliado',
+                      style: TextStyle(fontSize: 11, color: AppColors.textHint),
+                    ),
+                  ],
+                ),
+              ),
+              // Badge do selecionado
+              if (selectedEntry != null)
+                GestureDetector(
+                  onTap: () => onChanged(null),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(selectedEntry.icon,
+                            size: 12, color: AppColors.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          selectedEntry.label,
+                          style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.close_rounded,
+                            size: 12, color: AppColors.primary),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBorder.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Padrão',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textHint,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+
+          // Grade de ícones (4 colunas)
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 1,
+            ),
+            itemCount: catalog.length,
+            itemBuilder: (_, index) {
+              final entry = catalog[index];
+              final isSelected = entry.name == selectedIconName;
+              return GestureDetector(
+                onTap: () => onChanged(isSelected ? null : entry.name),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.primary.withValues(alpha: 0.12)
+                        : AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.cardBorder,
+                      width: isSelected ? 2 : 1,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        entry.icon,
+                        size: 24,
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.textSecondary,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        entry.label,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                          color: isSelected
+                              ? AppColors.primary
+                              : AppColors.textHint,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // Dica quando nenhum selecionado
+          if (selectedIconName == null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.info_outline_rounded,
+                    size: 12, color: AppColors.textHint),
+                const SizedBox(width: 6),
+                const Expanded(
+                  child: Text(
+                    'Sem seleção: usa ícone padrão do tipo de cobrança (Pix Recorrente ou Pix Único)',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textHint,
+                        fontStyle: FontStyle.italic),
+                  ),
+                ),
+              ],
+            ),
           ],
         ],
       ),
