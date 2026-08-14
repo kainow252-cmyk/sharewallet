@@ -3166,16 +3166,7 @@ class _PreapprovalCardState extends State<_PreapprovalCard> {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text('Woovi',
-                      style: TextStyle(color: Colors.white,
-                          fontSize: 12, fontWeight: FontWeight.w700)),
-                ),
+                // badge de gateway removida
               ],
             ),
           ),
@@ -3486,22 +3477,7 @@ class _PixQrCardState extends State<_PixQrCard> {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6C3CE1).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.pix_rounded, color: Color(0xFF6C3CE1), size: 14),
-                      SizedBox(width: 4),
-                      Text('Woovi',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                              color: Color(0xFF6C3CE1))),
-                    ],
-                  ),
-                ),
+                // badge de gateway removida — processador interno
               ],
             ),
           ),
