@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/chat_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
@@ -21,8 +22,17 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
     final chat = context.watch<ChatService>();
-    final myUid = auth.currentUser?.id ?? '';
-    final myUsername = auth.currentUser?.username ?? '';
+
+    // ── Uid: prioridade ao AuthService (Firestore profile), fallback ao
+    // FirebaseAuth direto para evitar tela de "Faça login" durante hidratação
+    // assíncrona do AuthService na PWA/Web.
+    final fbUser = FirebaseAuth.instance.currentUser;
+    final myUid = auth.currentUser?.id.isNotEmpty == true
+        ? auth.currentUser!.id
+        : (fbUser?.uid ?? '');
+    final myUsername = auth.currentUser?.username.isNotEmpty == true
+        ? auth.currentUser!.username
+        : (fbUser?.displayName ?? fbUser?.email?.split('@').first ?? '');
 
     return PopScope(
       canPop: false,
