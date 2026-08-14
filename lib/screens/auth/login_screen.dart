@@ -6,6 +6,7 @@ import '../../services/firebase_auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
 import '../../utils/web_utils.dart';
+import '../../services/app_config_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -534,7 +535,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthService>();
+    final auth       = context.watch<AuthService>();
+    final loginCfg   = context.watch<AppConfigService>().loginConfig;
 
     return Scaffold(
       body: Container(
@@ -750,94 +752,97 @@ class _LoginScreenState extends State<LoginScreen> {
                                 icon: Icons.login_rounded,
                               ),
 
-                              // -- Divisor "ou entre com" -------------------
-                              const SizedBox(height: 18),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Divider(
-                                      color: AppColors.textHint
-                                          .withValues(alpha: 0.4),
-                                      thickness: 1,
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10),
-                                    child: Text(
-                                      'ou entre com',
-                                      style: TextStyle(
-                                        color: AppColors.textHint,
-                                        fontSize: 12,
+                              // -- Social: Google + Facebook (se habilitados) --
+                              if (loginCfg.loginGoogle || loginCfg.loginFacebook) ...[  
+                                const SizedBox(height: 18),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Divider(
+                                        color: AppColors.textHint
+                                            .withValues(alpha: 0.4),
+                                        thickness: 1,
                                       ),
                                     ),
-                                  ),
-                                  Expanded(
-                                    child: Divider(
-                                      color: AppColors.textHint
-                                          .withValues(alpha: 0.4),
-                                      thickness: 1,
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10),
+                                      child: Text(
+                                        'ou entre com',
+                                        style: TextStyle(
+                                          color: AppColors.textHint,
+                                          fontSize: 12,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
+                                    Expanded(
+                                      child: Divider(
+                                        color: AppColors.textHint
+                                            .withValues(alpha: 0.4),
+                                        thickness: 1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    if (loginCfg.loginGoogle)
+                                      Expanded(
+                                        child: _SocialButton(
+                                          label: 'Google',
+                                          icon: _GoogleIcon(),
+                                          onPressed: _socialLoading || auth.isLoading
+                                              ? null
+                                              : _loginWithGoogle,
+                                          isLoading: _socialLoading,
+                                        ),
+                                      ),
+                                    if (loginCfg.loginGoogle && loginCfg.loginFacebook)
+                                      const SizedBox(width: 12),
+                                    if (loginCfg.loginFacebook)
+                                      Expanded(
+                                        child: _SocialButton(
+                                          label: 'Facebook',
+                                          icon: const Icon(
+                                            Icons.facebook_rounded,
+                                            color: Color(0xFF1877F2),
+                                            size: 22,
+                                          ),
+                                          onPressed: _socialLoading || auth.isLoading
+                                              ? null
+                                              : _loginWithFacebook,
+                                          isLoading: _socialLoading,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                              ],
 
-                              // -- Botões sociais Google + Facebook ---------
-                              Row(
-                                children: [
-                                  // Google
-                                  Expanded(
-                                    child: _SocialButton(
-                                      label: 'Google',
-                                      icon: _GoogleIcon(),
-                                      onPressed: _socialLoading || auth.isLoading
-                                          ? null
-                                          : _loginWithGoogle,
-                                      isLoading: _socialLoading,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  // Facebook / Meta
-                                  Expanded(
-                                    child: _SocialButton(
-                                      label: 'Facebook',
-                                      icon: const Icon(
-                                        Icons.facebook_rounded,
-                                        color: Color(0xFF1877F2),
-                                        size: 22,
-                                      ),
-                                      onPressed: _socialLoading || auth.isLoading
-                                          ? null
-                                          : _loginWithFacebook,
-                                      isLoading: _socialLoading,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-
-                              // -- Cadastre-se ------------------------------
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Text('Não tem conta?',
-                                      style: TextStyle(
-                                          color: AppColors.textSecondary)),
-                                  GestureDetector(
-                                    onTap: () => Navigator.pushNamed(
-                                        context, '/register'),
-                                    child: const Text(
-                                      ' Cadastre-se',
-                                      style: TextStyle(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w700,
+                              // -- Cadastre-se (somente se público habilitado) --
+                              if (loginCfg.loginCadastroPublico) ...[  
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text('Não tem conta?',
+                                        style: TextStyle(
+                                            color: AppColors.textSecondary)),
+                                    GestureDetector(
+                                      onTap: () => Navigator.pushNamed(
+                                          context, '/register'),
+                                      child: const Text(
+                                        ' Cadastre-se',
+                                        style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                              ],
                             ],
                           ),
                         ),

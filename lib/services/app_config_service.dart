@@ -4,6 +4,43 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AppLoginConfig — configuração de visibilidade dos métodos de login
+// ─────────────────────────────────────────────────────────────────────────────
+class AppLoginConfig {
+  final bool loginGoogle;
+  final bool loginFacebook;
+  final bool loginCadastroPublico;
+
+  const AppLoginConfig({
+    this.loginGoogle          = true,
+    this.loginFacebook        = true,
+    this.loginCadastroPublico = true,
+  });
+
+  factory AppLoginConfig.fromJson(Map<String, dynamic> j) => AppLoginConfig(
+    loginGoogle:          j['login_google']           as bool? ?? true,
+    loginFacebook:        j['login_facebook']         as bool? ?? true,
+    loginCadastroPublico: j['login_cadastro_publico'] as bool? ?? true,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'login_google':           loginGoogle,
+    'login_facebook':         loginFacebook,
+    'login_cadastro_publico': loginCadastroPublico,
+  };
+
+  AppLoginConfig copyWith({
+    bool? loginGoogle,
+    bool? loginFacebook,
+    bool? loginCadastroPublico,
+  }) => AppLoginConfig(
+    loginGoogle:          loginGoogle          ?? this.loginGoogle,
+    loginFacebook:        loginFacebook        ?? this.loginFacebook,
+    loginCadastroPublico: loginCadastroPublico ?? this.loginCadastroPublico,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AppMenuConfig — configuração de visibilidade dos menus
 // ─────────────────────────────────────────────────────────────────────────────
 class AppMenuConfig {
@@ -84,39 +121,53 @@ class AppMenuConfig {
 // persiste localmente (SharedPreferences) e sincroniza com o worker remoto.
 // ─────────────────────────────────────────────────────────────────────────────
 class AppConfigService extends ChangeNotifier {
-  static const String _baseUrl = 'https://api.sharewallet.com.br';
-  static const String _cacheKey = 'app_menu_config_v1';
+  static const String _baseUrl       = 'https://api.sharewallet.com.br';
+  static const String _cacheKey      = 'app_menu_config_v1';
+  static const String _loginCacheKey = 'app_login_config_v1';
 
-  AppMenuConfig _config = const AppMenuConfig();
-  bool _loading = false;
+  AppMenuConfig  _config      = const AppMenuConfig();
+  AppLoginConfig _loginConfig = const AppLoginConfig();
+  bool    _loading = false;
   String? _error;
 
-  AppMenuConfig get config  => _config;
-  bool          get loading => _loading;
-  String?       get error   => _error;
+  AppMenuConfig  get config      => _config;
+  AppLoginConfig get loginConfig => _loginConfig;
+  bool           get loading     => _loading;
+  String?        get error       => _error;
 
-  // ── Carrega a config (cache local → remoto) ───────────────────────────────
+  // ── Carrega ambas as configs (cache local → remoto em paralelo) ───────────
   Future<void> load({bool forceRemote = false}) async {
-    // 1. Tenta cache local primeiro (instantâneo)
     if (!forceRemote) {
-      await _loadFromCache();
+      await Future.wait([_loadMenuFromCache(), _loadLoginFromCache()]);
     }
 
-    // 2. Busca remoto em background
     _loading = true;
     _error   = null;
     notifyListeners();
 
     try {
-      final res = await http
-          .get(Uri.parse('$_baseUrl/api/admin/menu-config'))
-          .timeout(const Duration(seconds: 8));
+      // Busca as duas configs em paralelo
+      final results = await Future.wait([
+        http.get(Uri.parse('$_baseUrl/api/admin/menu-config'))
+            .timeout(const Duration(seconds: 8)),
+        http.get(Uri.parse('$_baseUrl/api/admin/login-config'))
+            .timeout(const Duration(seconds: 8)),
+      ]);
 
-      if (res.statusCode == 200) {
-        final body = json.decode(res.body) as Map<String, dynamic>;
+      final menuRes  = results[0];
+      final loginRes = results[1];
+
+      if (menuRes.statusCode == 200) {
+        final body = json.decode(menuRes.body) as Map<String, dynamic>;
         final data = (body['result'] ?? body) as Map<String, dynamic>;
         _config = AppMenuConfig.fromJson(data);
-        await _saveToCache(_config);
+        await _saveMenuToCache(_config);
+      }
+      if (loginRes.statusCode == 200) {
+        final body = json.decode(loginRes.body) as Map<String, dynamic>;
+        final data = (body['result'] ?? body) as Map<String, dynamic>;
+        _loginConfig = AppLoginConfig.fromJson(data);
+        await _saveLoginToCache(_loginConfig);
       }
     } catch (e) {
       _error = 'Falha ao carregar configurações';
@@ -127,7 +178,7 @@ class AppConfigService extends ChangeNotifier {
     }
   }
 
-  // ── Salva uma nova config (remoto + cache local) ──────────────────────────
+  // ── Salva config de menus ─────────────────────────────────────────────────
   Future<bool> save(AppMenuConfig newConfig) async {
     try {
       final res = await http
@@ -140,7 +191,7 @@ class AppConfigService extends ChangeNotifier {
 
       if (res.statusCode == 200) {
         _config = newConfig;
-        await _saveToCache(newConfig);
+        await _saveMenuToCache(newConfig);
         notifyListeners();
         return true;
       }
@@ -151,23 +202,65 @@ class AppConfigService extends ChangeNotifier {
     }
   }
 
-  // ── Cache local com SharedPreferences ────────────────────────────────────
-  Future<void> _loadFromCache() async {
+  // ── Salva config de login ─────────────────────────────────────────────────
+  Future<bool> saveLoginConfig(AppLoginConfig newConfig) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$_baseUrl/api/admin/login-config'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(newConfig.toJson()),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        _loginConfig = newConfig;
+        await _saveLoginToCache(newConfig);
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[AppConfigService] saveLogin error: $e');
+      return false;
+    }
+  }
+
+  // ── Cache local — menus ───────────────────────────────────────────────────
+  Future<void> _loadMenuFromCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw   = prefs.getString(_cacheKey);
       if (raw != null) {
-        _config = AppMenuConfig.fromJson(
-            json.decode(raw) as Map<String, dynamic>);
+        _config = AppMenuConfig.fromJson(json.decode(raw) as Map<String, dynamic>);
         notifyListeners();
       }
     } catch (_) {}
   }
 
-  Future<void> _saveToCache(AppMenuConfig cfg) async {
+  Future<void> _saveMenuToCache(AppMenuConfig cfg) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_cacheKey, json.encode(cfg.toJson()));
+    } catch (_) {}
+  }
+
+  // ── Cache local — login ───────────────────────────────────────────────────
+  Future<void> _loadLoginFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw   = prefs.getString(_loginCacheKey);
+      if (raw != null) {
+        _loginConfig = AppLoginConfig.fromJson(json.decode(raw) as Map<String, dynamic>);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveLoginToCache(AppLoginConfig cfg) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_loginCacheKey, json.encode(cfg.toJson()));
     } catch (_) {}
   }
 }

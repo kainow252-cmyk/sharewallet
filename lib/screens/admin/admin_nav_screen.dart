@@ -14,6 +14,7 @@ import 'admin_reports_screen.dart';
 import 'admin_reset_screen.dart';
 import 'admin_chat_screen.dart';
 import 'admin_menu_config_screen.dart';
+import 'admin_login_config_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cores do tema admin (verde escuro profissional)
@@ -72,6 +73,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     _NavItem(icon: Icons.assessment_rounded,              label: 'Relatórios'),
     _NavItem(icon: Icons.chat_bubble_rounded,             label: 'Chat'),
     _NavItem(icon: Icons.tune_rounded,                    label: 'Menus'),
+    _NavItem(icon: Icons.login_rounded,                   label: 'Login'),
     _NavItem(icon: Icons.delete_sweep_rounded,            label: 'Reset', isReset: true),
   ];
 
@@ -92,6 +94,7 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
     const AdminReportsScreen(),
     const AdminChatScreen(),
     const AdminMenuConfigScreen(),
+    const AdminLoginConfigScreen(),
     const AdminResetScreen(),
   ];
 
@@ -112,8 +115,9 @@ class _AdminNavScreenState extends State<AdminNavScreen> {
       case 4: s.loadWithdrawals(); break;
       case 5: s.loadSales(); break;
       case 8: break; // Chat — sem refresh do AdminService
-      case 9: break; // Menus — sem refresh do AdminService
-      case 10: break; // Reset
+      case 9:  break; // Menus — sem refresh do AdminService
+      case 10: break; // Login — sem refresh do AdminService
+      case 11: break; // Reset
       default: s.loadAll(); break;
     }
   }
