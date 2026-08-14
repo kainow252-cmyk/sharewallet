@@ -344,19 +344,22 @@ async function _handleRequest(request, env) {
       const id = b.id || 'p_' + Date.now();
       await DB.prepare(
         `INSERT INTO products (id,nome,descricao,valor,comissao,categoria,charge_type,
-          periodicidade,dia_cobranca,beneficios,imagem_url,ativo)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+          periodicidade,dia_cobranca,beneficios,imagem_url,ativo,icon_name,docs_required,custom_fields)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET
           nome=excluded.nome, descricao=excluded.descricao, valor=excluded.valor,
           comissao=excluded.comissao, categoria=excluded.categoria,
           charge_type=excluded.charge_type, periodicidade=excluded.periodicidade,
           dia_cobranca=excluded.dia_cobranca, beneficios=excluded.beneficios,
-          imagem_url=excluded.imagem_url, ativo=excluded.ativo`
+          imagem_url=excluded.imagem_url, ativo=excluded.ativo,
+          icon_name=excluded.icon_name,
+          docs_required=excluded.docs_required, custom_fields=excluded.custom_fields`
       ).bind(
         id, b.nome, b.descricao??'', b.valor??0, b.comissao??0,
         b.categoria??'geral', b.chargeType??b.charge_type??'pixRecorrente',
         b.periodicidade??null, b.diaCobranca??b.dia_cobranca??null,
-        b.beneficios??null, b.imagem_url??null, b.ativo===false?0:1
+        b.beneficios??null, b.imagem_url??null, b.ativo===false?0:1,
+        b.icon_name??null, b.docs_required??null, b.custom_fields??null
       ).run();
       const product = await DB.prepare(`SELECT * FROM products WHERE id=?`).bind(id).first();
       return ok(product);
@@ -369,13 +372,15 @@ async function _handleRequest(request, env) {
       const b = await request.json();
       await DB.prepare(
         `UPDATE products SET nome=?,descricao=?,valor=?,comissao=?,categoria=?,
-          charge_type=?,periodicidade=?,dia_cobranca=?,beneficios=?,imagem_url=?,ativo=?
+          charge_type=?,periodicidade=?,dia_cobranca=?,beneficios=?,imagem_url=?,ativo=?,
+          icon_name=?,docs_required=?,custom_fields=?
          WHERE id=?`
       ).bind(
         b.nome, b.descricao??'', b.valor??0, b.comissao??0,
         b.categoria??'geral', b.chargeType??b.charge_type??'pixRecorrente',
         b.periodicidade??null, b.diaCobranca??b.dia_cobranca??null,
-        b.beneficios??null, b.imagem_url??null, b.ativo===false?0:1, id
+        b.beneficios??null, b.imagem_url??null, b.ativo===false?0:1,
+        b.icon_name??null, b.docs_required??null, b.custom_fields??null, id
       ).run();
       const product = await DB.prepare(`SELECT * FROM products WHERE id=?`).bind(id).first();
       return ok(product);

@@ -649,6 +649,7 @@ class AdminService extends ChangeNotifier {
     'ativo': r['ativo'] == 1 || r['ativo'] == true,
     'docs_required': r['docs_required'],
     'custom_fields': r['custom_fields'],
+    'icon_name': r['icon_name'],         // ícone personalizado do produto
   };
 
   Future<bool> saveProduct(ProductModel product, {bool isNew = false}) async {
