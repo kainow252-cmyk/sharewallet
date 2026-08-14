@@ -1080,9 +1080,11 @@ class _ProductCardInline extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = product;
     final auth = context.read<AuthService>();
-    final affiliateCode = auth.currentUser?.username.isNotEmpty == true
-        ? auth.currentUser!.username
-        : (auth.currentUser?.affiliateCode ?? 'ABC123');
+    // SEMPRE usa o affiliate_code real (ex: 9ESQ3K) no link de rastreio.
+    // username é só para exibição — se usado como ref, o webhook não acha o afiliado.
+    final affiliateCode = auth.currentUser?.affiliateCode.isNotEmpty == true
+        ? auth.currentUser!.affiliateCode
+        : 'ABC123';
 
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -1455,10 +1457,11 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = product;
     final auth = context.read<AuthService>();
-    // Usa @username como ref de rastreio (mais amigável); fallback para affiliateCode
-    final affiliateCode = auth.currentUser?.username.isNotEmpty == true
-        ? auth.currentUser!.username
-        : (auth.currentUser?.affiliateCode ?? 'ABC123');
+    // SEMPRE usa o affiliate_code real (ex: 9ESQ3K) no link de rastreio.
+    // username é só para exibição — se usado como ref, o webhook não acha o afiliado.
+    final affiliateCode = auth.currentUser?.affiliateCode.isNotEmpty == true
+        ? auth.currentUser!.affiliateCode
+        : 'ABC123';
 
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
