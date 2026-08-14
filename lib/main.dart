@@ -131,6 +131,15 @@ void main() async {
     initialProductId: initialProductId,
     initialAffiliateCode: initialAffiliateCode,
   ));
+
+  // ── Remove o HTML splash nativo assim que o PRIMEIRO frame for pintado ────
+  // Funciona independente da rota inicial (SplashScreen, HomeScreen, etc.)
+  // Resolve o bug de F5 na /home que deixava o splash travado na tela.
+  if (kIsWeb) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyFlutterReady();
+    });
+  }
 }
 
 class ShareWalletApp extends StatelessWidget {
