@@ -345,7 +345,7 @@
       background-size: 200% 100%;
       border-radius: 99px;
       animation:
-        swProgressFill 3.5s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards,
+        swProgressFill 10s cubic-bezier(0.25, 0, 0.1, 1) 0.3s forwards,
         swShimmer 1.4s linear infinite;
     }
 
@@ -414,13 +414,16 @@
 
   <script>
     // Remove o splash nativo quando o Flutter terminar de renderizar o 1º frame.
-    // O Flutter dispara o evento "flutter-first-frame" no window quando o
-    // primeiro frame do app é pintado na tela.
+    // Estratégia em 3 camadas para garantir que a splash só some quando o app
+    // REALMENTE está pintado na tela (evita tela azul entre splash e conteúdo).
     (function() {
       var _splashRemoved = false;
+
       function removeSplash() {
         if (_splashRemoved) return;
         _splashRemoved = true;
+        clearInterval(_pollInterval);
+        clearTimeout(_fallbackTimer);
         var splash = document.getElementById('sw-splash');
         if (!splash) return;
         splash.classList.add('sw-fade-out');
@@ -429,26 +432,36 @@
         }, 500);
       }
 
-      // Método 1: evento disparado pelo Flutter (main.dart addPostFrameCallback)
+      // Método 1: evento flutter-first-frame (disparado pelo main.dart)
+      // É o mais confiável — sinaliza que o 1º frame foi efetivamente pintado.
       window.addEventListener('flutter-first-frame', removeSplash, { once: true });
 
-      // Método 2: polling — detecta quando o canvas do Flutter aparece no DOM
-      // Resolve o caso de F5 na home onde SplashScreen não é visitada
+      // Método 2: polling robusto — detecta o canvas E verifica que tem pixels
+      // Garante que o Flutter já pintou algo antes de remover a splash.
       var _pollInterval = setInterval(function() {
-        var canvas = document.querySelector('flt-glass-pane, flutter-view, canvas');
-        if (canvas) {
-          clearInterval(_pollInterval);
-          // Aguarda 200ms para o primeiro frame ser pintado de fato
-          setTimeout(removeSplash, 200);
-        }
-      }, 150);
+        // flt-glass-pane é o container raiz do Flutter web renderer
+        var pane = document.querySelector('flt-glass-pane');
+        if (!pane) return;
 
-      // Método 3: fallback de segurança — 4s (reduzido de 8s)
-      // Se nem o evento nem o polling funcionarem, remove por tempo
-      setTimeout(function() {
+        // Verifica se o canvas interno já tem dimensão (foi pintado)
+        var canvas = pane.shadowRoot
+          ? pane.shadowRoot.querySelector('canvas')
+          : pane.querySelector('canvas');
+
+        if (canvas && canvas.width > 0 && canvas.height > 0) {
+          clearInterval(_pollInterval);
+          // Aguarda 350ms para garantir que o 1º frame completo foi pintado
+          setTimeout(removeSplash, 350);
+        }
+      }, 200);
+
+      // Método 3: fallback de segurança — 12s para conexões lentas (3G/4G ruim)
+      // O main.dart.js tem ~5-8MB, pode demorar em redes móveis lentas.
+      // Antes eram 4s — muito curto para 4G fraco, causava tela azul.
+      var _fallbackTimer = setTimeout(function() {
         clearInterval(_pollInterval);
         removeSplash();
-      }, 4000);
+      }, 12000);
     })();
   </script>
 
