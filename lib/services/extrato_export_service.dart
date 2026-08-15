@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import '../utils/web_utils.dart';
 
 // Importações condicionais web vs stub
 import 'extrato_export_web.dart'
@@ -217,7 +218,8 @@ class ExtratoExportService {
     final fileName =
         'extrato_sharewallet_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.csv';
 
-    if (kIsWeb) {
+    // APK WebView: kIsWeb=true mas window.open/blob falham — usa share nativo
+    if (kIsWeb && !isNativeApp()) {
       _platform.downloadFileWeb(
         content: csv,
         fileName: fileName,
@@ -248,7 +250,8 @@ class ExtratoExportService {
     final fileName =
         'extrato_sharewallet_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.html';
 
-    if (kIsWeb) {
+    // APK WebView: kIsWeb=true mas window.open/_blank é bloqueado — usa share nativo
+    if (kIsWeb && !isNativeApp()) {
       _platform.openHtmlBlob(html_: html, fileName: fileName);
     } else {
       await _platform.shareFileNative(
