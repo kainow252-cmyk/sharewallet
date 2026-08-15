@@ -1,7 +1,23 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/app_config_service.dart';
 import 'register_screen.dart';
+
+// ── APK Install constants ────────────────────────────────────────────────────
+// URL de download direto do R2 via Worker
+const _apkFallbackUrl = 'https://api.sharewallet.com.br/api/app/download';
+
+// Android Intent URL:
+//   • Se o app JÁ estiver instalado → abre direto o app nativo
+//   • Se NÃO estiver instalado      → fallback_url baixa e instala o APK
+const _androidIntentUrl =
+    'intent://app.sharewallet.com.br/#Intent;'
+    'scheme=https;'
+    'package=com.affiliatewallet.wallet;'
+    'S.browser_fallback_url=https%3A%2F%2Fapi.sharewallet.com.br%2Fapi%2Fapp%2Fdownload;'
+    'end';
 
 /// Landing Page — layout 100% adaptável à altura da tela.
 /// Usa LayoutBuilder + Column com Flexible/Expanded para
@@ -479,6 +495,33 @@ class _CtaSection extends StatelessWidget {
     this.showCadastro = true,
   });
 
+  Future<void> _handleInstall(BuildContext context) async {
+    // Intent URL: abre app nativo se instalado; caso contrário
+    // o Android baixa e instala o APK automaticamente via fallback_url
+    final uri = Uri.parse(_androidIntentUrl);
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && context.mounted) {
+        // Fallback direto para download se Intent não abrir
+        await launchUrl(
+          Uri.parse(_apkFallbackUrl),
+          mode: LaunchMode.externalApplication,
+        );
+      }
+    } catch (_) {
+      // Última tentativa: download direto
+      if (context.mounted) {
+        await launchUrl(
+          Uri.parse(_apkFallbackUrl),
+          mode: LaunchMode.externalApplication,
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -544,6 +587,43 @@ class _CtaSection extends StatelessWidget {
             ),
           ),
         ),
+
+        // ── Botão Instalar App Android ──────────────────────────────────────
+        // Visível apenas no web (na landing page acessada pelo browser)
+        // No app nativo esse botão não faz sentido — escondemos via kIsWeb
+        if (kIsWeb) ...[
+          SizedBox(height: 10 * scale),
+          SizedBox(
+            width: double.infinity,
+            height: 46 * scale,
+            child: OutlinedButton.icon(
+              onPressed: () => _handleInstall(context),
+              icon: Icon(
+                Icons.android_rounded,
+                size: 18 * scale,
+                color: const Color(0xFF00E5B4),
+              ),
+              label: Text(
+                'Instalar App Android',
+                style: TextStyle(
+                  fontSize: 14 * scale,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF00E5B4),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                side: BorderSide(
+                  color: const Color(0xFF00E5B4).withValues(alpha: 0.45),
+                  width: 1.2,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(13),
+                ),
+              ),
+            ),
+          ),
+        ],
 
         if (showCadastro) SizedBox(height: 10 * scale),
 
