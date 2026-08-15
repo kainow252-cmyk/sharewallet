@@ -296,7 +296,11 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
                         onApprove: (w) => _approve(context, svc, w),
                         onReject: (w) => _reject(context, svc, w),
                       ),
-                      _WithdrawalList(withdrawals: processando),
+                      _WithdrawalList(
+                        withdrawals: processando,
+                        showMarkApproved: true,
+                        onMarkApproved: (w) => _markApproved(context, svc, w),
+                      ),
                       _WithdrawalList(withdrawals: aprovados),
                       _WithdrawalList(withdrawals: recusados),
                     ],
@@ -448,6 +452,75 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
     }
   }
 
+  Future<void> _markApproved(
+      BuildContext context, AdminService svc, AdminWithdrawal w) async {
+    final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Row(children: [
+          Icon(Icons.check_circle_rounded, color: AppColors.success, size: 22),
+          SizedBox(width: 8),
+          Text('Confirmar Aprovação'),
+        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ConfirmRow(label: 'Afiliado', value: w.affiliateNome),
+            _ConfirmRow(label: 'Valor', value: fmt.format(w.valor)),
+            _ConfirmRow(label: 'Chave PIX', value: w.pixKey),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.info.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
+              ),
+              child: const Row(children: [
+                Icon(Icons.info_outline_rounded, size: 14, color: AppColors.info),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Marcar como aprovado manualmente.\nUse quando a Woovi confirmou o pagamento mas o webhook não chegou.',
+                    style: TextStyle(color: AppColors.info, fontSize: 12),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await svc.approveWithdrawal(w.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Saque ${fmt.format(w.valor)} marcado como aprovado!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
   void _showExport(List<AdminWithdrawal> list) {
     final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
     // CSV
@@ -560,14 +633,18 @@ class _ExportBtn extends StatelessWidget {
 class _WithdrawalList extends StatelessWidget {
   final List<AdminWithdrawal> withdrawals;
   final bool showActions;
+  final bool showMarkApproved;
   final Function(AdminWithdrawal)? onApprove;
   final Function(AdminWithdrawal)? onReject;
+  final Function(AdminWithdrawal)? onMarkApproved;
 
   const _WithdrawalList({
     required this.withdrawals,
     this.showActions = false,
+    this.showMarkApproved = false,
     this.onApprove,
     this.onReject,
+    this.onMarkApproved,
   });
 
   @override
@@ -592,10 +669,13 @@ class _WithdrawalList extends StatelessWidget {
       itemBuilder: (ctx, i) => _WithdrawalCard(
         withdrawal: withdrawals[i],
         showActions: showActions,
+        showMarkApproved: showMarkApproved,
         onApprove:
             onApprove != null ? () => onApprove!(withdrawals[i]) : null,
         onReject:
             onReject != null ? () => onReject!(withdrawals[i]) : null,
+        onMarkApproved:
+            onMarkApproved != null ? () => onMarkApproved!(withdrawals[i]) : null,
       ),
     );
   }
@@ -605,14 +685,18 @@ class _WithdrawalList extends StatelessWidget {
 class _WithdrawalCard extends StatelessWidget {
   final AdminWithdrawal withdrawal;
   final bool showActions;
+  final bool showMarkApproved;
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
+  final VoidCallback? onMarkApproved;
 
   const _WithdrawalCard({
     required this.withdrawal,
     this.showActions = false,
+    this.showMarkApproved = false,
     this.onApprove,
     this.onReject,
+    this.onMarkApproved,
   });
 
   @override
@@ -823,6 +907,25 @@ class _WithdrawalCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ],
+
+            // Botão ação (saques processando — aprovação manual)
+            if (showMarkApproved) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: onMarkApproved,
+                  icon: const Icon(Icons.check_circle_rounded, size: 15),
+                  label: const Text('Marcar como Aprovado',
+                      style: TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.info,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
               ),
             ],
           ],
