@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/app_config_service.dart';
+import 'register_screen.dart';
 
 /// Landing Page — layout 100% adaptável à altura da tela.
 /// Usa LayoutBuilder + Column com Flexible/Expanded para
 /// que TODO o conteúdo caiba sem scroll em qualquer dispositivo.
+///
+/// [sponsorCode] — código de afiliado recebido via link /ref/CODE
+/// Quando informado, é pré-preenchido no campo de indicação do cadastro.
 class LandingScreen extends StatefulWidget {
-  const LandingScreen({super.key});
+  final String? sponsorCode;
+  const LandingScreen({super.key, this.sponsorCode});
 
   @override
   State<LandingScreen> createState() => _LandingScreenState();
@@ -125,8 +130,19 @@ class _LandingScreenState extends State<LandingScreen>
                       child: _CtaSection(
                         scale: scale,
                         showCadastro: context.watch<AppConfigService>().loginConfig.loginCadastroPublico,
-                        onCadastro: () =>
-                            Navigator.pushNamed(context, '/register'),
+                        onCadastro: () {
+                          final code = widget.sponsorCode;
+                          if (code != null && code.isNotEmpty) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => RegisterScreen(sponsorCode: code),
+                              ),
+                            );
+                          } else {
+                            Navigator.pushNamed(context, '/register');
+                          }
+                        },
                         onLogin: () =>
                             Navigator.pushNamed(context, '/login'),
                       ),

@@ -207,6 +207,19 @@ class ShareWalletApp extends StatelessWidget {
         onGenerateRoute: (settings) {
           final name = settings.name ?? '';
 
+          // /landing?ref=CODE → landing page passando sponsorCode para o registro
+          if (name.startsWith('/landing')) {
+            String? sponsorCode;
+            if (name.contains('?')) {
+              final query = Uri.splitQueryString(name.split('?').last);
+              final ref = (query['ref'] ?? '').replaceAll(RegExp(r'^@+'), '');
+              if (ref.isNotEmpty) sponsorCode = ref;
+            }
+            return MaterialPageRoute(
+              builder: (_) => LandingScreen(sponsorCode: sponsorCode),
+            );
+          }
+
           // /ref/CODE -> registro de afiliado
           if (name.startsWith('/ref/')) {
             final code = name.replaceFirst('/ref/', '');

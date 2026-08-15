@@ -1,21 +1,26 @@
 /**
- * pwa_install.js — ShareWallet PWA Install v7
+ * pwa_install.js — ShareWallet PWA Install v8
  * Lógica:
- *   1. App já instalado (standalone)  → silêncio total
+ *   1. App já instalado (standalone)  → lê sw_pending_ref do localStorage e navega
  *   2. Rota /produto/                 → silêncio total (comprador, não instalar)
  *   3. Rota /admin                    → troca manifest para manifest-admin.json
- *   4. beforeinstallprompt disparou   → banner automático bonito
+ *   4. beforeinstallprompt disparou   → banner automático bonito (preserva ?ref=)
  *   5. Prompt bloqueado / sem prompt  → silêncio total
  *
- * v7: REMOVIDO registro de SW e reload automático que causavam loop de reset.
- *     SWs são gerenciados apenas pelo flutter_bootstrap.js (sem serviceWorkerSettings).
+ * v8: Suporte a link de afiliado sharewallet.com.br/ref/CODE
+ *     - Lê ?ref= da URL e persiste no localStorage (sw_pending_ref)
+ *     - Ao abrir como PWA standalone, aplica o ref pendente na navegação
+ *     - SWs são gerenciados apenas pelo flutter_bootstrap.js
  */
 (function () {
   'use strict';
 
-  var KEY_INSTALLED = 'sw_pwa_v3_installed';
-  var KEY_DISMISSED = 'sw_pwa_v3_dismissed';
-  var DISMISS_TTL   = 7 * 24 * 60 * 60 * 1000; // 7 dias
+  var KEY_INSTALLED   = 'sw_pwa_v3_installed';
+  var KEY_DISMISSED   = 'sw_pwa_v3_dismissed';
+  var KEY_PENDING_REF = 'sw_pending_ref';
+  var KEY_PENDING_TS  = 'sw_pending_ref_ts';
+  var DISMISS_TTL     = 7 * 24 * 60 * 60 * 1000;  // 7 dias
+  var REF_TTL         = 30 * 24 * 60 * 60 * 1000;  // 30 dias (validade do ref)
 
   /* ── helpers ─────────────────────────────────────────────── */
   function isStandalone() {
@@ -35,6 +40,45 @@
   }
   function markInstalled() { localStorage.setItem(KEY_INSTALLED, '1'); }
   function markDismissed() { localStorage.setItem(KEY_DISMISSED, String(Date.now())); }
+
+  /* ── Ref de afiliado ─────────────────────────────────────── */
+  // Lê ?ref= da URL atual (hash ou search params)
+  function readRefFromUrl() {
+    // Tenta no hash: #/landing?ref=ABC123
+    var hash = window.location.hash || '';
+    var hashMatch = hash.match(/[?&]ref=([^&]+)/);
+    if (hashMatch) return decodeURIComponent(hashMatch[1]).replace(/^@+/, '');
+    // Tenta no search: ?ref=ABC123
+    var searchMatch = window.location.search.match(/[?&]ref=([^&]+)/);
+    if (searchMatch) return decodeURIComponent(searchMatch[1]).replace(/^@+/, '');
+    return null;
+  }
+
+  // Persiste ref no localStorage (sobrescreve se houver um mais novo)
+  function savePendingRef(code) {
+    if (!code) return;
+    localStorage.setItem(KEY_PENDING_REF, code);
+    localStorage.setItem(KEY_PENDING_TS, String(Date.now()));
+  }
+
+  // Lê ref pendente (respeita TTL de 30 dias)
+  function getPendingRef() {
+    var code = localStorage.getItem(KEY_PENDING_REF);
+    var ts   = parseInt(localStorage.getItem(KEY_PENDING_TS) || '0');
+    if (!code) return null;
+    if (Date.now() - ts > REF_TTL) {
+      localStorage.removeItem(KEY_PENDING_REF);
+      localStorage.removeItem(KEY_PENDING_TS);
+      return null;
+    }
+    return code;
+  }
+
+  // Limpa ref pendente após ser consumido
+  function clearPendingRef() {
+    localStorage.removeItem(KEY_PENDING_REF);
+    localStorage.removeItem(KEY_PENDING_TS);
+  }
 
   /* ── CSS ─────────────────────────────────────────────────── */
   function injectCSS() {
@@ -234,6 +278,10 @@
     injectCSS();
     registerSW();
 
+    // ── Captura ref= da URL e persiste (válido por 30 dias) ──────────────────
+    var urlRef = readRefFromUrl();
+    if (urlRef) savePendingRef(urlRef);
+
     // Troca manifest se for rota admin
     swapManifestIfAdmin();
 
@@ -248,8 +296,28 @@
       }
     });
 
-    // Já está como PWA → silêncio total
-    if (isStandalone()) { markInstalled(); return; }
+    // ── PWA já instalado (standalone) ────────────────────────────────────────
+    if (isStandalone()) {
+      markInstalled();
+
+      // Aplica ref pendente: navega para landing com o código do afiliado
+      var pendingRef = getPendingRef();
+      if (pendingRef) {
+        clearPendingRef();
+        // Aguarda o Flutter carregar (300ms) antes de mudar a hash
+        setTimeout(function () {
+          var currentHash = window.location.hash || '';
+          // Só aplica se não estiver já em uma rota de produto
+          if (currentHash.indexOf('/produto/') === -1 &&
+              currentHash.indexOf('/login')    === -1 &&
+              currentHash.indexOf('/home')     === -1) {
+            window.location.hash = '/landing?ref=' + encodeURIComponent(pendingRef);
+          }
+        }, 300);
+      }
+      return;
+    }
+
     // Rota de comprador (/produto/) → silêncio total, sem instalar app
     if (isBuyerRoute()) return;
     // Já instalou antes → silêncio
