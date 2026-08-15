@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -49,8 +48,8 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
   _ShellState _state = _ShellState.checkingBiometric;
 
   // ── Biometria ──────────────────────────────────────────────────────────────
-  bool _biometricAvailable = false;
-  bool _biometricEnabled   = false;
+  bool _biometricAvailable = false; // ignore: unused_field
+  bool _biometricEnabled   = false;  // ignore: unused_field
   bool _bioLoading         = false;
   String? _bioError;
 
@@ -142,17 +141,20 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
     }
   }
 
-  // ── 3. Pular biometria → abre WebView normalmente ─────────────────────────
+  // ── 3. Pular biometria → inicia carregamento do WebView ────────────────────
   void _goToWebView({({String email, String password})? credenciais}) {
+    // Salva credenciais pendentes ANTES de mudar estado
+    if (credenciais != null) {
+      _pendingBiometricCredentials = credenciais;
+    }
+
     setState(() {
       _state      = _ShellState.loading;
       _bioLoading = false;
     });
 
-    // Se tem credenciais da biometria, injeta login automático via JS
-    if (credenciais != null) {
-      _pendingBiometricCredentials = credenciais;
-    }
+    // Só agora inicia o carregamento do WebView (evita tela preta inicial)
+    _ctrl.loadRequest(Uri.parse(WebViewShellScreen._baseUrl));
   }
 
   // Credenciais pendentes para injetar via JS após o WebView carregar
@@ -180,10 +182,12 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
             if (mounted) setState(() => _loadProgress = p);
           },
           onPageStarted: (_) {
-            if (mounted) setState(() { _state = _ShellState.loading; });
+            // Só mostra splash no carregamento INICIAL (checkingBiometric/loading)
+            // Navegações internas após ready só atualizam o progress bar do topo
+            if (mounted) setState(() => _loadProgress = 0);
           },
           onPageFinished: (url) async {
-            // Injeta flag JS para o site detectar APK
+            // Injeta flag JS para o site detectar APK (em toda navegação)
             await _ctrl.runJavaScript(
               'window.ShareWalletNativeApp = true;'
               'document.documentElement.classList.add("sw-native-app");'
@@ -198,7 +202,14 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
               _pendingBiometricCredentials = null;
             }
 
-            if (mounted) setState(() => _state = _ShellState.ready);
+            // Marca como ready (remove splash no carregamento inicial)
+            // Navegações internas já estão em ready, setState é no-op
+            if (mounted) {
+              setState(() {
+                _state        = _ShellState.ready;
+                _loadProgress = 100;
+              });
+            }
           },
           onWebResourceError: (err) {
             if (err.isForMainFrame == true && mounted) {
@@ -217,8 +228,9 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
             return NavigationDecision.prevent;
           },
         ),
-      )
-      ..loadRequest(Uri.parse(WebViewShellScreen._baseUrl));
+      );
+      // loadRequest NÃO é chamado aqui — aguarda _goToWebView() ser chamado
+      // após verificação de biometria, evitando tela preta / splash dupla.
   }
 
   // ── 5. Injeta JS helper para captura de foto ──────────────────────────────
@@ -407,15 +419,16 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
           bottom: true,
           child: Stack(
             children: [
-              // ── WebView (sempre presente na árvore de widgets) ────────────
-              // Fica invisível durante biometria/splash
+              // ── WebView ───────────────────────────────────────────────────
+              // Só fica visível quando ready (splash cobre o loading)
+              // maintainState=true preserva o WebView na árvore mesmo invisível
               Visibility(
-                visible: _state == _ShellState.ready ||
-                         _state == _ShellState.loading,
+                visible: _state == _ShellState.ready,
+                maintainState: true,
                 child: WebViewWidget(controller: _ctrl),
               ),
 
-              // ── Barra de progresso fina ───────────────────────────────────
+              // ── Barra de progresso fina no topo (só quando ready+reload) ──
               if (_state == _ShellState.loading && _loadProgress > 0 && _loadProgress < 100)
                 Positioned(
                   top: 0, left: 0, right: 0,
@@ -430,8 +443,10 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
                 ),
 
               // ── Splash / verificando biometria / carregando ───────────────
-              if (_state == _ShellState.checkingBiometric ||
-                  _state == _ShellState.loading)
+              // Mostra splash em TODOS os estados exceto ready e error
+              if (_state != _ShellState.ready &&
+                  _state != _ShellState.error &&
+                  _state != _ShellState.biometricPrompt)
                 _buildSplash(),
 
               // ── Tela de biometria ─────────────────────────────────────────
@@ -450,22 +465,51 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
 
   // ── Splash ────────────────────────────────────────────────────────────────
   Widget _buildSplash() {
-    return Container(
-      color: const Color(0xFF0A1628),
-      child: const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _LogoWidget(),
-            SizedBox(height: 32),
-            SizedBox(
-              width: 24, height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00E5B4)),
-              ),
-            ),
-          ],
+    // Quando o WebView já passou de 85% → fade-out da splash para não piscar
+    final isNearReady = _state == _ShellState.loading && _loadProgress >= 85;
+
+    return AnimatedOpacity(
+      opacity: isNearReady ? 0.0 : 1.0,
+      duration: const Duration(milliseconds: 300),
+      child: Container(
+        color: const Color(0xFF0A1628),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _LogoWidget(),
+              const SizedBox(height: 32),
+              // Barra de progresso fina quando está carregando o WebView
+              if (_state == _ShellState.loading && _loadProgress > 0)
+                Column(
+                  children: [
+                    SizedBox(
+                      width: 160,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: _loadProgress / 100,
+                          minHeight: 3,
+                          backgroundColor: Colors.white12,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            Color(0xFF00E5B4),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                // Spinner enquanto verifica biometria ou aguarda início
+                const SizedBox(
+                  width: 24, height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00E5B4)),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
