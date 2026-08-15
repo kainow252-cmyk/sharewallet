@@ -232,6 +232,54 @@ def deploy_version_sw():
     print(f'OK: sw_version.js deployado — APP_VERSION={version}')
 
 
+def inject_app_icon():
+    """
+    Injeta o ícone customizado em TODOS os arquivos de ícone do build/web/icons/.
+    O Flutter build sobrescreve os ícones em web/icons/ durante a compilação,
+    gerando arquivos versionados (ex: Icon-v20250625-192.png) que ficam no
+    manifest.json. Esta função substitui TODOS eles pelo ícone customizado
+    em assets/icon/app_icon.png, garantindo que o ícone correto apareça no
+    PWA, na aba do browser e na tela inicial do celular.
+    """
+    try:
+        from PIL import Image
+        import glob
+    except ImportError:
+        print('SKIP: inject_app_icon — Pillow não instalado')
+        return
+
+    icon_src = os.path.join(os.path.dirname(__file__), '..', 'assets', 'icon', 'app_icon.png')
+    if not os.path.exists(icon_src):
+        print(f'SKIP: inject_app_icon — {icon_src} não encontrado')
+        return
+
+    img = Image.open(icon_src).convert('RGBA')
+    icons_dir = os.path.join(BUILD_DIR, 'icons')
+    if not os.path.exists(icons_dir):
+        print(f'SKIP: inject_app_icon — {icons_dir} não encontrado')
+        return
+
+    count = 0
+    # Substituir todos os PNGs em build/web/icons/
+    for png_path in glob.glob(os.path.join(icons_dir, '*.png')):
+        filename = os.path.basename(png_path)
+        # Detectar tamanho pelo nome (192 ou 512)
+        if '512' in filename:
+            size = 512
+        else:
+            size = 192
+        resized = img.resize((size, size), Image.LANCZOS)
+        resized.save(png_path, 'PNG')
+        count += 1
+
+    # Substituir favicon.png
+    favicon_path = os.path.join(BUILD_DIR, 'favicon.png')
+    favicon = img.resize((32, 32), Image.LANCZOS)
+    favicon.save(favicon_path, 'PNG')
+
+    print(f'OK: inject_app_icon — {count} ícones + favicon substituídos pelo ícone customizado')
+
+
 if __name__ == '__main__':
     version = _app_version()
     patch_bootstrap(version)
@@ -241,4 +289,5 @@ if __name__ == '__main__':
     copy_pwa_install()
     copy_admin_manifest()
     deploy_version_sw()
+    inject_app_icon()
     print('Patches aplicados com sucesso.')
