@@ -73,22 +73,24 @@ class AppTheme {
         // Usa Typography.material2021().black como base para herdar os tamanhos
         // e pesos corretos do Material Design 3, adicionando o fallback a cada
         // estilo individualmente (unica forma garantida de funcionar no CanvasKit).
-        textTheme: Typography.material2021().black.copyWith(
-          displayLarge:  Typography.material2021().black.displayLarge?.copyWith(fontFamilyFallback: _fontFallback),
-          displayMedium: Typography.material2021().black.displayMedium?.copyWith(fontFamilyFallback: _fontFallback),
-          displaySmall:  Typography.material2021().black.displaySmall?.copyWith(fontFamilyFallback: _fontFallback),
-          headlineLarge: Typography.material2021().black.headlineLarge?.copyWith(fontFamilyFallback: _fontFallback),
-          headlineMedium:Typography.material2021().black.headlineMedium?.copyWith(fontFamilyFallback: _fontFallback),
-          headlineSmall: Typography.material2021().black.headlineSmall?.copyWith(fontFamilyFallback: _fontFallback),
-          titleLarge:    Typography.material2021().black.titleLarge?.copyWith(fontFamilyFallback: _fontFallback),
-          titleMedium:   Typography.material2021().black.titleMedium?.copyWith(fontFamilyFallback: _fontFallback),
-          titleSmall:    Typography.material2021().black.titleSmall?.copyWith(fontFamilyFallback: _fontFallback),
-          bodyLarge:     Typography.material2021().black.bodyLarge?.copyWith(fontFamilyFallback: _fontFallback),
-          bodyMedium:    Typography.material2021().black.bodyMedium?.copyWith(fontFamilyFallback: _fontFallback),
-          bodySmall:     Typography.material2021().black.bodySmall?.copyWith(fontFamilyFallback: _fontFallback),
-          labelLarge:    Typography.material2021().black.labelLarge?.copyWith(fontFamilyFallback: _fontFallback),
-          labelMedium:   Typography.material2021().black.labelMedium?.copyWith(fontFamilyFallback: _fontFallback),
-          labelSmall:    Typography.material2021().black.labelSmall?.copyWith(fontFamilyFallback: _fontFallback),
+        // TextTheme: usa a base padrão do Material (sem letterSpacing automático
+        // do M3 que distorce números e textos no Android) + fallback NotoColorEmoji.
+        textTheme: TextTheme(
+          displayLarge:  TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          displayMedium: TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          displaySmall:  TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          headlineLarge: TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          headlineMedium:TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          headlineSmall: TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          titleLarge:    TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          titleMedium:   TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          titleSmall:    TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          bodyLarge:     TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          bodyMedium:    TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          bodySmall:     TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          labelLarge:    TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          labelMedium:   TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
+          labelSmall:    TextStyle(fontFamilyFallback: _fontFallback, letterSpacing: 0),
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColors.primary,
@@ -99,7 +101,7 @@ class AppTheme {
             color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
+            letterSpacing: 0,
           ),
         ),
         cardTheme: CardThemeData(
@@ -123,7 +125,7 @@ class AppTheme {
             textStyle: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
+              letterSpacing: 0,
             ),
           ),
         ),
