@@ -128,9 +128,9 @@ class _WebViewShellScreenState extends State<WebViewShellScreen> {
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF0A1628),
-        // SafeArea só no topo — empurra o WebView pra baixo da status bar
+        // SafeArea top + bottom — respeita status bar e barra de navegação Android
         body: SafeArea(
-          bottom: false,
+          bottom: true,
           child: Stack(
             children: [
               // ── WebView ──────────────────────────────────────────────────
