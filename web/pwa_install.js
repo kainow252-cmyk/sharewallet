@@ -1,67 +1,72 @@
 /**
- * pwa_install.js — ShareWallet PWA Install v8
- * Lógica:
- *   1. App já instalado (standalone)  → lê sw_pending_ref do localStorage e navega
- *   2. Rota /produto/                 → silêncio total (comprador, não instalar)
- *   3. Rota /admin                    → troca manifest para manifest-admin.json
- *   4. beforeinstallprompt disparou   → banner automático bonito (preserva ?ref=)
- *   5. Prompt bloqueado / sem prompt  → silêncio total
+ * pwa_install.js — ShareWallet PWA Install v9
  *
- * v8: Suporte a link de afiliado sharewallet.com.br/ref/CODE
- *     - Lê ?ref= da URL e persiste no localStorage (sw_pending_ref)
- *     - Ao abrir como PWA standalone, aplica o ref pendente na navegação
- *     - SWs são gerenciados apenas pelo flutter_bootstrap.js
+ * LÓGICA v9 (mobile-first, sem depender do beforeinstallprompt):
+ *
+ *   1. standalone (PWA já instalada)  → pula landing, abre app direto
+ *   2. /produto/                      → silêncio total (comprador)
+ *   3. /admin                         → troca manifest para admin
+ *   4. Mobile (Android/iOS)           → mostra banner manual SEMPRE
+ *      a) beforeinstallprompt OK      → botão "Instalar" 1 clique (Chrome Android)
+ *      b) iOS                         → guia passo-a-passo (Compartilhar → Add to Home)
+ *      c) Chrome sem prompt           → guia passo-a-passo (menu ⋮ → Instalar app)
+ *   5. Dismissed < 3 dias             → não mostra novamente
  */
 (function () {
   'use strict';
 
   var KEY_INSTALLED   = 'sw_pwa_v3_installed';
-  var KEY_DISMISSED   = 'sw_pwa_v3_dismissed';
+  var KEY_DISMISSED   = 'sw_pwa_v9_dismissed';   // v9: chave nova para resetar dismiss antigo
   var KEY_PENDING_REF = 'sw_pending_ref';
   var KEY_PENDING_TS  = 'sw_pending_ref_ts';
-  var DISMISS_TTL     = 7 * 24 * 60 * 60 * 1000;  // 7 dias
-  var REF_TTL         = 30 * 24 * 60 * 60 * 1000;  // 30 dias (validade do ref)
+  var DISMISS_TTL     = 3 * 24 * 60 * 60 * 1000;  // 3 dias (reduzido de 7)
+  var REF_TTL         = 30 * 24 * 60 * 60 * 1000;
 
-  /* ── helpers ─────────────────────────────────────────────── */
+  /* ── helpers ──────────────────────────────────────────────────────────── */
   function isStandalone() {
     return window.matchMedia('(display-mode: standalone)').matches ||
            navigator.standalone === true;
   }
-  function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
-  function isAndroid() { return /android/i.test(navigator.userAgent); }
-  function wasInstalled() { return localStorage.getItem(KEY_INSTALLED) === '1'; }
+  function isIOS() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  }
+  function isAndroid() {
+    return /android/i.test(navigator.userAgent);
+  }
+  function isMobile() {
+    return isIOS() || isAndroid();
+  }
+  function wasInstalled() {
+    return localStorage.getItem(KEY_INSTALLED) === '1';
+  }
   function isBuyerRoute() {
-    var hash = window.location.hash || '';
-    return hash.indexOf('/produto/') !== -1;
+    return (window.location.hash || '').indexOf('/produto/') !== -1;
+  }
+  function isAdminRoute() {
+    return (window.location.hash || '').indexOf('/admin') !== -1;
   }
   function wasDismissed() {
     var t = localStorage.getItem(KEY_DISMISSED);
-    return !!t && (Date.now() - parseInt(t)) < DISMISS_TTL;
+    if (!t) return false;
+    return (Date.now() - parseInt(t)) < DISMISS_TTL;
   }
-  function markInstalled() { localStorage.setItem(KEY_INSTALLED, '1'); }
-  function markDismissed() { localStorage.setItem(KEY_DISMISSED, String(Date.now())); }
+  function markInstalled()  { localStorage.setItem(KEY_INSTALLED, '1'); }
+  function markDismissed()  { localStorage.setItem(KEY_DISMISSED, String(Date.now())); }
 
-  /* ── Ref de afiliado ─────────────────────────────────────── */
-  // Lê ?ref= da URL atual (hash ou search params)
+  /* ── ref de afiliado ─────────────────────────────────────────────────── */
   function readRefFromUrl() {
-    // Tenta no hash: #/landing?ref=ABC123
     var hash = window.location.hash || '';
-    var hashMatch = hash.match(/[?&]ref=([^&]+)/);
-    if (hashMatch) return decodeURIComponent(hashMatch[1]).replace(/^@+/, '');
-    // Tenta no search: ?ref=ABC123
-    var searchMatch = window.location.search.match(/[?&]ref=([^&]+)/);
-    if (searchMatch) return decodeURIComponent(searchMatch[1]).replace(/^@+/, '');
+    var hm = hash.match(/[?&]ref=([^&]+)/);
+    if (hm) return decodeURIComponent(hm[1]).replace(/^@+/, '');
+    var sm = window.location.search.match(/[?&]ref=([^&]+)/);
+    if (sm) return decodeURIComponent(sm[1]).replace(/^@+/, '');
     return null;
   }
-
-  // Persiste ref no localStorage (sobrescreve se houver um mais novo)
   function savePendingRef(code) {
     if (!code) return;
     localStorage.setItem(KEY_PENDING_REF, code);
     localStorage.setItem(KEY_PENDING_TS, String(Date.now()));
   }
-
-  // Lê ref pendente (respeita TTL de 30 dias)
   function getPendingRef() {
     var code = localStorage.getItem(KEY_PENDING_REF);
     var ts   = parseInt(localStorage.getItem(KEY_PENDING_TS) || '0');
@@ -73,193 +78,214 @@
     }
     return code;
   }
-
-  // Limpa ref pendente após ser consumido
   function clearPendingRef() {
     localStorage.removeItem(KEY_PENDING_REF);
     localStorage.removeItem(KEY_PENDING_TS);
   }
 
-  /* ── CSS ─────────────────────────────────────────────────── */
+  /* ── fechar painel ──────────────────────────────────────────────────── */
+  function closePanel(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.style.transition = 'transform .3s ease, opacity .3s ease';
+    el.style.transform  = 'translateY(110%)';
+    el.style.opacity    = '0';
+    setTimeout(function () { if (el.parentNode) el.remove(); }, 350);
+  }
+
+  /* ── toast ──────────────────────────────────────────────────────────── */
+  function toast(msg) {
+    var t = document.createElement('div');
+    t.style.cssText =
+      'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);' +
+      'background:#C9A84C;color:#0f1e12;font-weight:800;' +
+      'padding:12px 26px;border-radius:30px;font-size:14px;' +
+      'z-index:2147483647;white-space:nowrap;' +
+      'box-shadow:0 4px 24px rgba(201,168,76,.5);' +
+      'font-family:-apple-system,BlinkMacSystemFont,sans-serif;';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, 3500);
+  }
+
+  /* ── CSS ──────────────────────────────────────────────────────────────  */
+  var ICON = '/app/icons/Icon-v202606251651-192.png';
+
   function injectCSS() {
     if (document.getElementById('pwa-css')) return;
     var s = document.createElement('style');
     s.id = 'pwa-css';
-    s.textContent = [
-      /* ── animação ── */
-      '@keyframes pwa-up{from{transform:translateY(110%);opacity:0}to{transform:translateY(0);opacity:1}}',
-      '@keyframes pwa-pulse{0%,100%{box-shadow:0 0 0 0 rgba(201,168,76,.5)}70%{box-shadow:0 0 0 10px rgba(201,168,76,0)}}',
+    s.textContent =
+      '@keyframes pwa-up{from{transform:translateY(110%);opacity:0}to{transform:translateY(0);opacity:1}}' +
+      '@keyframes pwa-pulse{0%,100%{box-shadow:0 0 0 0 rgba(201,168,76,.45)}70%{box-shadow:0 0 0 10px rgba(201,168,76,0)}}' +
+      '@keyframes pwa-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}' +
 
-      /* ── banner automático (quando prompt disparar) ── */
-      '#pwa-banner{',
-        'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;',
-        'background:linear-gradient(170deg,#0f2318 0%,#1c3522 100%);',
-        'border-top:2px solid #C9A84C;',
-        'padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));',
-        'display:flex;align-items:center;gap:14px;',
-        'box-shadow:0 -8px 40px rgba(0,0,0,.8);',
-        'animation:pwa-up .4s cubic-bezier(.22,.68,0,1.2) both;',
-        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;',
-      '}',
-      '#pwa-banner img{width:54px;height:54px;border-radius:14px;flex-shrink:0;border:2px solid rgba(201,168,76,.5);}',
-      '#pwa-banner .pwa-txt{flex:1;min-width:0;}',
-      '#pwa-banner .pwa-txt b{display:block;font-size:15px;font-weight:800;color:#fff;margin-bottom:3px;}',
-      '#pwa-banner .pwa-txt span{font-size:12px;color:rgba(255,255,255,.6);}',
-      '#pwa-banner .pwa-actions{display:flex;flex-direction:column;gap:7px;flex-shrink:0;}',
-      '#pwa-btn-install{',
-        'padding:11px 18px;border-radius:10px;border:none;cursor:pointer;',
-        'font-size:14px;font-weight:800;',
-        'background:linear-gradient(135deg,#C9A84C,#f0c84a);color:#0f1e12;',
-        'box-shadow:0 3px 14px rgba(201,168,76,.5);',
-        'animation:pwa-pulse 2s infinite;',
-      '}',
-      '#pwa-btn-later{',
-        'padding:6px;border-radius:8px;border:none;cursor:pointer;',
-        'background:transparent;color:rgba(255,255,255,.4);font-size:11px;',
-      '}',
+      /* ── banner principal ─────────────────────────────────────────── */
+      '#pwa-banner{' +
+        'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;' +
+        'background:linear-gradient(170deg,#0f2318 0%,#1a3520 100%);' +
+        'border-top:2px solid #C9A84C;' +
+        'padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));' +
+        'box-shadow:0 -10px 48px rgba(0,0,0,.85);' +
+        'animation:pwa-up .45s cubic-bezier(.22,.68,0,1.2) both;' +
+        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+      '}' +
 
-      /* ── card guia — mantido no CSS mas nunca exibido (reserva futura) ── */
-      '#pwa-guide{',
-        'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;',
-        'background:linear-gradient(170deg,#0f2318 0%,#1c3522 100%);',
-        'border-top:2px solid #C9A84C;',
-        'padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));',
-        'box-shadow:0 -8px 40px rgba(0,0,0,.8);',
-        'animation:pwa-up .4s cubic-bezier(.22,.68,0,1.2) both;',
-        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;',
-      '}',
-      '#pwa-guide .pwa-g-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;}',
-      '#pwa-guide .pwa-g-head img{width:46px;height:46px;border-radius:12px;border:2px solid rgba(201,168,76,.4);}',
-      '#pwa-guide .pwa-g-head div b{display:block;font-size:15px;font-weight:800;color:#fff;}',
-      '#pwa-guide .pwa-g-head div span{font-size:12px;color:rgba(255,255,255,.55);}',
+      /* linha de cima: logo + texto + fechar */
+      '#pwa-banner .pwa-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;}' +
+      '#pwa-banner .pwa-row img{width:50px;height:50px;border-radius:13px;flex-shrink:0;border:2px solid rgba(201,168,76,.5);}' +
+      '#pwa-banner .pwa-info{flex:1;min-width:0;}' +
+      '#pwa-banner .pwa-info b{display:block;font-size:15px;font-weight:800;color:#fff;margin-bottom:2px;}' +
+      '#pwa-banner .pwa-info span{font-size:12px;color:rgba(255,255,255,.6);}' +
+      '#pwa-banner .pwa-close{' +
+        'width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;' +
+        'background:rgba(255,255,255,.1);color:rgba(255,255,255,.55);' +
+        'font-size:16px;line-height:1;flex-shrink:0;' +
+        'display:flex;align-items:center;justify-content:center;' +
+      '}' +
 
-      /* passos visuais */
-      '#pwa-guide .pwa-steps{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}',
-      '#pwa-guide .pwa-step{',
-        'display:flex;align-items:center;gap:12px;',
-        'background:rgba(255,255,255,.05);border-radius:12px;padding:12px;',
-        'border:1px solid rgba(201,168,76,.15);',
-      '}',
-      '#pwa-guide .pwa-step .pwa-num{',
-        'width:28px;height:28px;border-radius:50%;flex-shrink:0;',
-        'background:#C9A84C;color:#0f1e12;',
-        'font-size:13px;font-weight:900;',
-        'display:flex;align-items:center;justify-content:center;',
-      '}',
-      '#pwa-guide .pwa-step .pwa-step-txt{flex:1;}',
-      '#pwa-guide .pwa-step .pwa-step-txt b{display:block;font-size:13px;color:#fff;margin-bottom:1px;}',
-      '#pwa-guide .pwa-step .pwa-step-txt span{font-size:11px;color:rgba(255,255,255,.5);}',
-      '#pwa-guide .pwa-step .pwa-step-ico{font-size:26px;flex-shrink:0;}',
+      /* botão instalar único */
+      '#pwa-btn-install{' +
+        'width:100%;padding:14px;border-radius:12px;border:none;cursor:pointer;' +
+        'font-size:15px;font-weight:800;letter-spacing:.3px;' +
+        'background:linear-gradient(135deg,#C9A84C 0%,#f0c84a 100%);color:#0f1e12;' +
+        'box-shadow:0 4px 18px rgba(201,168,76,.5);' +
+        'animation:pwa-pulse 2s infinite;' +
+        'display:flex;align-items:center;justify-content:center;gap:8px;' +
+      '}' +
 
-      /* seta animada apontando para os 3 pontos */
-      '#pwa-guide .pwa-arrow-hint{',
-        'text-align:right;font-size:11px;color:#C9A84C;',
-        'margin-bottom:4px;font-weight:700;',
-        'animation:pwa-pulse 1.5s infinite;',
-      '}',
-
-      '#pwa-guide-close{',
-        'width:100%;padding:10px;border-radius:10px;',
-        'border:1px solid rgba(255,255,255,.12);background:transparent;',
-        'color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;',
-      '}',
-    ].join('');
+      /* guia passo a passo (iOS / Chrome sem prompt) */
+      '#pwa-guide{' +
+        'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;' +
+        'background:linear-gradient(170deg,#0f2318 0%,#1a3520 100%);' +
+        'border-top:2px solid #C9A84C;' +
+        'padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));' +
+        'box-shadow:0 -10px 48px rgba(0,0,0,.85);' +
+        'animation:pwa-up .45s cubic-bezier(.22,.68,0,1.2) both;' +
+        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+      '}' +
+      '#pwa-guide .pwa-g-title{display:flex;align-items:center;gap:12px;margin-bottom:14px;}' +
+      '#pwa-guide .pwa-g-title img{width:44px;height:44px;border-radius:11px;border:2px solid rgba(201,168,76,.4);}' +
+      '#pwa-guide .pwa-g-title b{font-size:15px;font-weight:800;color:#fff;display:block;}' +
+      '#pwa-guide .pwa-g-title span{font-size:11px;color:rgba(255,255,255,.5);}' +
+      '#pwa-guide .pwa-g-close{float:right;width:28px;height:28px;border-radius:50%;border:none;cursor:pointer;background:rgba(255,255,255,.1);color:rgba(255,255,255,.55);font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}' +
+      '#pwa-guide .pwa-steps{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}' +
+      '#pwa-guide .pwa-step{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.05);border-radius:12px;padding:11px 12px;border:1px solid rgba(201,168,76,.15);}' +
+      '#pwa-guide .pwa-num{width:26px;height:26px;border-radius:50%;flex-shrink:0;background:#C9A84C;color:#0f1e12;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;}' +
+      '#pwa-guide .pwa-step-ico{font-size:24px;flex-shrink:0;}' +
+      '#pwa-guide .pwa-step-txt{flex:1;}' +
+      '#pwa-guide .pwa-step-txt b{display:block;font-size:13px;color:#fff;margin-bottom:1px;}' +
+      '#pwa-guide .pwa-step-txt s{font-size:11px;color:rgba(255,255,255,.5);font-style:normal;text-decoration:none;}' +
+      '#pwa-guide-dismiss{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:transparent;color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;}';
     document.head.appendChild(s);
   }
 
-  /* ── fecha um painel ─────────────────────────────────────── */
-  function closePanel(id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.style.transition = 'transform .25s ease, opacity .25s ease';
-    el.style.transform  = 'translateY(110%)';
-    el.style.opacity    = '0';
-    setTimeout(function () { el && el.parentNode && el.remove(); }, 300);
-  }
-
-  /* ── toast ───────────────────────────────────────────────── */
-  function toast(msg) {
-    var t = document.createElement('div');
-    t.style.cssText = [
-      'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);',
-      'background:#C9A84C;color:#0f1e12;font-weight:800;',
-      'padding:11px 24px;border-radius:28px;font-size:13px;',
-      'z-index:2147483647;white-space:nowrap;',
-      'box-shadow:0 4px 20px rgba(201,168,76,.5);',
-      'font-family:-apple-system,BlinkMacSystemFont,sans-serif;',
-      'animation:pwa-up .3s ease both;',
-    ].join('');
-    t.textContent = msg;
-    document.body.appendChild(t);
-    setTimeout(function () { t.parentNode && t.remove(); }, 3500);
-  }
-
-  var ICON = '/app/icons/Icon-v202606251651-192.png';
-
-  /* ── Banner automático (prompt disponível) ───────────────── */
-  function showAutoBanner(promptEvt) {
+  /* ── Banner 1 clique — Chrome Android com beforeinstallprompt ────────── */
+  function showInstallBanner(promptEvt) {
+    if (document.getElementById('pwa-banner') || document.getElementById('pwa-guide')) return;
     closePanel('pwa-guide');
-    if (document.getElementById('pwa-banner')) return;
 
     var el = document.createElement('div');
     el.id  = 'pwa-banner';
     el.innerHTML =
-      '<img src="' + ICON + '" alt="ShareWallet">' +
-      '<div class="pwa-txt">' +
-        '<b>Instalar ShareWallet</b>' +
-        '<span>Acesse como app, sem precisar do navegador</span>' +
+      '<div class="pwa-row">' +
+        '<img src="' + ICON + '" alt="">' +
+        '<div class="pwa-info">' +
+          '<b>Instalar ShareWallet</b>' +
+          '<span>Acesse como app direto da tela inicial</span>' +
+        '</div>' +
+        '<button class="pwa-close" id="pwa-banner-close">✕</button>' +
       '</div>' +
-      '<div class="pwa-actions">' +
-        '<button id="pwa-btn-install">Instalar</button>' +
-        '<button id="pwa-btn-later">Agora não</button>' +
-      '</div>';
+      '<button id="pwa-btn-install">' +
+        '<span style="font-size:20px">📲</span> Instalar app — é grátis' +
+      '</button>';
     document.body.appendChild(el);
 
-    document.getElementById('pwa-btn-later').onclick = function () {
+    document.getElementById('pwa-banner-close').onclick = function () {
       markDismissed();
       closePanel('pwa-banner');
     };
 
     document.getElementById('pwa-btn-install').onclick = function () {
       closePanel('pwa-banner');
-      promptEvt.prompt();
-      promptEvt.userChoice.then(function (r) {
-        if (r.outcome === 'accepted') {
-          markInstalled();
-          toast('✅ ShareWallet instalado!');
-        }
-      });
+      if (promptEvt) {
+        promptEvt.prompt();
+        promptEvt.userChoice.then(function (r) {
+          if (r.outcome === 'accepted') { markInstalled(); toast('✅ ShareWallet instalado!'); }
+        });
+      }
     };
   }
 
-  /* ── Troca manifest para admin quando na rota #/admin ─────── */
-  function swapManifestIfAdmin() {
-    var hash = window.location.hash || '';
-    if (hash.indexOf('/admin') === -1) return;
-    var link = document.querySelector('link[rel="manifest"]');
-    if (!link) return;
-    var current = link.getAttribute('href') || '';
-    if (current.indexOf('manifest-admin') !== -1) return; // já trocou
-    link.setAttribute('href', current.replace('manifest.json', 'manifest-admin.json'));
+  /* ── Guia passo-a-passo — iOS e Android sem prompt ────────────────────  */
+  function showGuide() {
+    if (document.getElementById('pwa-banner') || document.getElementById('pwa-guide')) return;
+
+    var ios     = isIOS();
+    var steps   = ios ? [
+      { ico: '1️⃣', label: 'Toque em',          detail: 'Compartilhar  (ícone de caixa com seta ↑)' },
+      { ico: '2️⃣', label: 'Role e toque em',   detail: '"Adicionar à Tela de Início"' },
+      { ico: '3️⃣', label: 'Confirme tocando em', detail: '"Adicionar" no canto superior direito' },
+    ] : [
+      { ico: '1️⃣', label: 'Toque no menu',     detail: 'Ícone ⋮ (três pontos) no canto superior direito' },
+      { ico: '2️⃣', label: 'Toque em',           detail: '"Instalar app" ou "Adicionar à tela inicial"' },
+      { ico: '3️⃣', label: 'Confirme e pronto!', detail: 'O app aparece na sua tela inicial' },
+    ];
+
+    var stepsHtml = steps.map(function (s) {
+      return '<div class="pwa-step">' +
+        '<div class="pwa-num">' + (steps.indexOf(s) + 1) + '</div>' +
+        '<span class="pwa-step-ico">' + s.ico + '</span>' +
+        '<div class="pwa-step-txt">' +
+          '<b>' + s.label + '</b>' +
+          '<s>' + s.detail + '</s>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    var el = document.createElement('div');
+    el.id  = 'pwa-guide';
+    el.innerHTML =
+      '<div class="pwa-g-title">' +
+        '<img src="' + ICON + '" alt="">' +
+        '<div style="flex:1">' +
+          '<b>Instalar ShareWallet</b>' +
+          '<span>' + (ios ? 'Siga os passos abaixo no Safari' : 'Siga os passos abaixo') + '</span>' +
+        '</div>' +
+        '<button class="pwa-g-close" id="pwa-guide-x">✕</button>' +
+      '</div>' +
+      '<div class="pwa-steps">' + stepsHtml + '</div>' +
+      '<button id="pwa-guide-dismiss">Agora não</button>';
+    document.body.appendChild(el);
+
+    document.getElementById('pwa-guide-x').onclick = function () {
+      markDismissed(); closePanel('pwa-guide');
+    };
+    document.getElementById('pwa-guide-dismiss').onclick = function () {
+      markDismissed(); closePanel('pwa-guide');
+    };
   }
 
-  /* ── SW registration ─────────────────────────────────────── */
-  // v7: NÃO registra Service Worker nem faz reload automático.
-  // Motivo: o sw_version.js v3 anterior causava loop infinito de reset:
-  //   activate → postMessage(SW_AUTO_RELOAD) → location.reload() → novo SW → loop
-  // O Cloudflare Worker já serve cache correto (immutable para main.dart.js).
-  // O flutter_bootstrap.js NÃO tem serviceWorkerSettings (removido pelo patch_build.py).
-  // Portanto, nenhum SW precisa ser registrado aqui.
+  /* ── Troca manifest admin ─────────────────────────────────────────────── */
+  function swapManifestIfAdmin() {
+    if (!isAdminRoute()) return;
+    var link = document.querySelector('link[rel="manifest"]');
+    if (!link) return;
+    var cur = link.getAttribute('href') || '';
+    if (cur.indexOf('manifest-admin') !== -1) return;
+    link.setAttribute('href', cur.replace('manifest.json', 'manifest-admin.json'));
+  }
+
+  /* ── limpa SWs residuais ─────────────────────────────────────────────── */
   function registerSW() {
-    // Desregistra qualquer SW residual de versões anteriores
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(regs) {
-        regs.forEach(function(r) { r.unregister(); });
-      }).catch(function() {});
+      navigator.serviceWorker.getRegistrations()
+        .then(function(regs) { regs.forEach(function(r) { r.unregister(); }); })
+        .catch(function() {});
     }
   }
 
-  /* ── captura o prompt ANTES de qualquer coisa ────────────── */
+  /* ── captura prompt cedo ─────────────────────────────────────────────── */
   var _prompt = null;
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
@@ -273,22 +299,19 @@
     toast('✅ ShareWallet instalado!');
   });
 
-  /* ── init ────────────────────────────────────────────────── */
+  /* ── INIT ────────────────────────────────────────────────────────────── */
   function init() {
     injectCSS();
     registerSW();
 
-    // ── Captura ref= da URL e persiste (válido por 30 dias) ──────────────────
+    // Persiste ref de afiliado da URL
     var urlRef = readRefFromUrl();
     if (urlRef) savePendingRef(urlRef);
 
-    // Troca manifest se for rota admin
     swapManifestIfAdmin();
-
-    // Observa mudanças de hash (SPA navigation admin ↔ app)
     window.addEventListener('hashchange', swapManifestIfAdmin);
 
-    // Fecha banner de instalação ao navegar para rota de comprador
+    // Fecha banners ao navegar para rota de comprador
     window.addEventListener('hashchange', function () {
       if (isBuyerRoute()) {
         closePanel('pwa-banner');
@@ -296,19 +319,16 @@
       }
     });
 
-    // ── PWA já instalada (standalone) ────────────────────────────────────────
-    // O usuário abriu o ícone do app na tela home do celular.
-    // Nunca mostramos a landing nesse caso: redirecionamos direto para o app.
+    /* ── 1. PWA já instalada (standalone) ─────────────────────────── */
     if (isStandalone()) {
       markInstalled();
 
       var pendingRef = getPendingRef();
 
-      // Aguarda o Flutter iniciar (150ms é suficiente — só muda o hash antes do router processar)
       setTimeout(function () {
         var currentHash = window.location.hash || '';
 
-        // Se veio com ref pendente de indicação → aplica na landing (cadastro)
+        // Ref pendente de indicação → vai para landing com código
         if (pendingRef) {
           clearPendingRef();
           if (currentHash.indexOf('/produto/') === -1 &&
@@ -320,42 +340,43 @@
           return;
         }
 
-        // Se está na landing (sem ref) → pula direto para o splash (raiz)
-        // O SplashScreen lê o localStorage UID e vai direto para /home se logado
-        var isOnLanding = currentHash === '' ||
-                          currentHash === '#/' ||
-                          currentHash.indexOf('/landing') !== -1;
-
-        if (isOnLanding) {
-          // Limpa o sessionStorage gravado pelo index.html ANTES do Flutter ler
-          // (evita o Dart redirecionar para /landing mesmo com standalone)
+        // Na landing sem ref → vai direto para splash (SplashScreen decide home/login)
+        var onLanding = !currentHash || currentHash === '#' || currentHash === '#/' ||
+                        currentHash.indexOf('/landing') !== -1;
+        if (onLanding) {
           try { sessionStorage.removeItem('flutter_initial_route'); } catch(e) {}
           window.location.hash = '/';
         }
-        // Qualquer outra rota (home, login, produto) → não interfere
       }, 150);
 
-      return;
+      return; // não mostra banner
     }
 
-    // Rota de comprador (/produto/) → silêncio total, sem instalar app
+    /* ── 2. Rota comprador → silêncio ─────────────────────────────── */
     if (isBuyerRoute()) return;
-    // Já instalou antes → silêncio
+
+    /* ── 3. Desktop → silêncio ────────────────────────────────────── */
+    if (!isMobile()) return;
+
+    /* ── 4. Já instalou antes → silêncio ──────────────────────────── */
     if (wasInstalled()) return;
-    // Dispensou recentemente → silêncio
+
+    /* ── 5. Dispensou recentemente → silêncio ─────────────────────── */
     if (wasDismissed()) return;
 
-    // Só mostra em celular e APENAS quando o Chrome oferecer o prompt nativo
-    if (!isIOS() && !isAndroid()) return;
-
-    // Aguarda 3s para o app carregar e verifica se o prompt está disponível
+    /* ── 6. Mostra banner após 2.5s (deixa o app carregar primeiro) ── */
     setTimeout(function () {
+      // Rota de comprador pode ter mudado enquanto aguardávamos
+      if (isBuyerRoute() || isStandalone()) return;
+
       if (_prompt) {
-        // Chrome deu o prompt → banner automático (toque de 1 botão)
-        showAutoBanner(_prompt);
+        // Chrome Android com prompt nativo disponível → banner 1 clique
+        showInstallBanner(_prompt);
+      } else {
+        // iOS ou Chrome que bloqueou o prompt → guia passo-a-passo
+        showGuide();
       }
-      // Sem prompt → silêncio total. Não mostrar guia de passos.
-    }, 3000);
+    }, 2500);
   }
 
   if (document.readyState === 'loading') {
