@@ -323,33 +323,7 @@
       letter-spacing: 0.3px;
       animation: swTextIn 0.5s ease-out 0.45s both;
     }
-
-    /* Barra de progresso na base */
-    .sw-progress-track {
-      position: absolute;
-      bottom: 52px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 140px;
-      height: 3px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 99px;
-      overflow: hidden;
-      animation: swTextIn 0.5s ease-out 0.5s both;
-    }
-
-    .sw-progress-bar {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #C9A84C, #F0D070, #C9A84C);
-      background-size: 200% 100%;
-      border-radius: 99px;
-      animation:
-        swProgressFill 10s cubic-bezier(0.25, 0, 0.1, 1) 0.3s forwards,
-        swShimmer 1.4s linear infinite;
-    }
-
-    /* Copyright */
+/* Copyright */
     .sw-copy {
       position: absolute;
       bottom: 22px;
@@ -374,18 +348,12 @@
       0%, 100% { transform: scale(0.92); opacity: 0.7; }
       50%       { transform: scale(1.08); opacity: 1; }
     }
-
-    @keyframes swProgressFill {
-      0%   { width: 0%; }
-      30%  { width: 45%; }
+30%  { width: 45%; }
       60%  { width: 72%; }
       85%  { width: 88%; }
       100% { width: 94%; }   /* Para em 94% — Flutter completa ao chegar */
     }
-
-    @keyframes swShimmer {
-      0%   { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
+100% { background-position: -200% 0; }
     }
   </style>
 
@@ -404,11 +372,6 @@
 
     <p class="sw-brand">ShareWallet</p>
     <p class="sw-tagline">Transforme conexões em receita</p>
-
-    <div class="sw-progress-track">
-      <div class="sw-progress-bar"></div>
-    </div>
-
     <span class="sw-copy">© 2025 ShareWallet</span>
   </div>
 
