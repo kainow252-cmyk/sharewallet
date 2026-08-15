@@ -296,25 +296,45 @@
       }
     });
 
-    // ── PWA já instalado (standalone) ────────────────────────────────────────
+    // ── PWA já instalada (standalone) ────────────────────────────────────────
+    // O usuário abriu o ícone do app na tela home do celular.
+    // Nunca mostramos a landing nesse caso: redirecionamos direto para o app.
     if (isStandalone()) {
       markInstalled();
 
-      // Aplica ref pendente: navega para landing com o código do afiliado
       var pendingRef = getPendingRef();
-      if (pendingRef) {
-        clearPendingRef();
-        // Aguarda o Flutter carregar (300ms) antes de mudar a hash
-        setTimeout(function () {
-          var currentHash = window.location.hash || '';
-          // Só aplica se não estiver já em uma rota de produto
+
+      // Aguarda o Flutter iniciar (150ms é suficiente — só muda o hash antes do router processar)
+      setTimeout(function () {
+        var currentHash = window.location.hash || '';
+
+        // Se veio com ref pendente de indicação → aplica na landing (cadastro)
+        if (pendingRef) {
+          clearPendingRef();
           if (currentHash.indexOf('/produto/') === -1 &&
               currentHash.indexOf('/login')    === -1 &&
-              currentHash.indexOf('/home')     === -1) {
+              currentHash.indexOf('/home')     === -1 &&
+              currentHash.indexOf('/admin')    === -1) {
             window.location.hash = '/landing?ref=' + encodeURIComponent(pendingRef);
           }
-        }, 300);
-      }
+          return;
+        }
+
+        // Se está na landing (sem ref) → pula direto para o splash (raiz)
+        // O SplashScreen lê o localStorage UID e vai direto para /home se logado
+        var isOnLanding = currentHash === '' ||
+                          currentHash === '#/' ||
+                          currentHash.indexOf('/landing') !== -1;
+
+        if (isOnLanding) {
+          // Limpa o sessionStorage gravado pelo index.html ANTES do Flutter ler
+          // (evita o Dart redirecionar para /landing mesmo com standalone)
+          try { sessionStorage.removeItem('flutter_initial_route'); } catch(e) {}
+          window.location.hash = '/';
+        }
+        // Qualquer outra rota (home, login, produto) → não interfere
+      }, 150);
+
       return;
     }
 

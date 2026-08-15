@@ -152,6 +152,26 @@
     (function() {
       try {
         var hash = window.location.hash; // "#/produto/p_xxx?ref=CODE"
+
+        // ── PWA Standalone: detecta abertura pelo ícone do app ───────────────
+        // Se o app está instalado (standalone) e o hash aponta para /landing,
+        // limpamos o sessionStorage e redirecionamos para '/' ANTES do Flutter
+        // iniciar. O SplashScreen cuida do resto (localStorage UID → home/login).
+        var isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                        || navigator.standalone === true;
+
+        if (isStandalone) {
+          var isLanding = !hash || hash === '#' || hash === '#/' || hash.indexOf('/landing') !== -1;
+          if (isLanding) {
+            // Remove da sessionStorage qualquer rota de landing gravada antes
+            try { sessionStorage.removeItem('flutter_initial_route'); } catch(e2) {}
+            // Força hash para raiz → SplashScreen decide home/login
+            window.location.replace(window.location.pathname + window.location.search + '#/');
+            return; // não grava sessionStorage com /landing
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         if (hash && hash.length > 1) {
           // Remove o "#" inicial
           var fragment = hash.substring(1); // "/produto/p_xxx?ref=CODE"
