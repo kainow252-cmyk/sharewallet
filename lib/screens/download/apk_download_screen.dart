@@ -7,8 +7,9 @@ import 'package:url_launcher/url_launcher.dart';
 class ApkDownloadScreen extends StatelessWidget {
   const ApkDownloadScreen({super.key});
 
+  // APK hospedado no GitHub Releases — link permanente
   static const _apkUrl =
-      'https://api.sharewallet.com.br/apk/download';
+      'https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.1/ShareWallet.apk';
 
   Future<void> _download() async {
     final uri = Uri.parse(_apkUrl);

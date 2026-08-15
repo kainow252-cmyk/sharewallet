@@ -2,6 +2,12 @@
   X-Frame-Options: ALLOWALL
   Access-Control-Allow-Origin: *
 
+# APK: força download (não tenta renderizar no browser)
+/ShareWallet.apk
+  Content-Type: application/vnd.android.package-archive
+  Content-Disposition: attachment; filename="ShareWallet.apk"
+  Cache-Control: no-cache, no-store, must-revalidate
+
 # index.html: sempre revalidar (nunca servir stale — contém versão do app)
 /index.html
   Content-Type: text/html; charset=utf-8
