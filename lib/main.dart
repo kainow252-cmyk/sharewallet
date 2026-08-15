@@ -135,12 +135,13 @@ void main() async {
     initialAffiliateCode: initialAffiliateCode,
   ));
 
-  // ── Remove o HTML splash nativo assim que o PRIMEIRO frame for pintado ────
-  // Funciona independente da rota inicial (SplashScreen, HomeScreen, etc.)
-  // Resolve o bug de F5 na /home que deixava o splash travado na tela.
+  // ── Remove o HTML splash nativo após as animações iniciais do Flutter ───────
+  // Aguarda 800ms após o 1º frame para cobrir as animações de entrada da
+  // LandingScreen (hero: 600ms + cards: 500ms). Evita o flash de tela azul
+  // entre a splash HTML sumir e os widgets Flutter aparecerem (opacity: 0→1).
   if (kIsWeb) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      notifyFlutterReady();
+      Future.delayed(const Duration(milliseconds: 800), notifyFlutterReady);
     });
   }
 }
