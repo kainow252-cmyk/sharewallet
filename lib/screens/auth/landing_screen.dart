@@ -68,6 +68,17 @@ class _LandingScreenState extends State<LandingScreen>
     );
 
     _runSequence();
+
+    // ── Remove o HTML splash quando a LandingScreen estiver visível ──────────
+    // Aguarda 700ms após o 1º frame: cobre a animação hero (600ms) + margem.
+    // NÃO chama no SplashScreen nem no main.dart — a LandingScreen é a tela
+    // real que o usuário vai ver, então só removemos quando ELA estiver pronta.
+    // Isso elimina o flash de tela azul entre o HTML splash e o conteúdo verde.
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(milliseconds: 700), notifyFlutterReady);
+      });
+    }
   }
 
   Future<void> _runSequence() async {

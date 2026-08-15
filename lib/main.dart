@@ -135,15 +135,10 @@ void main() async {
     initialAffiliateCode: initialAffiliateCode,
   ));
 
-  // ── Remove o HTML splash nativo após as animações iniciais do Flutter ───────
-  // Aguarda 800ms após o 1º frame para cobrir as animações de entrada da
-  // LandingScreen (hero: 600ms + cards: 500ms). Evita o flash de tela azul
-  // entre a splash HTML sumir e os widgets Flutter aparecerem (opacity: 0→1).
-  if (kIsWeb) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(milliseconds: 800), notifyFlutterReady);
-    });
-  }
+  // ── notifyFlutterReady() movido para LandingScreen ───────────────────────
+  // Chamado lá com delay de 700ms, cobrindo a animação hero (600ms).
+  // Removido daqui para evitar race condition com o SplashScreen que renderiza
+  // antes da LandingScreen, causando flash de tela azul.
 }
 
 class ShareWalletApp extends StatelessWidget {
