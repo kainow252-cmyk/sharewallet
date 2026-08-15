@@ -12,14 +12,14 @@ class AppLoginConfig {
   final bool loginCadastroPublico;
 
   const AppLoginConfig({
-    this.loginGoogle          = true,
-    this.loginFacebook        = true,
+    this.loginGoogle          = false, // opt-in: desativado por padrão
+    this.loginFacebook        = false, // opt-in: desativado por padrão
     this.loginCadastroPublico = true,
   });
 
   factory AppLoginConfig.fromJson(Map<String, dynamic> j) => AppLoginConfig(
-    loginGoogle:          j['login_google']           as bool? ?? true,
-    loginFacebook:        j['login_facebook']         as bool? ?? true,
+    loginGoogle:          j['login_google']           as bool? ?? false,
+    loginFacebook:        j['login_facebook']         as bool? ?? false,
     loginCadastroPublico: j['login_cadastro_publico'] as bool? ?? true,
   );
 

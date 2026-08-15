@@ -176,6 +176,7 @@ class _LandingScreenState extends State<LandingScreen>
                           '© ${DateTime.now().year} ShareWallet  •  Todos os direitos reservados',
                           textAlign: TextAlign.center,
                           style: TextStyle(
+                            fontFamily: 'Roboto',
                             color: Colors.white.withValues(alpha: 0.18),
                             fontSize: 9 * s,
                           ),
@@ -243,6 +244,7 @@ class _HeroSection extends StatelessWidget {
             TextSpan(
               text: 'Share',
               style: TextStyle(
+                fontFamily: 'Roboto',
                 color: Colors.white,
                 fontSize: 28 * s,
                 fontWeight: FontWeight.w900,
@@ -252,6 +254,7 @@ class _HeroSection extends StatelessWidget {
             TextSpan(
               text: 'Wallet',
               style: TextStyle(
+                fontFamily: 'Roboto',
                 color: const Color(0xFF00E5B4),
                 fontSize: 28 * s,
                 fontWeight: FontWeight.w900,
@@ -265,6 +268,7 @@ class _HeroSection extends StatelessWidget {
           'Transforme conexões em receita recorrente.',
           textAlign: TextAlign.center,
           style: TextStyle(
+            fontFamily: 'Roboto',
             color: Colors.white.withValues(alpha: 0.55),
             fontSize: 12 * s,
             height: 1.4,
@@ -317,6 +321,7 @@ class _WelcomeCard extends StatelessWidget {
                 Text(
                   'Bem-vindo à ShareWallet',
                   style: TextStyle(
+                    fontFamily: 'Roboto',
                     color: const Color(0xFF00E5B4),
                     fontSize: 13 * s,
                     fontWeight: FontWeight.w800,
@@ -326,6 +331,7 @@ class _WelcomeCard extends StatelessWidget {
                 Text(
                   'Sua rede de contatos é o seu maior ativo. Gerencie e expanda seus ganhos digitais com inteligência.',
                   style: TextStyle(
+                    fontFamily: 'Roboto',
                     color: Colors.white.withValues(alpha: 0.55),
                     fontSize: 11 * s,
                     height: 1.45,
@@ -431,6 +437,7 @@ class _FeatureCard extends StatelessWidget {
             feature.title,
             textAlign: TextAlign.center,
             style: TextStyle(
+              fontFamily: 'Roboto',
               color: Colors.white,
               fontSize: 11 * s,
               fontWeight: FontWeight.w700,
@@ -442,6 +449,7 @@ class _FeatureCard extends StatelessWidget {
             feature.desc,
             textAlign: TextAlign.center,
             style: TextStyle(
+              fontFamily: 'Roboto',
               color: Colors.white.withValues(alpha: 0.42),
               fontSize: 9.5 * s,
               height: 1.35,
@@ -510,6 +518,7 @@ class _StatItem extends StatelessWidget {
         Text(
           value,
           style: TextStyle(
+            fontFamily: 'Roboto',
             color: color,
             fontSize: 14 * s,
             fontWeight: FontWeight.w800,
@@ -520,6 +529,7 @@ class _StatItem extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
+            fontFamily: 'Roboto',
             color: Colors.white.withValues(alpha: 0.38),
             fontSize: 9.5 * s,
           ),
@@ -576,6 +586,7 @@ class _CtaSection extends StatelessWidget {
               label: Text(
                 'Começar agora — é grátis',
                 style: TextStyle(
+                  fontFamily: 'Roboto',
                   fontSize: 14 * s,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.1,
@@ -613,6 +624,7 @@ class _CtaSection extends StatelessWidget {
             child: Text(
               'Já tenho uma conta',
               style: TextStyle(
+                fontFamily: 'Roboto',
                 fontSize: 13 * s,
                 fontWeight: FontWeight.w500,
               ),
@@ -633,6 +645,7 @@ class _CtaSection extends StatelessWidget {
               label: Text(
                 'Instalar App Android',
                 style: TextStyle(
+                  fontFamily: 'Roboto',
                   fontSize: 13 * s,
                   fontWeight: FontWeight.w600,
                   color: const Color(0xFF00E5B4),
@@ -657,6 +670,7 @@ class _CtaSection extends StatelessWidget {
             'Ao criar sua conta você concorda com nossos Termos de Uso.',
             textAlign: TextAlign.center,
             style: TextStyle(
+              fontFamily: 'Roboto',
               color: Colors.white.withValues(alpha: 0.22),
               fontSize: 9 * s,
               height: 1.4,
