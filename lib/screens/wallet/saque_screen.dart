@@ -31,20 +31,22 @@ class _SaqueScreenState extends State<SaqueScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    // Pré-preenche chave PIX com pixKey salvo no perfil (ou email como fallback)
+    // Pré-preenche chave PIX SOMENTE com pixKey salvo no perfil (sem fallback para email)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthService>();
       final user = auth.currentUser;
       if (user != null) {
-        final savedPix = user.pixKey.isNotEmpty ? user.pixKey : user.email;
+        // Usa apenas a chave PIX real do perfil — sem fallback para email
+        final savedPix = user.pixKey.trim();
         _pixKeyController.text = savedPix;
-        // Detecta tipo da chave automaticamente
-        if (user.pixKeyType.isNotEmpty) {
+
+        // Detecta tipo: prioriza o tipo salvo, depois inferência por formato
+        if (user.pixKeyType.isNotEmpty && user.pixKeyType != 'EMAIL') {
+          // Tipo explícito salvo no perfil
           setState(() => _pixKeyType = user.pixKeyType);
-        } else if (savedPix.contains('@')) {
-          setState(() => _pixKeyType = 'EMAIL');
-        } else if (RegExp(r'^\d{11}$').hasMatch(savedPix.replaceAll(RegExp(r'\D'), ''))) {
-          setState(() => _pixKeyType = 'CPF');
+        } else {
+          // Inferência automática pelo formato da chave
+          setState(() => _pixKeyType = _inferirTipoPix(savedPix));
         }
       }
       // Garante histórico carregado
@@ -207,6 +209,37 @@ class _SaqueScreenState extends State<SaqueScreen>
     );
   }
 
+  // -- Inferência automática do tipo da chave PIX ----------------------------
+  String _inferirTipoPix(String chave) {
+    if (chave.isEmpty) return 'EMAIL';
+
+    // E-mail
+    if (chave.contains('@')) return 'EMAIL';
+
+    // Remove caracteres não-numéricos para contagem
+    final apenasDigitos = chave.replaceAll(RegExp(r'\D'), '');
+
+    // CPF = 11 dígitos
+    if (apenasDigitos.length == 11) return 'CPF';
+
+    // CNPJ = 14 dígitos
+    if (apenasDigitos.length == 14) return 'CNPJ';
+
+    // Telefone = 10 ou 11 dígitos (com DDD) e chave tem só números/+/espaço
+    if (RegExp(r'^[\d\s\+\-\(\)]+$').hasMatch(chave) &&
+        (apenasDigitos.length == 10 || apenasDigitos.length == 11)) {
+      return 'PHONE';
+    }
+
+    // UUID / chave aleatória (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+    if (RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(chave)) { return 'ALEATORIA'; }
+
+    // Fallback
+    return 'EMAIL';
+  }
+
   // -- Card read-only da chave PIX cadastrada no perfil ----------------------
   Widget _buildPixKeyCard() {
     final chavePix = _pixKeyController.text.trim();
@@ -275,6 +308,8 @@ class _SaqueScreenState extends State<SaqueScreen>
       switch (_pixKeyType) {
         case 'CPF':
           return 'CPF';
+        case 'CNPJ':
+          return 'CNPJ';
         case 'EMAIL':
           return 'E-mail';
         case 'PHONE':
@@ -290,6 +325,8 @@ class _SaqueScreenState extends State<SaqueScreen>
       switch (_pixKeyType) {
         case 'CPF':
           return Icons.badge_rounded;
+        case 'CNPJ':
+          return Icons.business_rounded;
         case 'EMAIL':
           return Icons.email_outlined;
         case 'PHONE':
