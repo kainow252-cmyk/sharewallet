@@ -8,6 +8,7 @@ import '../../services/biometric_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
 import '../../utils/web_utils.dart';
+import '../../utils/js_bridge_helper.dart' as jsBridge;
 import '../../services/app_config_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -43,8 +44,53 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       });
     }
-    // Verifica disponibilidade de biometria
+    // Verifica disponibilidade de biometria (só plataformas nativas)
     _checkBiometric();
+
+    // APK WebView: escuta 'sw-biometric-login' despachado pelo shell Flutter
+    // após autenticação biométrica bem-sucedida no lado nativo.
+    if (kIsWeb && isNativeApp()) {
+      _registerBiometricLoginListener();
+    }
+  }
+
+  /// Registra o listener JS que recebe credenciais do shell após biometria.
+  void _registerBiometricLoginListener() {
+    jsBridge.registerBiometricLoginListener((email, password) {
+      if (mounted) {
+        _emailController.text = email;
+        _senhaController.text = password;
+        _loginFromBiometricBridge(email, password);
+      }
+    });
+  }
+
+  /// Executa login com as credenciais recebidas do shell via evento biométrico.
+  Future<void> _loginFromBiometricBridge(String email, String password) async {
+    if (!mounted) return;
+    setState(() => _loginLoading = true);
+    try {
+      final auth = context.read<AuthService>();
+      final ok = await auth.login(email, password);
+      if (!mounted) return;
+      setState(() => _loginLoading = false);
+      if (ok) {
+        _navegarAposLogin();
+      } else {
+        // Credenciais do keystore inválidas — mostra tela de login normal
+        if (kDebugMode) debugPrint('[LoginScreen] biometric bridge: credenciais inválidas');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sessão expirada. Faça login novamente.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loginLoading = false);
+      if (kDebugMode) debugPrint('[LoginScreen] _loginFromBiometricBridge err: $e');
+    }
   }
 
   Future<void> _checkBiometric() async {

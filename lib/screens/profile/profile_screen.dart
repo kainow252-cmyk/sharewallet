@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +10,8 @@ import '../../services/cf_api_service.dart';
 import '../../services/profile_photo_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
+import '../../utils/web_utils.dart';
+import '../../utils/js_bridge_helper.dart' as jsBridge;
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,6 +24,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _editMode = false;
   bool _saving = false;
   bool _uploadingPhoto = false;
+
 
   late TextEditingController _nomeCtrl;
   late TextEditingController _emailCtrl;
@@ -48,6 +52,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _pixCtrl      = TextEditingController(
         text: (user?.pixKey.isNotEmpty == true) ? user!.pixKey : (user?.email ?? ''));
     _usernameCtrl = TextEditingController(text: user?.username ?? '');
+
+    // No APK WebView: registra listener do evento 'sw-photo-selected'
+    if (kIsWeb && isNativeApp()) {
+      _registerPhotoEventListener();
+    }
 
     // Recarrega perfil ao abrir - usa D1 como fonte de verdade
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -114,6 +123,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
+    jsBridge.unregisterPhotoEventListener();
     _nomeCtrl.dispose();
     _emailCtrl.dispose();
     _telefoneCtrl.dispose();
@@ -121,6 +131,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _pixCtrl.dispose();
     _usernameCtrl.dispose();
     super.dispose();
+  }
+
+  // ── Listener do evento JS 'sw-photo-selected' (bridge APK → Flutter Web) ──
+
+  void _registerPhotoEventListener() {
+    // Usa o js_bridge_helper (condicional web/stub) para registrar o listener
+    // do CustomEvent 'sw-photo-selected' despachado pelo shell Flutter APK.
+    jsBridge.registerPhotoEventListener((dataUrl, mimeType) {
+      _uploadFromBridge(dataUrl, mimeType);
+    });
+  }
+
+  /// Recebe base64 dataUrl do bridge nativo e faz upload via worker.
+  Future<void> _uploadFromBridge(String dataUrl, String mimeType) async {
+    if (!mounted) return;
+    final uid = context.read<AuthService>().currentUser?.id ?? '';
+    if (uid.isEmpty) return;
+
+    setState(() => _uploadingPhoto = true);
+
+    final url = await ProfilePhotoService.uploadBytes(
+      uid: uid,
+      base64DataUrl: dataUrl,
+      mimeType: mimeType,
+      onError: (msg) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+          );
+        }
+      },
+    );
+
+    if (!mounted) return;
+    setState(() => _uploadingPhoto = false);
+
+    if (url != null) {
+      context.read<AuthService>().updateCurrentUser(photoUrl: url);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Foto atualizada com sucesso!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
   }
 
   // -- Verifica disponibilidade do @username com debounce -------------------
@@ -849,7 +904,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               subtitle: 'Usar câmera do dispositivo',
               onTap: () async {
                 Navigator.pop(context);
-                await _uploadPhoto(uid, ImageSource.camera);
+                if (kIsWeb && isNativeApp()) {
+                  _callNativePicker('camera');
+                } else {
+                  await _uploadPhoto(uid, ImageSource.camera);
+                }
               },
             ),
             const SizedBox(height: 8),
@@ -860,7 +919,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               subtitle: 'Selecionar imagem existente',
               onTap: () async {
                 Navigator.pop(context);
-                await _uploadPhoto(uid, ImageSource.gallery);
+                if (kIsWeb && isNativeApp()) {
+                  _callNativePicker('gallery');
+                } else {
+                  await _uploadPhoto(uid, ImageSource.gallery);
+                }
               },
             ),
             // Remover foto (só se já tiver)
@@ -882,6 +945,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  /// Chama a função JS injetada pelo shell (openNativeCamera / openNativeGallery)
+  void _callNativePicker(String source) {
+    try {
+      if (source == 'camera') {
+        jsBridge.callNativeCamera();
+      } else {
+        jsBridge.callNativeGallery();
+      }
+      // Mostra loading — o resultado vem via evento assíncrono sw-photo-selected
+      setState(() => _uploadingPhoto = true);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[ProfileScreen] _callNativePicker err: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Erro ao abrir câmera/galeria nativa.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _uploadPhoto(String uid, ImageSource source) async {
