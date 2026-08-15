@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -104,7 +105,8 @@ class _BuyScreenState extends State<BuyScreen> {
   static const _workerBase = 'https://api.sharewallet.com.br';
 
   // -- Controle de tela de parabéns -----------------------------------------
-  bool _showSuccessScreen = false;
+  bool   _showSuccessScreen = false;
+  String _bilheteNumero     = '';   // número do bilhete Loteria Federal gerado na compra
 
   // -- Controle de banner de produto (landing) --------------------------------
   // true = mostra landing page com botões; false = mostra formulário de compra
@@ -328,6 +330,7 @@ class _BuyScreenState extends State<BuyScreen> {
   Future<void> _enviarComprovante({
     required String saleId,
     required String status,
+    String bilhete = '',
     Map<String, dynamic>? responseData,
   }) async {
     final email = _emailCtrl.text.trim();
@@ -337,14 +340,15 @@ class _BuyScreenState extends State<BuyScreen> {
         Uri.parse('$_workerBase/api/send-receipt'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'saleId':       saleId,
-          'clienteNome':  _nomeCtrl.text.trim(),
-          'clienteEmail': email,
-          'productId':    _product?.id ?? '',
-          'productNome':  _product?.nome ?? '',
-          'valor':        _product?.valor ?? 0,
-          'chargeType':   _product?.isPixRecorrente == true ? 'pixRecorrente' : 'pixAvulso',
-          'dataPagamento': DateTime.now().toIso8601String(),
+          'saleId':          saleId,
+          'clienteNome':     _nomeCtrl.text.trim(),
+          'clienteEmail':    email,
+          'productId':       _product?.id ?? '',
+          'productNome':     _product?.nome ?? '',
+          'valor':           _product?.valor ?? 0,
+          'chargeType':      _product?.isPixRecorrente == true ? 'pixRecorrente' : 'pixAvulso',
+          'dataPagamento':   DateTime.now().toIso8601String(),
+          'bilheteNumero':   bilhete,
         }),
       ).timeout(const Duration(seconds: 12));
     } catch (_) {
@@ -450,16 +454,20 @@ class _BuyScreenState extends State<BuyScreen> {
           final pago = status == 'approved' || status == 'ativa';
           if (pago && !_paymentApproved) {
             timer.cancel();
-            setState(() => _paymentApproved = true);
-            if (mounted) {
-              setState(() => _showSuccessScreen = true);
-            }
+            // Gera número de bilhete Loteria Federal (5 dígitos únicos)
+            final bilhete = Random().nextInt(99999).toString().padLeft(5, '0');
+            setState(() {
+              _paymentApproved  = true;
+              _bilheteNumero    = bilhete;
+              _showSuccessScreen = true;
+            });
             _salvarDadosCliente().catchError((_) {});
             // Envia comprovante ao comprador via nosso Worker (fire-and-forget)
             _enviarComprovante(
-              saleId:       paymentId,
-              status:       status,
-              responseData: data,
+              saleId:         paymentId,
+              status:         status,
+              bilhete:        bilhete,
+              responseData:   data,
             ).catchError((_) {});
           }
         }
@@ -601,14 +609,16 @@ class _BuyScreenState extends State<BuyScreen> {
     // -- Tela de parabéns (pós-pagamento) ------------------------------------
     if (_showSuccessScreen && _product != null) {
       return _PurchaseSuccessScreen(
-        product: _product!,
-        clienteNome: _nomeCtrl.text.trim(),
-        clienteEmail: _emailCtrl.text.trim(),
+        product:        _product!,
+        clienteNome:    _nomeCtrl.text.trim(),
+        clienteEmail:   _emailCtrl.text.trim(),
+        bilheteNumero:  _bilheteNumero,
         onVoltar: () => setState(() {
           _showSuccessScreen = false;
-          _pixResult = null;
+          _pixResult         = null;
           _preapprovalResult = null;
-          _paymentApproved = false;
+          _paymentApproved   = false;
+          _bilheteNumero     = '';
         }),
       );
     }
@@ -1451,12 +1461,14 @@ class _PurchaseSuccessScreen extends StatefulWidget {
   final ProductModel product;
   final String clienteNome;
   final String clienteEmail;
+  final String bilheteNumero;
   final VoidCallback onVoltar;
 
   const _PurchaseSuccessScreen({
     required this.product,
     required this.clienteNome,
     required this.clienteEmail,
+    required this.bilheteNumero,
     required this.onVoltar,
   });
 
@@ -1748,7 +1760,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
                 // ── Header com gradiente + animação ─────────────────────────
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
                   decoration: const BoxDecoration(
                     gradient: AppColors.darkGreenGradient,
                   ),
@@ -1836,12 +1848,16 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
                   ),
                 ),
 
+                // ── Divisória entre header e imagem ──────────────────────────
+                if (temImagem)
+                  Container(height: 3, color: Colors.white),
+
                 // ── Imagem do produto (se disponível) ────────────────────────
                 if (temImagem) ...[
                   Container(
                     width: double.infinity,
-                    height: 180,
-                    color: const Color(0xFF0A3D28),
+                    height: 200,
+                    color: Colors.black,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -1849,12 +1865,12 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
                           widget.product.imagemUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
-                            color: AppColors.primaryDark,
+                            color: Colors.black87,
                             child: const Icon(Icons.image_not_supported_rounded,
                                 color: Colors.white38, size: 40),
                           ),
                         ),
-                        // Gradiente sutil sobre a imagem
+                        // Gradiente sutil — apenas na parte inferior
                         Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
@@ -1862,8 +1878,9 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
                               end: Alignment.bottomCenter,
                               colors: [
                                 Colors.transparent,
-                                Colors.black.withValues(alpha: 0.45),
+                                Colors.black.withValues(alpha: 0.55),
                               ],
+                              stops: const [0.5, 1.0],
                             ),
                           ),
                         ),
@@ -1878,8 +1895,8 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.2),
-                                  blurRadius: 6,
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                  blurRadius: 8,
                                 ),
                               ],
                             ),
@@ -2092,6 +2109,159 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
                     ],
                   ),
                 ),
+
+                // ── Bilhete Loteria Federal ───────────────────────────────────
+                if (widget.bilheteNumero.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF1A237E), Color(0xFF283593)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF1A237E).withValues(alpha: 0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        children: [
+                          // Padrão de fundo decorativo (pontos)
+                          Positioned(
+                            right: -10, top: -10,
+                            child: Container(
+                              width: 100, height: 100,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.04),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: -20, bottom: -20,
+                            child: Container(
+                              width: 80, height: 80,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.04),
+                              ),
+                            ),
+                          ),
+                          // Conteúdo do bilhete
+                          Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Row(
+                              children: [
+                                // Ícone de loteria
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Text('🎟️',
+                                      style: TextStyle(fontSize: 24)),
+                                ),
+                                const SizedBox(width: 14),
+                                // Informações do bilhete
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Loteria Federal',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white.withValues(alpha: 0.7),
+                                          letterSpacing: 1.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      const Text(
+                                        'Seu Bilhete de Sorte',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      // Número do bilhete em destaque
+                                      Row(
+                                        children: widget.bilheteNumero.split('').map((d) =>
+                                          Container(
+                                            width: 32, height: 36,
+                                            margin: const EdgeInsets.only(right: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha: 0.3),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: Center(
+                                              child: Text(
+                                                d,
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: Colors.white,
+                                                  letterSpacing: 0,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ).toList(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Direita: estrela + aviso
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    const Text('⭐', style: TextStyle(fontSize: 20)),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFD600).withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: const Color(0xFFFFD600).withValues(alpha: 0.5),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'AUTO\nCHECK',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFFFFD600),
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
 
                 // ── Rodapé com linha decorativa ──────────────────────────────
                 Container(
