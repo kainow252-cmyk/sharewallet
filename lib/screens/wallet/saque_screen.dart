@@ -27,17 +27,6 @@ class _SaqueScreenState extends State<SaqueScreen>
       NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
   final _dateFmt = DateFormat('dd/MM/yyyy HH:mm');
 
-  final List<Map<String, dynamic>> _pixTypes = [
-    {'value': 'CPF', 'label': 'CPF', 'icon': Icons.badge_rounded},
-    {'value': 'EMAIL', 'label': 'E-mail', 'icon': Icons.email_outlined},
-    {'value': 'PHONE', 'label': 'Telefone', 'icon': Icons.phone_rounded},
-    {
-      'value': 'ALEATORIA',
-      'label': 'Chave Aleatória',
-      'icon': Icons.vpn_key_rounded
-    },
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -83,6 +72,15 @@ class _SaqueScreenState extends State<SaqueScreen>
   // -- Solicitar Saque --------------------------------------------------------
   Future<void> _solicitarSaque() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Valida se a chave PIX está preenchida (vinda do perfil)
+    if (_pixKeyController.text.trim().isEmpty) {
+      _showSnack(
+        'Cadastre sua chave PIX no Perfil antes de solicitar saque',
+        AppColors.error,
+      );
+      return;
+    }
 
     final auth = context.read<AuthService>();
     final wallet = context.read<WalletService>();
@@ -209,6 +207,191 @@ class _SaqueScreenState extends State<SaqueScreen>
     );
   }
 
+  // -- Card read-only da chave PIX cadastrada no perfil ----------------------
+  Widget _buildPixKeyCard() {
+    final chavePix = _pixKeyController.text.trim();
+
+    // Sem chave cadastrada → card de aviso
+    if (chavePix.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.error.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.pix_rounded,
+                  color: AppColors.error, size: 26),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Nenhuma chave PIX cadastrada',
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.error),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Cadastre sua chave PIX no Perfil para solicitar saque.',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(60, 36),
+              ),
+              child: const Text(
+                'Ir ao\nPerfil',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Com chave cadastrada → card read-only
+    final tipoLabel = () {
+      switch (_pixKeyType) {
+        case 'CPF':
+          return 'CPF';
+        case 'EMAIL':
+          return 'E-mail';
+        case 'PHONE':
+          return 'Telefone';
+        case 'ALEATORIA':
+          return 'Chave Aleatória';
+        default:
+          return _pixKeyType;
+      }
+    }();
+
+    final tipoIcon = () {
+      switch (_pixKeyType) {
+        case 'CPF':
+          return Icons.badge_rounded;
+        case 'EMAIL':
+          return Icons.email_outlined;
+        case 'PHONE':
+          return Icons.phone_rounded;
+        default:
+          return Icons.vpn_key_rounded;
+      }
+    }();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.35),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Ícone PIX
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.pix_rounded,
+                color: AppColors.primary, size: 26),
+          ),
+          const SizedBox(width: 14),
+          // Chave + tipo
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Chave PIX Cadastrada',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textHint),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  chavePix,
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Icon(tipoIcon,
+                        size: 12, color: AppColors.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      tipoLabel,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Botão "Alterar no Perfil"
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.verified_rounded,
+                    color: AppColors.success, size: 18),
+              ),
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: const Text(
+                  'Alterar\nno Perfil',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textHint,
+                      decoration: TextDecoration.underline),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   // -- Build ------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
@@ -313,113 +496,11 @@ class _SaqueScreenState extends State<SaqueScreen>
 
                     const SizedBox(height: 24),
 
-                    // -- Tipo de chave PIX ----------------------------------
-                    const _SectionLabel('Tipo de Chave PIX'),
+                    // -- Chave PIX (read-only, vinda do perfil) -------------
+                    const _SectionLabel('Chave PIX para Recebimento'),
                     const SizedBox(height: 10),
-                    GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 3.5,
-                      children: _pixTypes.map((t) {
-                        final isSelected = _pixKeyType == t['value'];
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _pixKeyType = t['value'] as String;
-                              // Pré-preenche por tipo
-                              if (t['value'] == 'EMAIL') {
-                                final email =
-                                    context.read<AuthService>().currentUser?.email ?? '';
-                                _pixKeyController.text = email;
-                              } else if (t['value'] == 'CPF') {
-                                final cpf = context
-                                        .read<AuthService>()
-                                        .currentUser
-                                        ?.cpf ??
-                                    '';
-                                _pixKeyController.text = cpf;
-                              } else if (t['value'] == 'PHONE') {
-                                final tel = context
-                                        .read<AuthService>()
-                                        .currentUser
-                                        ?.telefone ??
-                                    '';
-                                _pixKeyController.text = tel;
-                              } else {
-                                _pixKeyController.clear();
-                              }
-                            });
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.primary.withValues(alpha: 0.08)
-                                  : AppColors.surfaceVariant,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: isSelected
-                                    ? AppColors.primary
-                                    : AppColors.cardBorder,
-                                width: isSelected ? 2 : 1,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(t['icon'] as IconData,
-                                    color: isSelected
-                                        ? AppColors.primary
-                                        : AppColors.textHint,
-                                    size: 18),
-                                const SizedBox(width: 8),
-                                Text(t['label'] as String,
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: isSelected
-                                            ? AppColors.primary
-                                            : AppColors.textSecondary,
-                                        fontSize: 13)),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                    _buildPixKeyCard(),
 
-                    const SizedBox(height: 16),
-
-                    // -- Campo de chave PIX ---------------------------------
-                    TextFormField(
-                      controller: _pixKeyController,
-                      decoration: InputDecoration(
-                        labelText: 'Chave PIX ($_pixKeyType)',
-                        prefixIcon: const Icon(Icons.pix_rounded,
-                            color: AppColors.primary),
-                        hintText: _pixKeyType == 'CPF'
-                            ? '000.000.000-00'
-                            : _pixKeyType == 'EMAIL'
-                                ? 'seu@email.com'
-                                : _pixKeyType == 'PHONE'
-                                    ? '(11) 99999-9999'
-                                    : 'Chave aleatória UUID',
-                        suffixIcon: _pixKeyController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear_rounded,
-                                    size: 18),
-                                onPressed: () {
-                                  setState(() => _pixKeyController.clear());
-                                },
-                              )
-                            : null,
-                      ),
-                      onChanged: (_) => setState(() {}),
-                      validator: (v) =>
-                          v!.isEmpty ? 'Informe sua chave PIX' : null,
-                    ),
 
                     const SizedBox(height: 24),
 
