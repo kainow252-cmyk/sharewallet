@@ -8,6 +8,21 @@ import '../../services/cf_api_service.dart';
 import '../../services/extrato_export_service.dart';
 import '../../theme/app_theme.dart';
 
+// ── Enum de filtro de período (compartilhado pelas duas abas) ──
+enum _PerFiltro { todos, sete, trinta, noventa, custom }
+
+extension _PerLabel on _PerFiltro {
+  String get label {
+    switch (this) {
+      case _PerFiltro.todos:    return 'Todos';
+      case _PerFiltro.sete:     return '7d';
+      case _PerFiltro.trinta:   return '30d';
+      case _PerFiltro.noventa:  return '90d';
+      case _PerFiltro.custom:   return 'Custom';
+    }
+  }
+}
+
 /// Tela completa de Carteira ShareWallet - dados via Cloudflare D1
 class CarteiraScreen extends StatefulWidget {
   const CarteiraScreen({super.key});
@@ -18,10 +33,19 @@ class CarteiraScreen extends StatefulWidget {
 
 class _CarteiraScreenState extends State<CarteiraScreen>
     with SingleTickerProviderStateMixin {
-  final _fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+  final _fmt     = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+  final _fmtDate = DateFormat('dd/MM/yyyy');
   bool _saldoVisible = true;
   // Abas: 0 = Carteira, 1 = Indicados
   late TabController _tabController;
+
+  // ── Filtro de período — Aba Carteira (Histórico) ──
+  _PerFiltro _carteiraPeriodo = _PerFiltro.todos;
+  DateTimeRange? _carteiraCustomRange;
+
+  // ── Filtro de período — Aba Indicados ──
+  _PerFiltro _indicadosPeriodo = _PerFiltro.todos;
+  DateTimeRange? _indicadosCustomRange;
 
   // Dados de indicados
   bool _loadingIndicados = false;
@@ -260,6 +284,261 @@ class _CarteiraScreenState extends State<CarteiraScreen>
               },
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ── Filtrar lista de transações por período (aba Carteira) ──
+  List<Map<String, dynamic>> _transacoesFiltradas(List<Map<String, dynamic>> all) {
+    if (_carteiraPeriodo == _PerFiltro.todos) return all;
+    final now  = DateTime.now();
+    DateTime? cutoff;
+    if (_carteiraPeriodo == _PerFiltro.sete)    cutoff = now.subtract(const Duration(days: 7));
+    if (_carteiraPeriodo == _PerFiltro.trinta)  cutoff = now.subtract(const Duration(days: 30));
+    if (_carteiraPeriodo == _PerFiltro.noventa) cutoff = now.subtract(const Duration(days: 90));
+    if (_carteiraPeriodo == _PerFiltro.custom && _carteiraCustomRange != null) {
+      return all.where((tx) {
+        final d = tx['data'] as DateTime?;
+        if (d == null) return false;
+        return !d.isBefore(_carteiraCustomRange!.start) &&
+               !d.isAfter(_carteiraCustomRange!.end.add(const Duration(days: 1)));
+      }).toList();
+    }
+    if (cutoff == null) return all;
+    return all.where((tx) {
+      final d = tx['data'] as DateTime?;
+      return d != null && d.isAfter(cutoff!);
+    }).toList();
+  }
+
+  // ── Filtrar indicados por período (aba Indicados) ──
+  List<Map<String, dynamic>> _compradoresFiltrados() {
+    if (_indicadosPeriodo == _PerFiltro.todos) return _compradores;
+    final now = DateTime.now();
+    DateTime? cutoff;
+    if (_indicadosPeriodo == _PerFiltro.sete)    cutoff = now.subtract(const Duration(days: 7));
+    if (_indicadosPeriodo == _PerFiltro.trinta)  cutoff = now.subtract(const Duration(days: 30));
+    if (_indicadosPeriodo == _PerFiltro.noventa) cutoff = now.subtract(const Duration(days: 90));
+    if (_indicadosPeriodo == _PerFiltro.custom && _indicadosCustomRange != null) {
+      return _compradores.where((s) {
+        final d = _parseData(s['data'] as String?);
+        if (d == null) return false;
+        return !d.isBefore(_indicadosCustomRange!.start) &&
+               !d.isAfter(_indicadosCustomRange!.end.add(const Duration(days: 1)));
+      }).toList();
+    }
+    if (cutoff == null) return _compradores;
+    return _compradores.where((s) {
+      final d = _parseData(s['data'] as String?);
+      return d != null && d.isAfter(cutoff!);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _naoCmpFiltrados() {
+    if (_indicadosPeriodo == _PerFiltro.todos) return _naoCompraram;
+    final now = DateTime.now();
+    DateTime? cutoff;
+    if (_indicadosPeriodo == _PerFiltro.sete)    cutoff = now.subtract(const Duration(days: 7));
+    if (_indicadosPeriodo == _PerFiltro.trinta)  cutoff = now.subtract(const Duration(days: 30));
+    if (_indicadosPeriodo == _PerFiltro.noventa) cutoff = now.subtract(const Duration(days: 90));
+    if (_indicadosPeriodo == _PerFiltro.custom && _indicadosCustomRange != null) {
+      return _naoCompraram.where((s) {
+        final d = _parseData(s['data'] as String?);
+        if (d == null) return false;
+        return !d.isBefore(_indicadosCustomRange!.start) &&
+               !d.isAfter(_indicadosCustomRange!.end.add(const Duration(days: 1)));
+      }).toList();
+    }
+    if (cutoff == null) return _naoCompraram;
+    return _naoCompraram.where((s) {
+      final d = _parseData(s['data'] as String?);
+      return d != null && d.isAfter(cutoff!);
+    }).toList();
+  }
+
+  /// Parse de string ISO 8601 ou null → DateTime
+  DateTime? _parseData(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try { return DateTime.parse(raw); } catch (_) { return null; }
+  }
+
+  // ── BottomSheet de seleção de período custom (compatibilidade WebView Android) ──
+  static Future<DateTimeRange?> _showDateRangeBottomSheet({
+    required BuildContext context,
+    DateTimeRange? initialRange,
+  }) async {
+    final fmtInput = DateFormat('dd/MM/yyyy');
+    final ctrlInicio = TextEditingController(
+      text: initialRange != null ? fmtInput.format(initialRange.start) : '',
+    );
+    final ctrlFim = TextEditingController(
+      text: initialRange != null ? fmtInput.format(initialRange.end) : '',
+    );
+    String? erro;
+
+    return showModalBottomSheet<DateTimeRange?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.date_range_rounded,
+                          color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Selecionar Período',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: AppColors.textPrimary)),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Text('Data de início',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: ctrlInicio,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [_DateInputFormatter()],
+                  onChanged: (_) => setModalState(() => erro = null),
+                  decoration: InputDecoration(
+                    hintText: 'dd/mm/aaaa',
+                    prefixIcon: const Icon(Icons.calendar_today_rounded,
+                        size: 18, color: AppColors.primary),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.cardBorder)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: AppColors.primary, width: 2)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text('Data de fim',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: ctrlFim,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [_DateInputFormatter()],
+                  onChanged: (_) => setModalState(() => erro = null),
+                  decoration: InputDecoration(
+                    hintText: 'dd/mm/aaaa',
+                    prefixIcon: const Icon(Icons.calendar_today_rounded,
+                        size: 18, color: AppColors.primary),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.cardBorder)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: AppColors.primary, width: 2)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                  ),
+                ),
+                if (erro != null) ...[
+                  const SizedBox(height: 8),
+                  Text(erro!,
+                      style: const TextStyle(
+                          color: AppColors.error,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500)),
+                ],
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, null),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.primary),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text('Limpar',
+                            style: TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final fmtP = DateFormat('dd/MM/yyyy');
+                          DateTime? ini, fim;
+                          try { ini = fmtP.parseStrict(ctrlInicio.text.trim()); } catch (_) {}
+                          try { fim = fmtP.parseStrict(ctrlFim.text.trim()); } catch (_) {}
+                          if (ini == null || fim == null) {
+                            setModalState(() =>
+                                erro = 'Informe as duas datas no formato dd/mm/aaaa');
+                            return;
+                          }
+                          if (fim.isBefore(ini)) {
+                            setModalState(() =>
+                                erro = 'A data de fim deve ser após o início');
+                            return;
+                          }
+                          Navigator.pop(ctx, DateTimeRange(start: ini, end: fim));
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text('Aplicar Filtro',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -629,7 +908,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
 
                         const SizedBox(height: 24),
 
-                        // Histórico
+                        // ── Filtros de período do Histórico ──────────────
                         Row(
                           children: [
                             const Text('Histórico',
@@ -638,48 +917,137 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                                     fontSize: 17,
                                     fontWeight: FontWeight.w800)),
                             const Spacer(),
-                            Text('${transacoes.length} transações',
-                                style: const TextStyle(
-                                    color: AppColors.textHint, fontSize: 12)),
                           ],
+                        ),
+                        const SizedBox(height: 10),
+                        // Chips de período
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final p in [
+                                _PerFiltro.todos,
+                                _PerFiltro.sete,
+                                _PerFiltro.trinta,
+                                _PerFiltro.noventa,
+                              ])
+                                _CarteiraChip(
+                                  label: p.label,
+                                  selected: _carteiraPeriodo == p,
+                                  onTap: () => setState(
+                                      () => _carteiraPeriodo = p),
+                                ),
+                              // Chip "Período" custom
+                              _CarteiraChip(
+                                label: _carteiraPeriodo == _PerFiltro.custom &&
+                                        _carteiraCustomRange != null
+                                    ? '${_fmtDate.format(_carteiraCustomRange!.start)} – ${_fmtDate.format(_carteiraCustomRange!.end)}'
+                                    : 'Período',
+                                selected: _carteiraPeriodo == _PerFiltro.custom,
+                                icon: Icons.date_range_rounded,
+                                onTap: () async {
+                                  final range = await _showDateRangeBottomSheet(
+                                    context: context,
+                                    initialRange: _carteiraCustomRange,
+                                  );
+                                  if (range != null) {
+                                    setState(() {
+                                      _carteiraCustomRange = range;
+                                      _carteiraPeriodo = _PerFiltro.custom;
+                                    });
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 12),
 
-                        if (wallet.isLoading)
-                          const Padding(
-                            padding: EdgeInsets.all(32),
-                            child: Center(
-                                child: CircularProgressIndicator()))
-                        else if (transacoes.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(32),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(16),
-                              border:
-                                  Border.all(color: AppColors.cardBorder),
-                            ),
-                            child: const Column(
-                              children: [
-                                Icon(Icons.receipt_long_outlined,
-                                    color: AppColors.textHint, size: 40),
-                                SizedBox(height: 12),
-                                Text('Nenhuma transação ainda',
-                                    style: TextStyle(
-                                        color: AppColors.textSecondary,
-                                        fontWeight: FontWeight.w500)),
-                                Text('Suas comissões aparecerão aqui',
-                                    style: TextStyle(
+                        Builder(builder: (_) {
+                          final filtradas = _transacoesFiltradas(transacoes);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    '${filtradas.length} transações',
+                                    style: const TextStyle(
                                         color: AppColors.textHint,
-                                        fontSize: 12)),
-                              ],
-                            ),
-                          )
-                        else
-                          ...transacoes
-                              .take(30)
-                              .map((tx) =>
-                                  _TransacaoTile(tx: tx, fmt: _fmt)),
+                                        fontSize: 12),
+                                  ),
+                                  if (_carteiraPeriodo != _PerFiltro.todos) ...[
+                                    const SizedBox(width: 8),
+                                    GestureDetector(
+                                      onTap: () => setState(() {
+                                        _carteiraPeriodo = _PerFiltro.todos;
+                                        _carteiraCustomRange = null;
+                                      }),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.close_rounded,
+                                              size: 14,
+                                              color: AppColors.primary),
+                                          Text('Limpar',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: AppColors.primary,
+                                                  fontWeight:
+                                                      FontWeight.w600)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              if (wallet.isLoading)
+                                const Padding(
+                                  padding: EdgeInsets.all(32),
+                                  child: Center(
+                                      child: CircularProgressIndicator()))
+                              else if (filtradas.isEmpty)
+                                Container(
+                                  padding: const EdgeInsets.all(32),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                        color: AppColors.cardBorder),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      const Icon(Icons.receipt_long_outlined,
+                                          color: AppColors.textHint, size: 40),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        transacoes.isEmpty
+                                            ? 'Nenhuma transação ainda'
+                                            : 'Nenhuma transação no período',
+                                        style: const TextStyle(
+                                            color: AppColors.textSecondary,
+                                            fontWeight: FontWeight.w500),
+                                      ),
+                                      Text(
+                                        transacoes.isEmpty
+                                            ? 'Suas comissões aparecerão aqui'
+                                            : 'Tente outro período de datas',
+                                        style: const TextStyle(
+                                            color: AppColors.textHint,
+                                            fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                ...filtradas
+                                    .take(50)
+                                    .map((tx) =>
+                                        _TransacaoTile(tx: tx, fmt: _fmt)),
+                            ],
+                          );
+                        }),
                         const SizedBox(height: 32),
                       ],
                     ),
@@ -694,123 +1062,192 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                       ? const Center(child: CircularProgressIndicator())
                       : SingleChildScrollView(
                           padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Resumo
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _SaldoCard(
-                                      label: 'Compraram',
-                                      valor: '${_compradores.length}',
-                                      icon: Icons.check_circle_rounded,
-                                      color: AppColors.success,
+                          child: Builder(builder: (context) {
+                            final cmpFilt  = _compradoresFiltrados();
+                            final naoCFilt = _naoCmpFiltrados();
+                            final totalComFilt = cmpFilt.fold<double>(
+                                0.0, (s, c) => s + ((c['comissao'] as num?)?.toDouble() ?? 0.0));
+                            final semDados = _compradores.isEmpty && _naoCompraram.isEmpty;
+                            final semFiltro = cmpFilt.isEmpty && naoCFilt.isEmpty && !semDados;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // ── Chips de período ──
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: _PerFiltro.values.map((f) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: _CarteiraChip(
+                                          label: f.label,
+                                          selected: _indicadosPeriodo == f,
+                                          onTap: () async {
+                                            if (f == _PerFiltro.custom) {
+                                              final range = await _showDateRangeBottomSheet(
+                                                context: context,
+                                                initialRange: _indicadosCustomRange,
+                                              );
+                                              if (range != null) {
+                                                setState(() {
+                                                  _indicadosPeriodo    = _PerFiltro.custom;
+                                                  _indicadosCustomRange = range;
+                                                });
+                                              }
+                                            } else {
+                                              setState(() {
+                                                _indicadosPeriodo    = f;
+                                                _indicadosCustomRange = null;
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                // Resumo (valores filtrados)
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _SaldoCard(
+                                        label: 'Compraram',
+                                        valor: '${cmpFilt.length}',
+                                        icon: Icons.check_circle_rounded,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _SaldoCard(
+                                        label: 'N\u00e3o conc.',
+                                        valor: '${naoCFilt.length}',
+                                        icon: Icons.cancel_rounded,
+                                        color: AppColors.error,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _SaldoCard(
+                                        label: 'Comiss\u00f5es',
+                                        valor: _fmt.format(totalComFilt),
+                                        icon: Icons.monetization_on_rounded,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 24),
+
+                                // Estado: sem indicados no total
+                                if (semDados)
+                                  Container(
+                                    padding: const EdgeInsets.all(32),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surface,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: AppColors.cardBorder),
+                                    ),
+                                    child: const Column(
+                                      children: [
+                                        Icon(Icons.people_outline_rounded,
+                                            color: AppColors.textHint, size: 40),
+                                        SizedBox(height: 12),
+                                        Text('Nenhum indicado ainda',
+                                            style: TextStyle(
+                                                color: AppColors.textSecondary,
+                                                fontWeight: FontWeight.w500)),
+                                        Text(
+                                            'Compartilhe seu link e comece a ganhar!',
+                                            style: TextStyle(
+                                                color: AppColors.textHint, fontSize: 12)),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: _SaldoCard(
-                                      label: 'Não concluíram',
-                                      valor: '${_naoCompraram.length}',
-                                      icon: Icons.cancel_rounded,
-                                      color: AppColors.error,
+
+                                // Estado: sem dados no período selecionado
+                                if (semFiltro)
+                                  Container(
+                                    padding: const EdgeInsets.all(32),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surface,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: AppColors.cardBorder),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        const Icon(Icons.filter_list_off_rounded,
+                                            color: AppColors.textHint, size: 40),
+                                        const SizedBox(height: 12),
+                                        const Text('Sem indicados no per\u00edodo',
+                                            style: TextStyle(
+                                                color: AppColors.textSecondary,
+                                                fontWeight: FontWeight.w500)),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                            _indicadosPeriodo == _PerFiltro.custom &&
+                                                    _indicadosCustomRange != null
+                                                ? '${_fmtDate.format(_indicadosCustomRange!.start)} \u2013 ${_fmtDate.format(_indicadosCustomRange!.end)}'
+                                                : 'Tente um per\u00edodo maior',
+                                            style: const TextStyle(
+                                                color: AppColors.textHint, fontSize: 12)),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: _SaldoCard(
-                                      label: 'Comissões',
-                                      valor: _fmt.format(_compradores.fold<double>(
-                                          0.0,
-                                          (s, c) => s + ((c['comissao'] as num?)?.toDouble() ?? 0.0))),
-                                      icon: Icons.monetization_on_rounded,
-                                      color: AppColors.primary,
-                                    ),
+
+                                // COMPRADORES filtrados
+                                if (cmpFilt.isNotEmpty) ...[
+                                  _IndicadosSectionHeader(
+                                    label: 'Compraram',
+                                    count: cmpFilt.length,
+                                    color: AppColors.success,
+                                    icon: Icons.check_circle_rounded,
                                   ),
+                                  const SizedBox(height: 10),
+                                  ...cmpFilt.map((c) => _IndicadoTile(
+                                        nome: c['nome']?.toString() ?? '',
+                                        email: c['email']?.toString() ?? '',
+                                        produto: c['produto']?.toString() ?? '',
+                                        comissao: (c['comissao'] as num?)?.toDouble() ?? 0.0,
+                                        status: c['status']?.toString() ?? 'ativa',
+                                        data: c['data']?.toString() ?? '',
+                                        tipo: c['tipo']?.toString() ?? '',
+                                        comprou: true,
+                                        fmt: _fmt,
+                                      )),
                                 ],
-                              ),
 
-                              const SizedBox(height: 24),
-
-                              // COMPRADORES
-                              if (_compradores.isNotEmpty) ...[
-                                _IndicadosSectionHeader(
-                                  label: 'Compraram',
-                                  count: _compradores.length,
-                                  color: AppColors.success,
-                                  icon: Icons.check_circle_rounded,
-                                ),
-                                const SizedBox(height: 10),
-                                ..._compradores.map((c) => _IndicadoTile(
-                                      nome: c['nome']?.toString() ?? '',
-                                      email: c['email']?.toString() ?? '',
-                                      produto: c['produto']?.toString() ?? '',
-                                      comissao: (c['comissao'] as num?)?.toDouble() ?? 0.0,
-                                      status: c['status']?.toString() ?? 'ativa',
-                                      data: c['data']?.toString() ?? '',
-                                      tipo: c['tipo']?.toString() ?? '',
-                                      comprou: true,
-                                      fmt: _fmt,
-                                    )),
-                              ],
-
-                              // NÃO COMPRARAM
-                              if (_naoCompraram.isNotEmpty) ...[
-                                const SizedBox(height: 20),
-                                _IndicadosSectionHeader(
-                                  label: 'Não concluíram',
-                                  count: _naoCompraram.length,
-                                  color: AppColors.error,
-                                  icon: Icons.cancel_rounded,
-                                ),
-                                const SizedBox(height: 10),
-                                ..._naoCompraram.map((c) => _IndicadoTile(
-                                      nome: c['nome']?.toString() ?? '',
-                                      email: c['email']?.toString() ?? '',
-                                      produto: c['produto']?.toString() ?? '',
-                                      comissao: 0.0,
-                                      status: c['status']?.toString() ?? 'cancelada',
-                                      data: c['data']?.toString() ?? '',
-                                      tipo: '',
-                                      comprou: false,
-                                      fmt: _fmt,
-                                    )),
-                              ],
-
-                              if (_compradores.isEmpty &&
-                                  _naoCompraram.isEmpty)
-                                Container(
-                                  padding: const EdgeInsets.all(32),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surface,
-                                    borderRadius:
-                                        BorderRadius.circular(16),
-                                    border: Border.all(
-                                        color: AppColors.cardBorder),
+                                // NÃO COMPRARAM filtrados
+                                if (naoCFilt.isNotEmpty) ...[
+                                  const SizedBox(height: 20),
+                                  _IndicadosSectionHeader(
+                                    label: 'N\u00e3o conclu\u00edram',
+                                    count: naoCFilt.length,
+                                    color: AppColors.error,
+                                    icon: Icons.cancel_rounded,
                                   ),
-                                  child: const Column(
-                                    children: [
-                                      Icon(Icons.people_outline_rounded,
-                                          color: AppColors.textHint,
-                                          size: 40),
-                                      SizedBox(height: 12),
-                                      Text('Nenhum indicado ainda',
-                                          style: TextStyle(
-                                              color:
-                                                  AppColors.textSecondary,
-                                              fontWeight: FontWeight.w500)),
-                                      Text(
-                                          'Compartilhe seu link e comece a ganhar!',
-                                          style: TextStyle(
-                                              color: AppColors.textHint,
-                                              fontSize: 12)),
-                                    ],
-                                  ),
-                                ),
-                              const SizedBox(height: 40),
-                            ],
-                          ),
+                                  const SizedBox(height: 10),
+                                  ...naoCFilt.map((c) => _IndicadoTile(
+                                        nome: c['nome']?.toString() ?? '',
+                                        email: c['email']?.toString() ?? '',
+                                        produto: c['produto']?.toString() ?? '',
+                                        comissao: 0.0,
+                                        status: c['status']?.toString() ?? 'cancelada',
+                                        data: c['data']?.toString() ?? '',
+                                        tipo: '',
+                                        comprou: false,
+                                        fmt: _fmt,
+                                      )),
+                                ],
+
+                                const SizedBox(height: 40),
+                              ],
+                            );
+                          }),
                         ),
                 ),
               ],
@@ -1497,6 +1934,89 @@ class _ExportOption extends StatelessWidget {
                   color: Colors.white30, size: 20),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Formatter automático dd/MM/yyyy ──────────────────────────────────────────
+class _DateInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final buf = StringBuffer();
+    for (int i = 0; i < digits.length && i < 8; i++) {
+      if (i == 2 || i == 4) buf.write('/');
+      buf.write(digits[i]);
+    }
+    final result = buf.toString();
+    return TextEditingValue(
+      text: result,
+      selection: TextSelection.collapsed(offset: result.length),
+    );
+  }
+}
+
+// ── Chip de período para filtros da Carteira ─────────────────────────────────
+class _CarteiraChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  const _CarteiraChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.cardBorder,
+            width: selected ? 1.5 : 1,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 13,
+                color: selected ? Colors.white : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? Colors.white : AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );
