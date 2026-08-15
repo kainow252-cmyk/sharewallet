@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-/// APK shell — carrega o site PWA (https://app.sharewallet.com.br)
+/// APK shell — carrega o site PWA (https://sharewallet.com.br/app/)
 /// dentro de um WebView de tela cheia.
 ///
 /// Comportamento:
@@ -15,8 +15,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 class WebViewShellScreen extends StatefulWidget {
   const WebViewShellScreen({super.key});
 
-  /// URL base do PWA — sem trailing slash
-  static const String _baseUrl = 'https://app.sharewallet.com.br';
+  /// URL base do PWA
+  static const String _baseUrl = 'https://sharewallet.com.br/app/';
 
   @override
   State<WebViewShellScreen> createState() => _WebViewShellScreenState();
@@ -64,7 +64,8 @@ class _WebViewShellScreenState extends State<WebViewShellScreen> {
           onNavigationRequest: (req) {
             final url = req.url;
             // Permite navegar dentro do domínio
-            if (url.startsWith(WebViewShellScreen._baseUrl) ||
+            if (url.startsWith('https://sharewallet.com.br') ||
+                url.startsWith('https://api.sharewallet.com.br') ||
                 url.startsWith('about:') ||
                 url.startsWith('blob:')) {
               return NavigationDecision.navigate;
