@@ -108,10 +108,13 @@ class _WebViewShellScreenState extends State<WebViewShellScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Status bar transparente, ícones claros
+    // Status bar: cor sólida escura, ícones claros — NÃO transparente
+    // Transparente causava o WebView renderizar por baixo dos ícones do sistema
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
+      statusBarColor: Color(0xFF0A1628),
       statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Color(0xFF0A1628),
+      systemNavigationBarIconBrightness: Brightness.light,
     ));
 
     return PopScope(
@@ -125,10 +128,13 @@ class _WebViewShellScreenState extends State<WebViewShellScreen> {
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF0A1628),
-        body: Stack(
-          children: [
-            // ── WebView ────────────────────────────────────────────────────
-            WebViewWidget(controller: _ctrl),
+        // SafeArea só no topo — empurra o WebView pra baixo da status bar
+        body: SafeArea(
+          bottom: false,
+          child: Stack(
+            children: [
+              // ── WebView ──────────────────────────────────────────────────
+              WebViewWidget(controller: _ctrl),
 
             // ── Barra de progresso fina no topo ───────────────────────────
             if (!_loaded && _loadProgress > 0 && _loadProgress < 100)
@@ -136,15 +142,12 @@ class _WebViewShellScreenState extends State<WebViewShellScreen> {
                 top: 0,
                 left: 0,
                 right: 0,
-                child: SafeArea(
-                  bottom: false,
-                  child: LinearProgressIndicator(
-                    value: _loadProgress / 100,
-                    minHeight: 2,
-                    backgroundColor: Colors.transparent,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFF00E5B4),
-                    ),
+                child: LinearProgressIndicator(
+                  value: _loadProgress / 100,
+                  minHeight: 2,
+                  backgroundColor: Colors.transparent,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    Color(0xFF00E5B4),
                   ),
                 ),
               ),
@@ -237,7 +240,8 @@ class _WebViewShellScreenState extends State<WebViewShellScreen> {
                 ),
               ),
           ],
-        ),
+          ),  // Stack
+        ),    // SafeArea
       ),
     );
   }
