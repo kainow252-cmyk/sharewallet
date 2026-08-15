@@ -1,12 +1,12 @@
 /**
- * pwa_install.js — ShareWallet PWA Install v11
+ * pwa_install.js — ShareWallet PWA Install v12
  *
  * LÓGICA:
  *   1. standalone → pula landing, abre app direto
  *   2. /produto/  → silêncio
  *   3. /admin     → troca manifest
  *   4. Mobile     → botão INSTALAR 1 clique
- *      - Chrome/Edge Android: usa beforeinstallprompt (espera até 5s)
+ *      - Chrome/Edge Android: usa beforeinstallprompt (sem timeout de kill)
  *      - Samsung Internet: não dispara o prompt → mostra banner com
  *        instrução simples "toque ⬇️ na barra de endereço"
  *      - iOS Safari: mostra banner com instrução Compartilhar → Add
@@ -16,7 +16,7 @@
   'use strict';
 
   var KEY_INSTALLED   = 'sw_pwa_v3_installed';
-  var KEY_DISMISSED   = 'sw_pwa_v10_dismissed';
+  var KEY_DISMISSED   = 'sw_pwa_v12_dismissed'; // chave nova: limpa dismissals antigos do v10/v11
   var KEY_PENDING_REF = 'sw_pending_ref';
   var KEY_PENDING_TS  = 'sw_pending_ref_ts';
   var DISMISS_TTL     = 3 * 24 * 60 * 60 * 1000;
@@ -235,16 +235,17 @@
   }
 
   /* ── captura prompt o quanto antes ──────────────────────── */
-  var _prompt        = null;
-  var _bannerShown   = false;
-  var _readyToShow   = false;   // true quando o timeout de 2s disparou
+  var _prompt = null;
 
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     _prompt = e;
-    // Se o timeout já passou e ainda estávamos esperando → mostra agora
-    if (_readyToShow && !_bannerShown && !wasDismissed() && !wasInstalled()) {
-      _bannerShown = true;
+    // Se o banner ainda não foi criado, mostra imediatamente
+    // (cobre o caso em que o prompt chega depois do timeout de 2.5s)
+    if (!document.getElementById('pwa-banner') &&
+        !wasDismissed() && !wasInstalled() &&
+        !isBuyerRoute() && !isStandalone() &&
+        isMobile() && !needsManualBanner()) {
       showBanner(_prompt);
     }
   });
@@ -302,33 +303,28 @@
     if (wasInstalled() || wasDismissed()) return;
 
     /*
-     * 5. Samsung Internet / iOS → banner manual imediato (2s)
-     *    Chrome/Edge Android    → espera beforeinstallprompt até 5s
+     * 5. Samsung Internet / iOS → banner manual (2s)
+     *    Chrome/Edge Android    → espera beforeinstallprompt; timeout de 2.5s
+     *                             só mostra se o prompt já chegou; se chegar
+     *                             depois, o listener acima cobre.
      */
     if (needsManualBanner()) {
       // Samsung e iOS não entregam prompt → banner com instrução visual
       setTimeout(function () {
-        if (isBuyerRoute() || isStandalone() || _bannerShown) return;
-        _bannerShown = true;
-        showManualBanner();
+        if (isBuyerRoute() || isStandalone()) return;
+        if (!document.getElementById('pwa-banner')) showManualBanner();
       }, 2000);
       return;
     }
 
-    // Chrome/Edge: aguarda beforeinstallprompt
+    // Chrome/Edge: lógica simples — sem flags de controle
     setTimeout(function () {
       if (isBuyerRoute() || isStandalone()) return;
-      _readyToShow = true;
-      if (_prompt && !_bannerShown) {
-        _bannerShown = true;
+      if (!document.getElementById('pwa-banner') && _prompt) {
         showBanner(_prompt);
       }
-    }, 2000);
-
-    setTimeout(function () {
-      // Após 5s sem prompt → silêncio (Chrome bloqueou por algum motivo)
-      _readyToShow = false;
-    }, 5000);
+      // Se _prompt ainda não chegou, o listener 'beforeinstallprompt' cuida
+    }, 2500);
   }
 
   if (document.readyState === 'loading') {
