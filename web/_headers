@@ -60,6 +60,17 @@
   CDN-Cache-Control: no-store
   Cloudflare-CDN-Cache-Control: no-store
 
+# Imagens do app (logo, ícones): sem cache para sempre pegar versão mais recente
+/assets/assets/images/*
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/assets/assets/icon/*
+  Cache-Control: no-cache, no-store, must-revalidate
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
 # Assets Flutter com hash no path (ex: /assets/xxx.sha256/...): imutáveis
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
