@@ -60,6 +60,16 @@ void downloadFileWeb(String dataUri, String filename) {
   anchor.remove();
 }
 
+/// Retorna true se o Flutter Web está rodando dentro do APK WebView.
+/// Detecta via User-Agent 'ShareWalletApp/1.0' injetado pelo WebView shell.
+bool isNativeApp() {
+  try {
+    return html.window.navigator.userAgent.contains('ShareWalletApp/');
+  } catch (_) {
+    return false;
+  }
+}
+
 /// Dispara o evento 'flutter-first-frame' no window para remover o splash nativo.
 /// Deve ser chamado quando o primeiro frame do app estiver visível.
 void notifyFlutterReady() {

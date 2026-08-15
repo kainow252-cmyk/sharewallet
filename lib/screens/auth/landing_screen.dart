@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/app_config_service.dart';
+import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
@@ -634,8 +635,8 @@ class _CtaSection extends StatelessWidget {
           ),
         ),
 
-        // Botão APK (só web)
-        if (kIsWeb) ...[
+        // Botão APK: só no site — esconde quando rodando dentro do APK WebView
+        if (kIsWeb && !isNativeApp()) ...[
           SizedBox(height: 8 * s),
           SizedBox(
             width: double.infinity,

@@ -38,11 +38,13 @@ class _WebViewShellScreenState extends State<WebViewShellScreen> {
     _ctrl = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0A1628))
-      // User-Agent: mantém o site achando que é mobile (importante para PWA)
+      // User-Agent: ShareWalletApp/1.0 permite o site detectar que é APK
+      // e esconder o botão "Instalar App Android" (que não faz sentido dentro do app)
       ..setUserAgent(
         'Mozilla/5.0 (Linux; Android 11; ShareWallet) '
         'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/120.0.0.0 Mobile Safari/537.36',
+        'Chrome/120.0.0.0 Mobile Safari/537.36 '
+        'ShareWalletApp/1.0',
       )
       ..setNavigationDelegate(
         NavigationDelegate(
@@ -52,7 +54,12 @@ class _WebViewShellScreenState extends State<WebViewShellScreen> {
           onPageStarted: (_) {
             if (mounted) setState(() { _hasError = false; });
           },
-          onPageFinished: (_) {
+          onPageFinished: (url) {
+            // Injeta flag JS para o site saber que está rodando dentro do APK
+            _ctrl.runJavaScript(
+              'window.ShareWalletNativeApp = true;'
+              'document.documentElement.classList.add("sw-native-app");'
+            );
             if (mounted) setState(() => _loaded = true);
           },
           onWebResourceError: (err) {

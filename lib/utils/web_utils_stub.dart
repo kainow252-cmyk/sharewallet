@@ -27,3 +27,6 @@ void openHtmlBlobInNewTab(String htmlContent) {}
 
 /// Stub — no-op em mobile/desktop
 void notifyFlutterReady() {}
+
+/// Stub — mobile nativo nunca é WebView
+bool isNativeApp() => false;
