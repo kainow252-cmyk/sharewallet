@@ -7,6 +7,32 @@ import '../../services/extrato_export_service.dart';
 import '../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Formatador de input de data: auto-insere "/" em dd/MM/yyyy
+// ─────────────────────────────────────────────────────────────────────────────
+class _DateInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Remove tudo que não é dígito
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final buffer = StringBuffer();
+
+    for (int i = 0; i < digits.length && i < 8; i++) {
+      if (i == 2 || i == 4) buffer.write('/');
+      buffer.write(digits[i]);
+    }
+
+    final formatted = buffer.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Enum de filtro de período
 // ─────────────────────────────────────────────────────────────────────────────
 enum _PeriodoFiltro { todos, sete, trinta, noventa, custom }
@@ -281,24 +307,13 @@ class _IndicacoesScreenState extends State<IndicacoesScreen>
   double _comissaoLista(List<Map<String, dynamic>> lista) =>
       lista.fold(0, (s, r) => s + ((r['comissao_mensal'] as num?)?.toDouble() ?? 0));
 
-  // ── Selecionar período custom ──────────────────────────────────────────────
+  // ── Selecionar período custom (BottomSheet — funciona no WebView Android) ──
   Future<void> _selecionarCustomRange() async {
-    final range = await showDateRangePicker(
+    // Usa BottomSheet customizado com TextFields de data
+    // evita showDateRangePicker que trava no WebView Android (overlay cinza)
+    final range = await _showDateRangeBottomSheet(
       context: context,
-      firstDate: DateTime(2023),
-      lastDate: DateTime.now(),
-      initialDateRange: _customRange,
-      locale: const Locale('pt', 'BR'),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.light(
-            primary: AppColors.primary,
-            onPrimary: Colors.white,
-            surface: AppColors.surface,
-          ),
-        ),
-        child: child!,
-      ),
+      initialRange: _customRange,
     );
     if (range != null) {
       setState(() {
@@ -306,6 +321,222 @@ class _IndicacoesScreenState extends State<IndicacoesScreen>
         _periodoFiltro = _PeriodoFiltro.custom;
       });
     }
+  }
+
+  /// Exibe um BottomSheet com dois campos de texto para início e fim do período.
+  /// Compatível com WebView Android — não usa dialog nativo do Material.
+  static Future<DateTimeRange?> _showDateRangeBottomSheet({
+    required BuildContext context,
+    DateTimeRange? initialRange,
+  }) async {
+    final fmtInput = DateFormat('dd/MM/yyyy');
+    final ctrlInicio = TextEditingController(
+      text: initialRange != null ? fmtInput.format(initialRange.start) : '',
+    );
+    final ctrlFim = TextEditingController(
+      text: initialRange != null ? fmtInput.format(initialRange.end) : '',
+    );
+    String? erro;
+
+    return showModalBottomSheet<DateTimeRange?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Título
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.date_range_rounded,
+                            color: AppColors.primary, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Selecionar Período',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Campo de início
+                  Text('Data de início',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: ctrlInicio,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: 'dd/mm/aaaa',
+                      prefixIcon: const Icon(Icons.calendar_today_rounded,
+                          size: 18, color: AppColors.primary),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.cardBorder),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            const BorderSide(color: AppColors.primary, width: 2),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                    ),
+                    inputFormatters: [_DateInputFormatter()],
+                    onChanged: (_) => setModalState(() => erro = null),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Campo de fim
+                  Text('Data de fim',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: ctrlFim,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: 'dd/mm/aaaa',
+                      prefixIcon: const Icon(Icons.calendar_today_rounded,
+                          size: 18, color: AppColors.primary),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.cardBorder),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            const BorderSide(color: AppColors.primary, width: 2),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                    ),
+                    inputFormatters: [_DateInputFormatter()],
+                    onChanged: (_) => setModalState(() => erro = null),
+                  ),
+
+                  // Erro
+                  if (erro != null) ...[
+                    const SizedBox(height: 8),
+                    Text(erro!,
+                        style: const TextStyle(
+                            color: AppColors.error,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500)),
+                  ],
+
+                  const SizedBox(height: 20),
+
+                  // Ações
+                  Row(
+                    children: [
+                      // Limpar
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx, null),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text('Limpar',
+                              style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Aplicar
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            final fmtParse = DateFormat('dd/MM/yyyy');
+                            DateTime? inicio;
+                            DateTime? fim;
+                            try {
+                              inicio = fmtParse.parseStrict(ctrlInicio.text.trim());
+                            } catch (_) {}
+                            try {
+                              fim = fmtParse.parseStrict(ctrlFim.text.trim());
+                            } catch (_) {}
+
+                            if (inicio == null || fim == null) {
+                              setModalState(() =>
+                                  erro = 'Informe as duas datas no formato dd/mm/aaaa');
+                              return;
+                            }
+                            if (fim.isBefore(inicio)) {
+                              setModalState(() =>
+                                  erro = 'A data de fim deve ser após o início');
+                              return;
+                            }
+                            Navigator.pop(ctx, DateTimeRange(start: inicio, end: fim));
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text('Aplicar Filtro',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   // ── Modal de exportação ────────────────────────────────────────────────────
