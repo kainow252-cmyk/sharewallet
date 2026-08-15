@@ -79,8 +79,8 @@ class _CarteiraScreenState extends State<CarteiraScreen>
         final pctCom   = (s['comissao'] as num?)?.toDouble() ?? 0.20;
         final comissao = (s['comissao_valor'] as num?)?.toDouble() ?? (valor * pctCom);
         return {
-          'nome':     s['nome_cliente'] ?? s['affiliate_nome'] ?? 'Cliente',
-          'email':    s['email_cliente'] ?? s['email'] ?? '',
+          'nome':     s['cliente_nome'] ?? s['nome_cliente'] ?? s['affiliate_nome'] ?? '',
+          'email':    s['cliente_email'] ?? s['email_cliente'] ?? s['email'] ?? '',
           'produto':  s['product_nome'] ?? s['produto_nome'] ?? 'Produto',
           'valor':    valor,
           'comissao': comissao,
@@ -96,8 +96,8 @@ class _CarteiraScreenState extends State<CarteiraScreen>
         return st == 'cancelada' || st == 'inativa' || st == 'pendente' ||
                st == 'cancelado' || st == 'inativo';
       }).map((s) => {
-        'nome':    s['nome_cliente'] ?? s['affiliate_nome'] ?? 'Cliente',
-        'email':   s['email_cliente'] ?? s['email'] ?? '',
+        'nome':    s['cliente_nome'] ?? s['nome_cliente'] ?? s['affiliate_nome'] ?? '',
+        'email':   s['cliente_email'] ?? s['email_cliente'] ?? s['email'] ?? '',
         'produto': s['product_nome'] ?? s['produto_nome'] ?? 'Produto',
         'status':  s['status']?.toString() ?? 'inativa',
         'data':    s['created_at']?.toString() ?? '',
@@ -1006,7 +1006,7 @@ class _IndicadoTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(nome.isNotEmpty ? nome : 'Cliente',
+                Text(nome.isNotEmpty ? nome : 'Comprador',
                     style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
