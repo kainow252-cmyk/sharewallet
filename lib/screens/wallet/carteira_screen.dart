@@ -155,13 +155,27 @@ class _CarteiraScreenState extends State<CarteiraScreen>
     final auth = context.read<AuthService>();
     final user = auth.currentUser;
 
+    // Usa a chave PIX real do perfil (não o email)
+    final pixKeyCadastrada = user?.pixKey.trim() ?? '';
+    // Inferir tipo automaticamente pelo formato
+    String pixTypeCadastrado = user?.pixKeyType ?? 'EMAIL';
+    if (pixTypeCadastrado.isEmpty || pixTypeCadastrado == 'EMAIL') {
+      if (!pixKeyCadastrada.contains('@')) {
+        final digits = pixKeyCadastrada.replaceAll(RegExp(r'\D'), '');
+        if (digits.length == 14)      { pixTypeCadastrado = 'CNPJ'; }
+        else if (digits.length == 11) { pixTypeCadastrado = 'CPF'; }
+        else if (digits.length == 10) { pixTypeCadastrado = 'PHONE'; }
+      }
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _SaqueModal(
         saldoDisponivel: wallet.saldoCarteira,
-        pixKey: user?.email ?? '',
+        pixKey: pixKeyCadastrada,
+        pixKeyType: pixTypeCadastrado,
         saqueMinimo: wallet.saqueMinimo,
         saqueMaximo: wallet.saqueMaximo,
         onConfirm: (valor, pixKey, pixType) async {
@@ -1012,6 +1026,7 @@ class _TransacaoTile extends StatelessWidget {
 class _SaqueModal extends StatefulWidget {
   final double saldoDisponivel;
   final String pixKey;
+  final String pixKeyType;
   final double saqueMinimo;
   final double saqueMaximo;
   final void Function(double valor, String pixKey, String pixType) onConfirm;
@@ -1020,6 +1035,7 @@ class _SaqueModal extends StatefulWidget {
     required this.saldoDisponivel,
     required this.pixKey,
     required this.onConfirm,
+    this.pixKeyType = 'EMAIL',
     this.saqueMinimo = 0.0,
     this.saqueMaximo = 0.0,
   });
@@ -1029,23 +1045,123 @@ class _SaqueModal extends StatefulWidget {
 }
 
 class _SaqueModalState extends State<_SaqueModal> {
-  final _pixController = TextEditingController();
   final _valorController = TextEditingController();
-  String _pixType = 'EMAIL';
   final _fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
   @override
   void initState() {
     super.initState();
-    _pixController.text = widget.pixKey;
     _valorController.text = widget.saldoDisponivel.toStringAsFixed(2);
   }
 
   @override
   void dispose() {
-    _pixController.dispose();
     _valorController.dispose();
     super.dispose();
+  }
+
+  // -- Card read-only da chave PIX ------------------------------------------
+  Widget _buildPixCard() {
+    final chavePix = widget.pixKey;
+
+    // Sem chave → aviso vermelho
+    if (chavePix.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.error.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.pix_rounded, color: AppColors.error, size: 24),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Nenhuma chave PIX cadastrada.\nCadastre no seu Perfil para sacar.',
+                style: TextStyle(fontSize: 12, color: AppColors.error),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Label do tipo
+    final tipoLabel = () {
+      switch (widget.pixKeyType) {
+        case 'CPF':       return 'CPF';
+        case 'CNPJ':      return 'CNPJ';
+        case 'PHONE':     return 'Telefone';
+        case 'ALEATORIA': return 'Chave Aleatória';
+        default:          return 'E-mail';
+      }
+    }();
+
+    final tipoIcon = () {
+      switch (widget.pixKeyType) {
+        case 'CPF':       return Icons.badge_rounded;
+        case 'CNPJ':      return Icons.business_rounded;
+        case 'PHONE':     return Icons.phone_rounded;
+        case 'ALEATORIA': return Icons.vpn_key_rounded;
+        default:          return Icons.email_outlined;
+      }
+    }();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.pix_rounded,
+                color: AppColors.primary, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Chave PIX Cadastrada',
+                    style: TextStyle(fontSize: 11, color: AppColors.textHint)),
+                const SizedBox(height: 2),
+                Text(chavePix,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary),
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Row(children: [
+                  Icon(tipoIcon, size: 11, color: AppColors.primary),
+                  const SizedBox(width: 3),
+                  Text(tipoLabel,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary)),
+                ]),
+              ],
+            ),
+          ),
+          const Icon(Icons.verified_rounded,
+              color: AppColors.success, size: 18),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1131,39 +1247,14 @@ class _SaqueModalState extends State<_SaqueModal> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Tipo da chave PIX',
+          // -- Chave PIX read-only do perfil ---------------------------------
+          const Text('Chave PIX para Recebimento',
               style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: _pixType,
-            decoration: const InputDecoration(),
-            items: const [
-              DropdownMenuItem(value: 'EMAIL', child: Text('E-mail')),
-              DropdownMenuItem(value: 'CPF', child: Text('CPF')),
-              DropdownMenuItem(value: 'TELEFONE', child: Text('Telefone')),
-              DropdownMenuItem(
-                  value: 'ALEATORIA', child: Text('Chave aleatória')),
-            ],
-            onChanged: (v) => setState(() => _pixType = v ?? 'EMAIL'),
-          ),
-          const SizedBox(height: 16),
-          const Text('Chave PIX',
-              style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _pixController,
-            decoration: const InputDecoration(
-              hintText: 'Digite sua chave PIX',
-              prefixIcon:
-                  Icon(Icons.pix_rounded, color: AppColors.primary),
-            ),
-          ),
+          _buildPixCard(),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -1172,7 +1263,15 @@ class _SaqueModalState extends State<_SaqueModal> {
                 final valor = double.tryParse(
                         _valorController.text.replaceAll(',', '.')) ??
                     0;
-                if (valor <= 0 || _pixController.text.isEmpty) return;
+                // Valida chave PIX do perfil
+                if (widget.pixKey.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Cadastre sua chave PIX no Perfil antes de sacar'),
+                    backgroundColor: AppColors.error,
+                  ));
+                  return;
+                }
+                if (valor <= 0) return;
                 // Valida mínimo
                 if (widget.saqueMinimo > 0 && valor < widget.saqueMinimo) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1191,7 +1290,8 @@ class _SaqueModalState extends State<_SaqueModal> {
                   ));
                   return;
                 }
-                widget.onConfirm(valor, _pixController.text, _pixType);
+                // Usa a chave PIX e tipo do perfil (read-only)
+                widget.onConfirm(valor, widget.pixKey, widget.pixKeyType);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00E5B4),
