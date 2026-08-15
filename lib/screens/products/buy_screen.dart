@@ -454,8 +454,8 @@ class _BuyScreenState extends State<BuyScreen> {
           final pago = status == 'approved' || status == 'ativa';
           if (pago && !_paymentApproved) {
             timer.cancel();
-            // Gera número de bilhete Loteria Federal (5 dígitos únicos)
-            final bilhete = Random().nextInt(99999).toString().padLeft(5, '0');
+            // Gera número de bilhete Loteria Federal (6 dígitos — formato oficial)
+            final bilhete = Random().nextInt(999999).toString().padLeft(6, '0');
             setState(() {
               _paymentApproved  = true;
               _bilheteNumero    = bilhete;
@@ -2194,12 +2194,12 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
                                         ),
                                       ),
                                       const SizedBox(height: 6),
-                                      // Número do bilhete em destaque
+                                      // Número do bilhete em destaque (6 dígitos)
                                       Row(
                                         children: widget.bilheteNumero.split('').map((d) =>
                                           Container(
-                                            width: 32, height: 36,
-                                            margin: const EdgeInsets.only(right: 4),
+                                            width: 28, height: 34,
+                                            margin: const EdgeInsets.only(right: 3),
                                             decoration: BoxDecoration(
                                               color: Colors.white.withValues(alpha: 0.15),
                                               borderRadius: BorderRadius.circular(6),
@@ -2212,7 +2212,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
                                               child: Text(
                                                 d,
                                                 style: const TextStyle(
-                                                  fontSize: 18,
+                                                  fontSize: 16,
                                                   fontWeight: FontWeight.w900,
                                                   color: Colors.white,
                                                   letterSpacing: 0,
