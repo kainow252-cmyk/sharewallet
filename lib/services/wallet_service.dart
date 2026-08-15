@@ -171,11 +171,11 @@ class WalletService extends ChangeNotifier {
   }
 
 
-  // -- Solicitar Saque via Woovi — endpoint unificado (sem subconta) -----------
+  // -- Solicitar Saque via Mercado Pago PIX Out — endpoint unificado -----------
   // Usa POST /api/wallet/:userId/withdraw que:
   // 1. Valida saldo disponível
   // 2. Usa a chave Pix já cadastrada em affiliates.pix_key
-  // 3. Chama POST /api/v1/payment (destinationAlias) + POST /api/v1/payment/approve
+  // 3. Chama POST /v1/payments (MP PIX Out: operation_type=money_transfer)
   // Para cadastrar/atualizar chave Pix: use salvarChavePix() abaixo.
   Future<WithdrawResult> solicitarSaque({
     required double valor,
@@ -206,7 +206,7 @@ class WalletService extends ChangeNotifier {
         return WithdrawResult(success: false, message: 'Usuário não autenticado.');
       }
 
-      // Endpoint unificado: valida + cria withdrawal + chama Woovi em 1 passo
+      // Endpoint unificado: valida + cria withdrawal + chama Mercado Pago PIX Out
       final uri = Uri.parse('https://api.sharewallet.com.br/api/wallet/$uid/withdraw');
       final body = <String, dynamic>{'valor': valor};
       // pixKey opcional — se informado, é ignorado pelo worker (usa o cadastrado no perfil)
@@ -226,7 +226,7 @@ class WalletService extends ChangeNotifier {
         final status      = respData['status']?.toString() ?? 'processando';
         final destAlias   = respData['destinationAlias']?.toString() ?? pixKey ?? '';
         final destType    = respData['destinationType']?.toString() ?? '';
-        final msgWoovi    = respData['message']?.toString() ?? 'Saque enviado!';
+        final msgSaque    = respData['message']?.toString() ?? 'Saque enviado!';
         final wdData      = respData['withdrawal'] as Map<String, dynamic>? ?? {};
 
         // Atualiza saldo local imediatamente (otimistic update)
@@ -256,7 +256,7 @@ class WalletService extends ChangeNotifier {
         notifyListeners();
         return WithdrawResult(
           success: true,
-          message: msgWoovi,
+          message: msgSaque,
           value: valor,
           pixKey: destAlias,
           status: status,
