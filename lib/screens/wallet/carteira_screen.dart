@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../services/wallet_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/cf_api_service.dart';
+import '../../services/extrato_export_service.dart';
 import '../../theme/app_theme.dart';
 
 /// Tela completa de Carteira ShareWallet - dados via Cloudflare D1
@@ -113,26 +114,153 @@ class _CarteiraScreenState extends State<CarteiraScreen>
     }
   }
 
-  // Exportar extrato CSV para clipboard
-  void _exportarExtrato(WalletService wallet) {
-    final sb = StringBuffer();
-    sb.writeln('Tipo,Descrição,Valor,Data,Status');
-    for (final tx in wallet.extratoCompleto) {
-      final tipo   = tx['tipo'] as String? ?? '';
-      final desc   = (tx['descricao'] as String? ?? '').replaceAll('"','""');
-      final valor  = (tx['valor'] as num?)?.toDouble() ?? 0.0;
-      final data   = tx['data'] as DateTime?;
-      final status = tx['status'] as String? ?? '';
-      final dataStr = data != null
-          ? DateFormat('dd/MM/yyyy HH:mm').format(data) : '';
-      sb.writeln('$tipo,"$desc",${valor.toStringAsFixed(2)},$dataStr,$status');
-    }
-    Clipboard.setData(ClipboardData(text: sb.toString()));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Extrato copiado! Cole numa planilha para visualizar.'),
-        backgroundColor: AppColors.success,
-        duration: Duration(seconds: 4),
+  // Modal de exportação do extrato — opções: PDF/HTML, CSV, Copiar
+  void _showExtratoModal(WalletService wallet) {
+    final extrato = wallet.extratoCompleto;
+    final auth = context.read<AuthService>();
+    final nome = auth.currentUser?.nome ?? '';
+    final totalComissoes = extrato
+        .where((t) => (t['positivo'] as bool? ?? false))
+        .fold<double>(0, (s, t) => s + ((t['valor'] as num?)?.toDouble() ?? 0));
+    final totalSaques = extrato
+        .where((t) => !(t['positivo'] as bool? ?? true))
+        .fold<double>(0, (s, t) => s + ((t['valor'] as num?)?.toDouble() ?? 0));
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF1A1A2E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Título
+            Row(
+              children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded,
+                      color: AppColors.primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Exportar Extrato',
+                        style: TextStyle(color: Colors.white,
+                            fontSize: 16, fontWeight: FontWeight.w700)),
+                    Text('${extrato.length} transações',
+                        style: const TextStyle(
+                            color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Divider(color: Colors.white12, height: 32),
+
+            // Opção PDF / HTML
+            _ExportOption(
+              icon: Icons.picture_as_pdf_rounded,
+              iconColor: const Color(0xFFE84545),
+              label: 'PDF / Imprimir',
+              sublabel: 'Abre relatório completo para salvar como PDF',
+              onTap: () async {
+                Navigator.pop(context);
+                try {
+                  await ExtratoExportService.openPdf(
+                    extrato: extrato,
+                    totalComissoes: totalComissoes,
+                    totalSaques: totalSaques,
+                    nomeAfiliado: nome,
+                  );
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erro: $e'),
+                          backgroundColor: AppColors.error));
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+
+            // Opção CSV
+            _ExportOption(
+              icon: Icons.table_chart_rounded,
+              iconColor: const Color(0xFF4CAF50),
+              label: 'Planilha CSV',
+              sublabel: 'Baixa arquivo compatível com Excel e Google Sheets',
+              onTap: () async {
+                Navigator.pop(context);
+                try {
+                  await ExtratoExportService.downloadCsv(
+                    extrato: extrato,
+                    nomeAfiliado: nome,
+                  );
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erro: $e'),
+                          backgroundColor: AppColors.error));
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+
+            // Opção Copiar
+            _ExportOption(
+              icon: Icons.copy_rounded,
+              iconColor: const Color(0xFF2196F3),
+              label: 'Copiar para área de transferência',
+              sublabel: 'Cole direto numa planilha ou editor de texto',
+              onTap: () {
+                Navigator.pop(context);
+                final sb = StringBuffer();
+                sb.writeln('Data;Tipo;Descrição;Valor;Status');
+                for (final tx in extrato) {
+                  final tipo = tx['tipo'] as String? ?? '';
+                  final desc = (tx['descricao'] as String? ?? '').replaceAll(';', ',');
+                  final valor = (tx['valor'] as num?)?.toDouble() ?? 0.0;
+                  final data = tx['data'] as DateTime?;
+                  final positivo = tx['positivo'] as bool? ?? true;
+                  final status = tx['status'] as String? ?? '';
+                  final dataStr = data != null
+                      ? DateFormat('dd/MM/yyyy HH:mm').format(data) : '';
+                  final sinal = positivo ? '+' : '-';
+                  sb.writeln('$dataStr;$tipo;$desc;$sinal${valor.toStringAsFixed(2).replaceAll('.', ',')};$status');
+                }
+                Clipboard.setData(ClipboardData(text: sb.toString()));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Extrato copiado! Cole numa planilha.'),
+                    backgroundColor: AppColors.success,
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -249,10 +377,10 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                                 const Spacer(),
                                 // Exportar extrato
                                 IconButton(
-                                  onPressed: () => _exportarExtrato(wallet),
+                                  onPressed: () => _showExtratoModal(wallet),
                                   icon: const Icon(Icons.download_rounded,
                                       color: Colors.white70, size: 20),
-                                  tooltip: 'Exportar extrato CSV',
+                                  tooltip: 'Exportar extrato',
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(
                                       minWidth: 36, minHeight: 36),
@@ -470,7 +598,7 @@ class _CarteiraScreenState extends State<CarteiraScreen>
                             const SizedBox(width: 10),
                             // Exportar comissões
                             OutlinedButton.icon(
-                              onPressed: () => _exportarExtrato(wallet),
+                              onPressed: () => _showExtratoModal(wallet),
                               icon: const Icon(Icons.download_rounded,
                                   size: 16, color: AppColors.primary),
                               label: const Text('Extrato',
@@ -1307,6 +1435,69 @@ class _SaqueModalState extends State<_SaqueModal> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Widget auxiliar para opção de exportação ──────────────────────────────────
+class _ExportOption extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String sublabel;
+  final VoidCallback onTap;
+
+  const _ExportOption({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.sublabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(sublabel,
+                        style: const TextStyle(
+                            color: Colors.white54, fontSize: 11)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Colors.white30, size: 20),
+            ],
+          ),
+        ),
       ),
     );
   }
