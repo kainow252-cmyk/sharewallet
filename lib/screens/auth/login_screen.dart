@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/firebase_auth_service.dart';
+import '../../services/biometric_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
 import '../../utils/web_utils.dart';
@@ -24,13 +26,14 @@ class _LoginScreenState extends State<LoginScreen> {
   // Flag local para feedback INSTANTÂNEO no botão Entrar — antes do Firebase responder.
   // auth.isLoading só muda após o primeiro notifyListeners() do AuthService (tem delay).
   bool _loginLoading = false;
+  bool _biometricLoading = false;
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
 
   @override
   void initState() {
     super.initState();
     // Verifica redirect pendente do Google Sign-In (web).
-    // SÓ executa se sessionStorage indica redirect real pendente —
-    // evita esperar getRedirectResult() toda vez que a tela abre.
     if (kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final pendente = getSessionStorageValue('sw_redirect_pending') == 'true';
@@ -39,6 +42,24 @@ class _LoginScreenState extends State<LoginScreen> {
           _checkRedirectResult();
         }
       });
+    }
+    // Verifica disponibilidade de biometria
+    _checkBiometric();
+  }
+
+  Future<void> _checkBiometric() async {
+    if (kIsWeb) return;
+    final available = await BiometricService.isAvailable();
+    final enabled   = await BiometricService.isEnabled();
+    if (!mounted) return;
+    setState(() {
+      _biometricAvailable = available;
+      _biometricEnabled   = enabled;
+    });
+    // Se biometria está habilitada E há credenciais → tenta login automático
+    if (enabled && available) {
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (mounted) _loginWithBiometric(silent: true);
     }
   }
 
@@ -97,10 +118,19 @@ class _LoginScreenState extends State<LoginScreen> {
     // Feedback IMEDIATO: spinner aparece antes mesmo do Firebase ser chamado
     setState(() => _loginLoading = true);
     final auth = context.read<AuthService>();
-    final ok = await auth.login(_emailController.text.trim(), _senhaController.text);
+    final email = _emailController.text.trim();
+    final senha = _senhaController.text;
+    final ok = await auth.login(email, senha);
     if (!mounted) return;
     setState(() => _loginLoading = false);
     if (ok) {
+      // Oferecer salvar biometria se disponível e ainda não habilitada
+      if (_biometricAvailable && !_biometricEnabled) {
+        await _offerBiometricSave(email, senha);
+      } else if (_biometricEnabled) {
+        // Atualiza credenciais salvas (pode ter mudado a senha)
+        await BiometricService.saveCredentials(email, senha);
+      }
       _navegarAposLogin();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -109,6 +139,109 @@ class _LoginScreenState extends State<LoginScreen> {
           backgroundColor: AppColors.error,
         ),
       );
+    }
+  }
+
+  /// Login via biometria: autentica com digital, carrega credenciais e faz login.
+  Future<void> _loginWithBiometric({bool silent = false}) async {
+    if (!mounted) return;
+    setState(() => _biometricLoading = true);
+    try {
+      final creds = await BiometricService.loginWithBiometric();
+      if (!mounted) return;
+      if (creds == null) {
+        setState(() => _biometricLoading = false);
+        if (!silent) {
+          _showError('Autenticação biométrica falhou ou não há credenciais salvas.');
+        }
+        return;
+      }
+      // Preenche campos para o usuário ver (UX)
+      _emailController.text = creds.email;
+      _senhaController.text = creds.password;
+
+      final auth = context.read<AuthService>();
+      final ok = await auth.login(creds.email, creds.password);
+      if (!mounted) return;
+      setState(() => _biometricLoading = false);
+      if (ok) {
+        _navegarAposLogin();
+      } else {
+        // Credenciais salvas inválidas → remove biometria
+        await BiometricService.disable();
+        setState(() {
+          _biometricEnabled = false;
+        });
+        _showError('Sessão expirada. Por favor, faça login novamente.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _biometricLoading = false);
+      if (!silent) _showError('Erro ao usar biometria. Tente novamente.');
+    }
+  }
+
+  /// Pergunta ao usuário se quer ativar biometria após login bem-sucedido.
+  Future<void> _offerBiometricSave(String email, String senha) async {
+    if (!mounted) return;
+    final aceito = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.fingerprint_rounded,
+                  color: AppColors.primary, size: 28),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Ativar login por digital?',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Da próxima vez, entre com um toque de digital ou reconhecimento facial — sem precisar digitar senha.',
+          style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Agora não',
+                style: TextStyle(color: AppColors.textHint)),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.fingerprint_rounded, size: 18),
+            label: const Text('Ativar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+    if (aceito == true) {
+      await BiometricService.saveCredentials(email, senha);
+      if (mounted) {
+        setState(() => _biometricEnabled = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Login por digital ativado! 👆'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
     }
   }
 
@@ -685,42 +818,56 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 18),
 
-                              // E-mail
-                              TextFormField(
-                                controller: _emailController,
-                                keyboardType: TextInputType.emailAddress,
-                                decoration: const InputDecoration(
-                                  labelText: 'E-mail',
-                                  prefixIcon: Icon(Icons.email_outlined,
-                                      color: AppColors.primary),
-                                ),
-                                validator: (v) =>
-                                    v!.isEmpty ? 'Informe seu e-mail' : null,
-                              ),
-                              const SizedBox(height: 12),
-
-                              // Senha
-                              TextFormField(
-                                controller: _senhaController,
-                                obscureText: !_showPassword,
-                                decoration: InputDecoration(
-                                  labelText: 'Senha',
-                                  prefixIcon: const Icon(
-                                      Icons.lock_outline_rounded,
-                                      color: AppColors.primary),
-                                  suffixIcon: IconButton(
-                                    icon: Icon(
-                                      _showPassword
-                                          ? Icons.visibility_off_rounded
-                                          : Icons.visibility_rounded,
-                                      color: AppColors.textHint,
+                              // E-mail — com autofill para PWA salvar senha
+                              AutofillGroup(
+                                child: Column(
+                                  children: [
+                                    TextFormField(
+                                      controller: _emailController,
+                                      keyboardType: TextInputType.emailAddress,
+                                      autofillHints: const [AutofillHints.username, AutofillHints.email],
+                                      textInputAction: TextInputAction.next,
+                                      decoration: const InputDecoration(
+                                        labelText: 'E-mail',
+                                        prefixIcon: Icon(Icons.email_outlined,
+                                            color: AppColors.primary),
+                                      ),
+                                      validator: (v) =>
+                                          v!.isEmpty ? 'Informe seu e-mail' : null,
                                     ),
-                                    onPressed: () => setState(
-                                        () => _showPassword = !_showPassword),
-                                  ),
+                                    const SizedBox(height: 12),
+
+                                    // Senha
+                                    TextFormField(
+                                      controller: _senhaController,
+                                      obscureText: !_showPassword,
+                                      autofillHints: const [AutofillHints.password],
+                                      textInputAction: TextInputAction.done,
+                                      onEditingComplete: () {
+                                        TextInput.finishAutofillContext();
+                                        _login();
+                                      },
+                                      decoration: InputDecoration(
+                                        labelText: 'Senha',
+                                        prefixIcon: const Icon(
+                                            Icons.lock_outline_rounded,
+                                            color: AppColors.primary),
+                                        suffixIcon: IconButton(
+                                          icon: Icon(
+                                            _showPassword
+                                                ? Icons.visibility_off_rounded
+                                                : Icons.visibility_rounded,
+                                            color: AppColors.textHint,
+                                          ),
+                                          onPressed: () => setState(
+                                              () => _showPassword = !_showPassword),
+                                        ),
+                                      ),
+                                      validator: (v) =>
+                                          v!.length < 6 ? 'Mínimo 6 caracteres' : null,
+                                    ),
+                                  ],
                                 ),
-                                validator: (v) =>
-                                    v!.length < 6 ? 'Mínimo 6 caracteres' : null,
                               ),
                               const SizedBox(height: 4),
 
@@ -746,11 +893,55 @@ class _LoginScreenState extends State<LoginScreen> {
                               // Botão Entrar
                               PrimaryButton(
                                 label: 'Entrar',
-                                onPressed:
-                                    auth.isLoading || _socialLoading || _loginLoading ? null : _login,
+                                onPressed: auth.isLoading || _socialLoading ||
+                                    _loginLoading || _biometricLoading
+                                    ? null
+                                    : () {
+                                        TextInput.finishAutofillContext();
+                                        _login();
+                                      },
                                 isLoading: auth.isLoading || _loginLoading,
                                 icon: Icons.login_rounded,
                               ),
+
+                              // Botão biometria (digital/face) — só mobile com biometria disponível
+                              if (!kIsWeb && _biometricAvailable) ...[  
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    icon: _biometricLoading
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: AppColors.primary),
+                                          )
+                                        : const Icon(Icons.fingerprint_rounded,
+                                            size: 24, color: AppColors.primary),
+                                    label: Text(
+                                      _biometricEnabled
+                                          ? 'Entrar com digital'
+                                          : 'Usar digital (configure após login)',
+                                      style: const TextStyle(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      side: const BorderSide(
+                                          color: AppColors.primary, width: 1.5),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    onPressed: _biometricLoading || auth.isLoading ||
+                                        _loginLoading || !_biometricEnabled
+                                        ? null
+                                        : () => _loginWithBiometric(),
+                                  ),
+                                ),
+                              ],
 
                               // -- Social: Google + Facebook (se habilitados) --
                               if (loginCfg.loginGoogle || loginCfg.loginFacebook) ...[  
