@@ -6,12 +6,8 @@ import '../../services/app_config_service.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-// URL de download direto do R2 via Worker
 const _apkFallbackUrl = 'https://api.sharewallet.com.br/api/app/download';
 
-// Android Intent URL:
-//   • Se o app JÁ estiver instalado → abre direto o app nativo
-//   • Se NÃO estiver instalado      → fallback_url baixa e instala o APK
 const _androidIntentUrl =
     'intent://app.sharewallet.com.br/#Intent;'
     'scheme=https;'
@@ -19,12 +15,7 @@ const _androidIntentUrl =
     'S.browser_fallback_url=https%3A%2F%2Fapi.sharewallet.com.br%2Fapi%2Fapp%2Fdownload;'
     'end';
 
-/// Landing Page — layout 100% adaptável à altura da tela.
-/// Usa LayoutBuilder + Column com Flexible/Expanded para
-/// que TODO o conteúdo caiba sem scroll em qualquer dispositivo.
-///
-/// [sponsorCode] — código de afiliado recebido via link /ref/CODE
-/// Quando informado, é pré-preenchido no campo de indicação do cadastro.
+/// Landing Page — scroll livre, layout limpo, sem justify.
 class LandingScreen extends StatefulWidget {
   final String? sponsorCode;
   const LandingScreen({super.key, this.sponsorCode});
@@ -35,294 +26,353 @@ class LandingScreen extends StatefulWidget {
 
 class _LandingScreenState extends State<LandingScreen>
     with TickerProviderStateMixin {
-  late AnimationController _heroCtrl;
-  late AnimationController _cardsCtrl;
-  late AnimationController _ctaCtrl;
-
-  late Animation<double> _heroFade;
-  late Animation<Offset> _heroSlide;
-  late Animation<double> _cardsFade;
-  late Animation<Offset> _cardsSlide;
-  late Animation<double> _ctaScale;
+  late AnimationController _fadeCtrl;
+  late Animation<double> _fade;
+  late Animation<Offset> _slide;
 
   @override
   void initState() {
     super.initState();
-
-    _heroCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 700));
-    _heroFade  = CurvedAnimation(parent: _heroCtrl, curve: Curves.easeOut);
-    _heroSlide = Tween<Offset>(
-      begin: const Offset(0, -0.12),
+    _fadeCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 600));
+    _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _heroCtrl, curve: Curves.easeOut));
-
-    _cardsCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 550));
-    _cardsFade  = CurvedAnimation(parent: _cardsCtrl, curve: Curves.easeOut);
-    _cardsSlide = Tween<Offset>(
-      begin: const Offset(0, 0.18),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _cardsCtrl, curve: Curves.easeOut));
-
-    _ctaCtrl  = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 500));
-    _ctaScale = Tween<double>(begin: 0.88, end: 1.0).animate(
-      CurvedAnimation(parent: _ctaCtrl, curve: Curves.elasticOut),
-    );
-
-    _runSequence();
-  }
-
-  Future<void> _runSequence() async {
-    await _heroCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 80));
-    _cardsCtrl.forward();
-    await Future.delayed(const Duration(milliseconds: 180));
-    _ctaCtrl.forward();
+    ).animate(CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut));
+    _fadeCtrl.forward();
   }
 
   @override
   void dispose() {
-    _heroCtrl.dispose();
-    _cardsCtrl.dispose();
-    _ctaCtrl.dispose();
+    _fadeCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleInstall(BuildContext context) async {
+    final uri = Uri.parse(_androidIntentUrl);
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && context.mounted) {
+        await launchUrl(Uri.parse(_apkFallbackUrl), mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      if (context.mounted) {
+        await launchUrl(Uri.parse(_apkFallbackUrl), mode: LaunchMode.externalApplication);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final showCadastro =
+        context.watch<AppConfigService>().loginConfig.loginCadastroPublico;
+    final mq = MediaQuery.of(context);
+
     return Scaffold(
+      backgroundColor: const Color(0xFF071020),
       body: Container(
-        width: double.infinity,
-        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0A1628), Color(0xFF0D3B2E)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF071020), Color(0xFF0A2218), Color(0xFF071020)],
+            stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final h = constraints.maxHeight;
-              // Escala proporiconal: referência = 700px de altura útil
-              final scale = (h / 700).clamp(0.7, 1.1);
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: SlideTransition(
+            position: _slide,
+            child: FadeTransition(
+              opacity: _fade,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                    20, 28, 20, mq.padding.bottom + 24),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
 
-                    // ── Logo + título + subtítulo ───────────────────────────
-                    SlideTransition(
-                      position: _heroSlide,
-                      child: FadeTransition(
-                        opacity: _heroFade,
-                        child: _HeroSection(scale: scale),
+                    // ── Logo ──────────────────────────────────────────────
+                    _buildLogo(),
+
+                    const SizedBox(height: 20),
+
+                    // ── Brand name ────────────────────────────────────────
+                    RichText(
+                      text: const TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'Share',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 34,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          TextSpan(
+                            text: 'Wallet',
+                            style: TextStyle(
+                              color: Color(0xFF00E5B4),
+                              fontSize: 34,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
 
-                    // ── Cards de features (3 colunas) ────────────────────────
-                    SlideTransition(
-                      position: _cardsSlide,
-                      child: FadeTransition(
-                        opacity: _cardsFade,
-                        child: _FeatureCards(scale: scale),
+                    const SizedBox(height: 8),
+
+                    // ── Tagline ───────────────────────────────────────────
+                    const Text(
+                      'Transforme conexões em receita recorrente.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF8BA8A0),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        height: 1.5,
                       ),
                     ),
 
-                    // ── Stats row ────────────────────────────────────────────
-                    FadeTransition(
-                      opacity: _cardsFade,
-                      child: _StatsRow(scale: scale),
-                    ),
+                    const SizedBox(height: 32),
 
-                    // ── CTA Buttons ──────────────────────────────────────────
-                    ScaleTransition(
-                      scale: _ctaScale,
-                      child: _CtaSection(
-                        scale: scale,
-                        showCadastro: context.watch<AppConfigService>().loginConfig.loginCadastroPublico,
-                        onCadastro: () {
+                    // ── Card destaque ─────────────────────────────────────
+                    _WelcomeCard(),
+
+                    const SizedBox(height: 20),
+
+                    // ── Features — lista vertical limpa ───────────────────
+                    _FeatureList(),
+
+                    const SizedBox(height: 20),
+
+                    // ── Stats row ─────────────────────────────────────────
+                    _StatsRow(),
+
+                    const SizedBox(height: 32),
+
+                    // ── CTAs ──────────────────────────────────────────────
+                    if (showCadastro) ...[
+                      _PrimaryBtn(
+                        label: 'Começar agora — é grátis',
+                        icon: Icons.rocket_launch_rounded,
+                        onTap: () {
                           final code = widget.sponsorCode;
                           if (code != null && code.isNotEmpty) {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => RegisterScreen(sponsorCode: code),
+                                builder: (_) =>
+                                    RegisterScreen(sponsorCode: code),
                               ),
                             );
                           } else {
                             Navigator.pushNamed(context, '/register');
                           }
                         },
-                        onLogin: () =>
-                            Navigator.pushNamed(context, '/login'),
                       ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    _SecondaryBtn(
+                      label: 'Já tenho uma conta',
+                      onTap: () => Navigator.pushNamed(context, '/login'),
                     ),
 
-                    // ── Footer mínimo ────────────────────────────────────────
-                    FadeTransition(
-                      opacity: _heroFade,
-                      child: Padding(
-                        padding: EdgeInsets.only(bottom: 6 * scale),
-                        child: Text(
-                          '© ${DateTime.now().year} ShareWallet  •  Todos os direitos reservados',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            fontSize: 9 * scale,
-                          ),
+                    if (kIsWeb) ...[
+                      const SizedBox(height: 12),
+                      _SecondaryBtn(
+                        label: 'Instalar App Android',
+                        icon: Icons.android_rounded,
+                        iconColor: const Color(0xFF00E5B4),
+                        borderColor:
+                            const Color(0xFF00E5B4).withValues(alpha: 0.45),
+                        onTap: () => _handleInstall(context),
+                      ),
+                    ],
+
+                    if (showCadastro) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Ao criar sua conta você concorda com nossos Termos de Uso.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.22),
+                          fontSize: 11,
+                          height: 1.5,
                         ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 24),
+
+                    // ── Footer ────────────────────────────────────────────
+                    Text(
+                      '© ${DateTime.now().year} ShareWallet  •  Todos os direitos reservados',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        fontSize: 10,
                       ),
                     ),
                   ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Hero Section ────────────────────────────────────────────────────────────
-
-class _HeroSection extends StatelessWidget {
-  final double scale;
-  const _HeroSection({required this.scale});
-
-  @override
-  Widget build(BuildContext context) {
-    final logoSize = 72.0 * scale;
-
-    return Column(
-      children: [
-        SizedBox(height: 18 * scale),
-
-        // Logo
-        Container(
-          width: logoSize,
-          height: logoSize,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(logoSize * 0.28),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF00E5B4).withValues(alpha: 0.28),
-                blurRadius: 28,
-                spreadRadius: 3,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(logoSize * 0.28),
-            child: Image.asset(
-              'assets/images/sharewallet_logo.png',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF1A237E), Color(0xFF00BCD4)],
-                  ),
-                ),
-                child: Icon(
-                  Icons.account_balance_wallet_rounded,
-                  color: Colors.white,
-                  size: logoSize * 0.54,
                 ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
 
-        SizedBox(height: 14 * scale),
-
-        // Nome ShareWallet
-        RichText(
-          textAlign: TextAlign.center,
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: 'Share',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 30 * scale,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
-                ),
+  Widget _buildLogo() {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00E5B4).withValues(alpha: 0.30),
+            blurRadius: 32,
+            spreadRadius: 2,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Image.asset(
+          'assets/images/sharewallet_logo.png',
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF0A2218), Color(0xFF00BCD4)],
               ),
-              TextSpan(
-                text: 'Wallet',
-                style: TextStyle(
-                  color: const Color(0xFF00E5B4),
-                  fontSize: 30 * scale,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
-                ),
-              ),
-            ],
+            ),
+            child: const Icon(
+              Icons.account_balance_wallet_rounded,
+              color: Colors.white,
+              size: 38,
+            ),
           ),
         ),
-
-        SizedBox(height: 6 * scale),
-
-        // Tagline
-        Text(
-          'Transforme conexões em receita recorrente.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.65),
-            fontSize: 13 * scale,
-            fontWeight: FontWeight.w400,
-            height: 1.5,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-// ── Feature Cards ─────────────────────────────────────────────────────────────
+// ── Welcome Card ──────────────────────────────────────────────────────────────
 
-class _FeatureCards extends StatelessWidget {
-  final double scale;
-  const _FeatureCards({required this.scale});
+class _WelcomeCard extends StatelessWidget {
+  const _WelcomeCard();
 
   @override
   Widget build(BuildContext context) {
-    const features = [
-      _FeatureData(
-        icon: Icons.track_changes_rounded,
-        color: Color(0xFF00E5B4),
-        title: 'Rastreamento',
-        desc: 'Cliques, conversões e comissões em tempo real.',
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00E5B4).withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFF00E5B4).withValues(alpha: 0.18),
+          width: 1,
+        ),
       ),
-      _FeatureData(
-        icon: Icons.pix_rounded,
-        color: Color(0xFF00BCD4),
-        title: 'Saque PIX',
-        desc: 'Receba seus ganhos direto na conta em segundos.',
+      child: Column(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFF00E5B4).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.hub_rounded,
+              color: Color(0xFF00E5B4),
+              size: 26,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Bem-vindo à ShareWallet',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Color(0xFF00E5B4),
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Sua rede de contatos é o seu maior ativo.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Gerencie, rastreie e expanda seus ganhos digitais.\nTransforme conexões em receita recorrente\ne assuma o controle da sua performance financeira.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.50),
+              fontSize: 13,
+              height: 1.6,
+            ),
+          ),
+        ],
       ),
-      _FeatureData(
-        icon: Icons.bar_chart_rounded,
-        color: Color(0xFFFFD740),
-        title: 'Dashboard',
-        desc: 'Performance com métricas detalhadas.',
-      ),
-    ];
+    );
+  }
+}
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: features
-            .map((f) => Expanded(child: _FeatureCard(feature: f, scale: scale)))
-            .toList(),
-      ),
+// ── Feature List — vertical, sem quebras feias ────────────────────────────────
+
+class _FeatureList extends StatelessWidget {
+  const _FeatureList();
+
+  static const _items = [
+    _FeatureData(
+      icon: Icons.track_changes_rounded,
+      color: Color(0xFF00E5B4),
+      title: 'Rastreamento em tempo real',
+      desc: 'Monitore cliques, conversões e comissões instantaneamente.',
+    ),
+    _FeatureData(
+      icon: Icons.pix_rounded,
+      color: Color(0xFF00BCD4),
+      title: 'Saque via PIX',
+      desc: 'Receba seus ganhos direto na sua conta em segundos.',
+    ),
+    _FeatureData(
+      icon: Icons.bar_chart_rounded,
+      color: Color(0xFFFFD740),
+      title: 'Dashboard completo',
+      desc: 'Visualize sua performance com métricas detalhadas.',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: _items
+          .map((f) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _FeatureRow(feature: f),
+              ))
+          .toList(),
     );
   }
 }
@@ -340,58 +390,60 @@ class _FeatureData {
   });
 }
 
-class _FeatureCard extends StatelessWidget {
+class _FeatureRow extends StatelessWidget {
   final _FeatureData feature;
-  final double scale;
-  const _FeatureCard({required this.feature, required this.scale});
+  const _FeatureRow({required this.feature});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: EdgeInsets.symmetric(
-          vertical: 14 * scale, horizontal: 8 * scale),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: Colors.white.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: feature.color.withValues(alpha: 0.20),
+          color: feature.color.withValues(alpha: 0.18),
           width: 1,
         ),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Ícone
           Container(
-            width: 42 * scale,
-            height: 42 * scale,
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
-              color: feature.color.withValues(alpha: 0.12),
+              color: feature.color.withValues(alpha: 0.13),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(feature.icon,
-                color: feature.color, size: 20 * scale),
+            child: Icon(feature.icon, color: feature.color, size: 24),
           ),
-          SizedBox(height: 10 * scale),
-          Text(
-            feature.title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 11 * scale,
-              fontWeight: FontWeight.w700,
-              height: 1.3,
-            ),
-          ),
-          SizedBox(height: 5 * scale),
-          Text(
-            feature.desc,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.45),
-              fontSize: 10 * scale,
-              height: 1.4,
+          const SizedBox(width: 14),
+          // Texto
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  feature.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  feature.desc,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.48),
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -403,16 +455,14 @@ class _FeatureCard extends StatelessWidget {
 // ── Stats Row ─────────────────────────────────────────────────────────────────
 
 class _StatsRow extends StatelessWidget {
-  final double scale;
-  const _StatsRow({required this.scale});
+  const _StatsRow();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(
-          vertical: 12 * scale, horizontal: 16 * scale),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: Colors.white.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: const Color(0xFF00E5B4).withValues(alpha: 0.12),
@@ -420,22 +470,18 @@ class _StatsRow extends StatelessWidget {
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _StatItem(value: '10K+', label: 'Afiliados',
-              color: const Color(0xFF00E5B4), scale: scale),
-          Container(
-            width: 1, height: 32 * scale,
-            color: Colors.white.withValues(alpha: 0.1),
-          ),
+              color: const Color(0xFF00E5B4)),
+          Container(width: 1, height: 36,
+              color: Colors.white.withValues(alpha: 0.08)),
           _StatItem(value: 'R\$ 2M+', label: 'Pagos',
-              color: const Color(0xFF00BCD4), scale: scale),
-          Container(
-            width: 1, height: 32 * scale,
-            color: Colors.white.withValues(alpha: 0.1),
-          ),
+              color: const Color(0xFF00BCD4)),
+          Container(width: 1, height: 36,
+              color: Colors.white.withValues(alpha: 0.08)),
           _StatItem(value: '99.9%', label: 'Uptime',
-              color: const Color(0xFFFFD740), scale: scale),
+              color: const Color(0xFFFFD740)),
         ],
       ),
     );
@@ -446,12 +492,10 @@ class _StatItem extends StatelessWidget {
   final String value;
   final String label;
   final Color color;
-  final double scale;
   const _StatItem({
     required this.value,
     required this.label,
     required this.color,
-    required this.scale,
   });
 
   @override
@@ -462,17 +506,17 @@ class _StatItem extends StatelessWidget {
           value,
           style: TextStyle(
             color: color,
-            fontSize: 15 * scale,
+            fontSize: 16,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.3,
           ),
         ),
-        SizedBox(height: 2 * scale),
+        const SizedBox(height: 3),
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.4),
-            fontSize: 10 * scale,
+            color: Colors.white.withValues(alpha: 0.38),
+            fontSize: 11,
           ),
         ),
       ],
@@ -480,163 +524,95 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-// ── CTA Section ───────────────────────────────────────────────────────────────
+// ── Buttons ───────────────────────────────────────────────────────────────────
 
-class _CtaSection extends StatelessWidget {
-  final VoidCallback onCadastro;
-  final VoidCallback onLogin;
-  final double scale;
-  final bool showCadastro;
-
-  const _CtaSection({
-    required this.onCadastro,
-    required this.onLogin,
-    required this.scale,
-    this.showCadastro = true,
+class _PrimaryBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _PrimaryBtn({
+    required this.label,
+    required this.icon,
+    required this.onTap,
   });
-
-  Future<void> _handleInstall(BuildContext context) async {
-    // Intent URL: abre app nativo se instalado; caso contrário
-    // o Android baixa e instala o APK automaticamente via fallback_url
-    final uri = Uri.parse(_androidIntentUrl);
-    try {
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched && context.mounted) {
-        // Fallback direto para download se Intent não abrir
-        await launchUrl(
-          Uri.parse(_apkFallbackUrl),
-          mode: LaunchMode.externalApplication,
-        );
-      }
-    } catch (_) {
-      // Última tentativa: download direto
-      if (context.mounted) {
-        await launchUrl(
-          Uri.parse(_apkFallbackUrl),
-          mode: LaunchMode.externalApplication,
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Botão primário — só aparece se cadastro público está habilitado
-        if (showCadastro) SizedBox(
-          width: double.infinity,
-          height: 50 * scale,
-          child: ElevatedButton(
-            onPressed: onCadastro,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00E5B4),
-              foregroundColor: const Color(0xFF0A1628),
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(13),
-              ),
-              elevation: 0,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.rocket_launch_rounded, size: 18 * scale),
-                SizedBox(width: 8 * scale),
-                Text(
-                  'Começar agora  —  é grátis',
-                  style: TextStyle(
-                    fontSize: 15 * scale,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ],
-            ),
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+        label: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.1,
           ),
         ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF00E5B4),
+          foregroundColor: const Color(0xFF071020),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-        if (showCadastro) SizedBox(height: 10 * scale),
+class _SecondaryBtn extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final Color? iconColor;
+  final Color? borderColor;
+  final VoidCallback onTap;
+  const _SecondaryBtn({
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.iconColor,
+    this.borderColor,
+  });
 
-        // Botão secundário — "Já tenho uma conta" sempre visível
-        SizedBox(
-          width: double.infinity,
-          height: 46 * scale,
-          child: OutlinedButton(
-            onPressed: onLogin,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white70,
-              side: BorderSide(
-                color: Colors.white.withValues(alpha: 0.18),
-                width: 1,
-              ),
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(13),
-              ),
-            ),
-            child: Text(
-              'Já tenho uma conta',
+  @override
+  Widget build(BuildContext context) {
+    final border = borderColor ?? Colors.white.withValues(alpha: 0.16);
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: iconColor ?? Colors.white70,
+          side: BorderSide(color: border, width: 1.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          padding: EdgeInsets.zero,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 18, color: iconColor ?? Colors.white70),
+              const SizedBox(width: 8),
+            ],
+            Text(
+              label,
               style: TextStyle(
-                fontSize: 14 * scale,
-                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: iconColor ?? Colors.white70,
               ),
             ),
-          ),
+          ],
         ),
-
-        // ── Botão Instalar App Android ──────────────────────────────────────
-        // Visível apenas no web (na landing page acessada pelo browser)
-        // No app nativo esse botão não faz sentido — escondemos via kIsWeb
-        if (kIsWeb) ...[
-          SizedBox(height: 10 * scale),
-          SizedBox(
-            width: double.infinity,
-            height: 46 * scale,
-            child: OutlinedButton.icon(
-              onPressed: () => _handleInstall(context),
-              icon: Icon(
-                Icons.android_rounded,
-                size: 18 * scale,
-                color: const Color(0xFF00E5B4),
-              ),
-              label: Text(
-                'Instalar App Android',
-                style: TextStyle(
-                  fontSize: 14 * scale,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF00E5B4),
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.zero,
-                side: BorderSide(
-                  color: const Color(0xFF00E5B4).withValues(alpha: 0.45),
-                  width: 1.2,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13),
-                ),
-              ),
-            ),
-          ),
-        ],
-
-        if (showCadastro) SizedBox(height: 10 * scale),
-
-        if (showCadastro) Text(
-          'Ao criar sua conta você concorda com nossos Termos de Uso.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.25),
-            fontSize: 10 * scale,
-            height: 1.5,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
