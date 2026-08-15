@@ -1,13 +1,15 @@
 /**
- * pwa_install.js — ShareWallet PWA Install v10
+ * pwa_install.js — ShareWallet PWA Install v11
  *
- * LÓGICA SIMPLES:
+ * LÓGICA:
  *   1. standalone → pula landing, abre app direto
  *   2. /produto/  → silêncio
  *   3. /admin     → troca manifest
- *   4. Mobile     → espera até 5s pelo beforeinstallprompt
- *                   Se chegar → botão INSTALAR 1 clique
- *                   Se não chegar → nada (não mostra guia confuso)
+ *   4. Mobile     → botão INSTALAR 1 clique
+ *      - Chrome/Edge Android: usa beforeinstallprompt (espera até 5s)
+ *      - Samsung Internet: não dispara o prompt → mostra banner com
+ *        instrução simples "toque ⬇️ na barra de endereço"
+ *      - iOS Safari: mostra banner com instrução Compartilhar → Add
  *   5. Dismissed < 3 dias → silêncio
  */
 (function () {
@@ -25,9 +27,12 @@
     return window.matchMedia('(display-mode: standalone)').matches ||
            navigator.standalone === true;
   }
-  function isIOS()     { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
-  function isAndroid() { return /android/i.test(navigator.userAgent); }
-  function isMobile()  { return isIOS() || isAndroid(); }
+  function isIOS()      { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+  function isAndroid()  { return /android/i.test(navigator.userAgent); }
+  function isSamsungBrowser() { return /SamsungBrowser/i.test(navigator.userAgent); }
+  function isMobile()   { return isIOS() || isAndroid(); }
+  // Samsung Internet não dispara beforeinstallprompt → precisa de banner manual
+  function needsManualBanner() { return isSamsungBrowser() || isIOS(); }
 
   function wasInstalled() { return localStorage.getItem(KEY_INSTALLED) === '1'; }
   function isBuyerRoute() { return (window.location.hash || '').indexOf('/produto/') !== -1; }
@@ -135,7 +140,7 @@
     document.head.appendChild(s);
   }
 
-  /* ── Banner install (1 clique) ───────────────────────────── */
+  /* ── Banner install 1 clique (Chrome Android com prompt) ─── */
   function showBanner(promptEvt) {
     if (document.getElementById('pwa-banner')) return;
 
@@ -169,6 +174,44 @@
           }
         });
       }
+    };
+  }
+
+  /* ── Banner manual (Samsung Internet / iOS) ──────────────── */
+  // Samsung: tem ícone ⬇️ na barra de endereço — só aponta para ele
+  // iOS: Compartilhar → Adicionar à Tela de Início
+  function showManualBanner() {
+    if (document.getElementById('pwa-banner')) return;
+
+    var samsung = isSamsungBrowser();
+    var hint = samsung
+      ? 'Toque em <b style="color:#C9A84C">⬇️</b> na barra de endereço acima'
+      : 'Toque em <b style="color:#C9A84C">Compartilhar ↑</b> → "Adicionar à Tela"';
+
+    var el = document.createElement('div');
+    el.id  = 'pwa-banner';
+    el.innerHTML =
+      '<div class="pwa-row">' +
+        '<img src="' + ICON + '" alt="">' +
+        '<div class="pwa-info">' +
+          '<b>Instalar ShareWallet</b>' +
+          '<span>' + hint + '</span>' +
+        '</div>' +
+        '<button class="pwa-close" id="pwa-close-btn">✕</button>' +
+      '</div>' +
+      '<button id="pwa-btn-install" style="background:rgba(201,168,76,.15);color:#C9A84C;box-shadow:none;border:1px solid rgba(201,168,76,.4);animation:none;">' +
+        (samsung ? '⬇️&nbsp; Toque no ícone de download acima' : '📤&nbsp; Compartilhar → Adicionar à Tela') +
+      '</button>';
+    document.body.appendChild(el);
+
+    document.getElementById('pwa-close-btn').onclick = function () {
+      markDismissed();
+      closePanel('pwa-banner');
+    };
+    // Botão secundário só fecha o banner (não tem prompt para acionar)
+    document.getElementById('pwa-btn-install').onclick = function () {
+      markDismissed();
+      closePanel('pwa-banner');
     };
   }
 
@@ -259,11 +302,20 @@
     if (wasInstalled() || wasDismissed()) return;
 
     /*
-     * 5. Aguarda até 5s pelo beforeinstallprompt.
-     *    - Se chegar antes de 2s → mostra imediatamente ao completar 2s
-     *    - Se chegar entre 2s e 5s → mostra na hora que chegar
-     *    - Se não chegar em 5s → silêncio (Chrome bloqueou, não confunde o usuário)
+     * 5. Samsung Internet / iOS → banner manual imediato (2s)
+     *    Chrome/Edge Android    → espera beforeinstallprompt até 5s
      */
+    if (needsManualBanner()) {
+      // Samsung e iOS não entregam prompt → banner com instrução visual
+      setTimeout(function () {
+        if (isBuyerRoute() || isStandalone() || _bannerShown) return;
+        _bannerShown = true;
+        showManualBanner();
+      }, 2000);
+      return;
+    }
+
+    // Chrome/Edge: aguarda beforeinstallprompt
     setTimeout(function () {
       if (isBuyerRoute() || isStandalone()) return;
       _readyToShow = true;
@@ -271,12 +323,10 @@
         _bannerShown = true;
         showBanner(_prompt);
       }
-      // Sem prompt após 2s → espera mais 3s (total 5s) antes de desistir
     }, 2000);
 
     setTimeout(function () {
-      // Após 5s: se o prompt não chegou, não mostra nada
-      // (evita guia confuso de "três pontinhos")
+      // Após 5s sem prompt → silêncio (Chrome bloqueou por algum motivo)
       _readyToShow = false;
     }, 5000);
   }
