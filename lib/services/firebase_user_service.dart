@@ -526,6 +526,9 @@ class FirebaseUserService {
         createdAt: _toDateTimeOrNow(aData['created_at']),
         pixKey: pixKeyResolvido,
         pixKeyType: pixKeyTypeResolvido,
+        photoUrl: _toStr(aData['photo_url']).isNotEmpty
+            ? _toStr(aData['photo_url'])
+            : null,
       );
     } catch (e) {
       if (kDebugMode) {
