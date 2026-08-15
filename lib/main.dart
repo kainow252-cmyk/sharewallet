@@ -35,6 +35,7 @@ import 'screens/admin/admin_login_screen.dart';
 import 'screens/admin/admin_nav_screen.dart';
 import 'screens/products/buy_screen.dart';
 import 'screens/download/apk_download_screen.dart';
+import 'screens/shell/webview_shell_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -159,6 +160,18 @@ class ShareWalletApp extends StatelessWidget {
     final hasProduto =
         initialProductId != null && initialProductId!.isNotEmpty;
 
+    // ── APK Android: abre diretamente o site como WebView (igual PWA) ────────
+    // Fontes, layout e UX ficam 100% idênticos ao site — zero duplicação.
+    if (!kIsWeb) {
+      return MaterialApp(
+        title: 'ShareWallet',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.theme,
+        home: const WebViewShellScreen(),
+      );
+    }
+
+    // ── Web: fluxo nativo Flutter completo ───────────────────────────────────
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
