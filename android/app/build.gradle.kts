@@ -33,7 +33,7 @@ android {
 
     defaultConfig {
         applicationId = "com.affiliatewallet.wallet"
-        minSdk = 23 // local_auth (biometria) exige mínimo API 23
+        minSdk = flutter.minSdkVersion // local_auth (biometria) exige mínimo API 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
