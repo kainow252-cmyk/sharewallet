@@ -45,8 +45,8 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
   @override
   void initState() {
     super.initState();
-    // 3 tabs: Pendentes | Aprovados | Recusados
-    _tabController = TabController(length: 3, vsync: this);
+    // 4 tabs: Pendentes | Processando | Aprovados | Recusados
+    _tabController = TabController(length: 4, vsync: this);
     _searchCtrl.addListener(() => setState(() => _search = _searchCtrl.text.trim()));
   }
 
@@ -62,10 +62,11 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
     final svc = context.watch<AdminService>();
     final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
-    final pendentes  = _filtered(svc.withdrawals.where((w) => w.status == 'pendente').toList());
-    final aprovados  = _filtered(svc.withdrawals.where((w) => w.status == 'aprovado').toList());
-    final recusados  = _filtered(svc.withdrawals.where((w) => w.status == 'recusado' || w.status == 'processando').toList());
-    final todos      = _filtered(svc.withdrawals);
+    final pendentes    = _filtered(svc.withdrawals.where((w) => w.status == 'pendente').toList());
+    final processando  = _filtered(svc.withdrawals.where((w) => w.status == 'processando').toList());
+    final aprovados    = _filtered(svc.withdrawals.where((w) => w.status == 'aprovado').toList());
+    final recusados    = _filtered(svc.withdrawals.where((w) => w.status == 'recusado').toList());
+    final todos        = _filtered(svc.withdrawals);
 
     final totalPendente = pendentes.fold(0.0, (s, w) => s + w.valor);
 
@@ -103,6 +104,31 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text('${pendentes.length}',
+                              style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                // Processando
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Processando'),
+                      if (processando.isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppColors.info,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text('${processando.length}',
                               style: const TextStyle(
                                   fontSize: 10,
                                   color: Colors.white,
@@ -270,6 +296,7 @@ class _AdminWithdrawalsScreenState extends State<AdminWithdrawalsScreen>
                         onApprove: (w) => _approve(context, svc, w),
                         onReject: (w) => _reject(context, svc, w),
                       ),
+                      _WithdrawalList(withdrawals: processando),
                       _WithdrawalList(withdrawals: aprovados),
                       _WithdrawalList(withdrawals: recusados),
                     ],
