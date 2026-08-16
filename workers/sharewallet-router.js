@@ -410,11 +410,11 @@ var worker_default = {
     //   • Chrome mostra "ABRIR" na notificação ao terminar ✅
     if (path === "/app/download" || path === "/download/apk" ||
         path === "/app/ShareWallet.apk" || path === "/ShareWallet.apk") {
-      const APK_KEY = "ShareWallet-v1.0.5.apk";
+      const APK_KEY = "ShareWallet-v1.0.7.apk";
       try {
         const obj = await env.APK_BUCKET.get(APK_KEY);
         if (!obj) {
-          const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
+          const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.7/ShareWallet-v1.0.7.apk";
           return Response.redirect(GITHUB_APK, 302);
         }
         const headers = new Headers();
@@ -425,7 +425,7 @@ var worker_default = {
         headers.set("Access-Control-Allow-Origin", "*");
         return new Response(obj.body, { status: 200, headers });
       } catch (_) {
-        const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
+        const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.7/ShareWallet-v1.0.7.apk";
         return Response.redirect(GITHUB_APK, 302);
       }
     }
