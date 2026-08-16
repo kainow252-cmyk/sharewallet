@@ -8,10 +8,9 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-// Worker /app/download faz redirect 302 → GitHub CDN.
-// window.location.href (mesma aba) + redirect 302 = Chrome segue sem abrir nova guia
-// + GitHub CDN serve com Content-Disposition:attachment correto
-// + botao "ABRIR" aparece na notificacao ao terminar.
+// Worker /app/download serve APK do R2 (mesmo domínio, sem redirect).
+// downloadApkBlob() faz fetch() same-origin → Blob → blob:// → <a download>
+// → sem nova guia → Chrome baixa → notificação com "ABRIR" → PackageInstaller.
 const _apkUrl = 'https://payment.sharewallet.com.br/app/download';
 const _apkFilename = 'ShareWallet.apk';
 
@@ -597,10 +596,9 @@ class _CtaSection extends StatelessWidget {
 
   Future<void> _handleInstall(BuildContext context) async {
     if (kIsWeb) {
-      // window.location.href = mesma aba, sem popup, sem nova guia
-      // Worker /app/download retorna 302 → GitHub CDN
-      // Chrome segue redirect, baixa do GitHub, mostra "ABRIR" na notificacao
-      web_utils.navigateSameTab(_apkUrl);
+      // fetch same-origin → Blob → blob:// → <a download>
+      // Sem nova guia. Chrome baixa e mostra "ABRIR" na notificação.
+      web_utils.downloadApkBlob(_apkUrl, _apkFilename);
       return;
     }
     try {

@@ -61,32 +61,39 @@ void navigateSameTab(String url) {
   html.window.open(url, '_self');
 }
 
-/// Inicia download de APK via <a href download> direto — popup nativo imediato.
+/// Baixa APK via fetch() + Blob URL — SEM abrir nova guia, SEM navegar.
 ///
-/// Por que esta abordagem:
-///   • fetch+Blob: carrega 62MB na RAM antes de mostrar qualquer coisa → UX ruim
-///   • window.location.href: mesmo domínio Worker → Chrome Mobile ainda pode abrir guia
-///   • <a download> com URL do Worker (mesmo domínio): Chrome exibe popup nativo
-///     "Baixar ShareWallet.apk?" IMEDIATAMENTE, download aparece na barra de
-///     notificações, e quando termina oferece "Abrir" para instalar.
+/// Fluxo:
+///   1. fetch(url) no mesmo domínio (Worker) → sem nova guia, sem CORS
+///   2. response.blob() → Blob local na memória do browser
+///   3. URL.createObjectURL(blob) → URL tipo blob:// (same-origin)
+///   4. <a download> + .click() → Chrome inicia download nativo imediato
+///   5. URL.revokeObjectURL() após 60s → libera memória
 ///
-/// O Worker /app/download retorna Content-Disposition: attachment + mesmo domínio,
-/// então Chrome trata como download, não como navegação.
+/// Por que funciona:
+///   • fetch same-origin → browser não abre nova guia
+///   • blob:// é same-origin → <a download> é respeitado pelo Chrome Android
+///   • window.location.href/redirect cross-origin → Chrome abre nova guia ❌
 Future<void> downloadApkBlob(String url, String filename) async {
   try {
-    // <a href=url download=filename> + .click() — popup nativo imediato
-    // Sem fetch, sem Blob, sem espera — Chrome mostra "Baixar?" na hora
-    final anchor = html.AnchorElement(href: url)
+    final resp = await html.window.fetch(url);
+    // ignore: avoid_dynamic_calls
+    if ((resp as dynamic).ok != true) {
+      html.window.location.href = url;
+      return;
+    }
+    // ignore: avoid_dynamic_calls
+    final blob = await (resp as dynamic).blob() as html.Blob;
+    final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+    final anchor = html.AnchorElement(href: blobUrl)
       ..setAttribute('download', filename)
-      ..setAttribute('target', '_self')   // garante mesma aba
       ..style.display = 'none';
     html.document.body?.append(anchor);
     anchor.click();
-    // Pequeno delay antes de remover para garantir que o clique foi processado
-    await Future.delayed(const Duration(milliseconds: 200));
     anchor.remove();
+    Future.delayed(
+        const Duration(seconds: 60), () => html.Url.revokeObjectUrl(blobUrl));
   } catch (_) {
-    // Fallback: navega na mesma aba
     html.window.location.href = url;
   }
 }

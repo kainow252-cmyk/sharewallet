@@ -159,21 +159,39 @@ var worker_default = {
     if (path === "/" || path === "") {
       return Response.redirect(url.origin + "/app/", 302);
     }
-    // ── Download APK ─────────────────────────────────────────────────────────
-    // window.location.href (mesma aba) → Worker → redirect 302 → GitHub CDN.
+    // ── Download APK via R2 (proxy mesmo domínio) ────────────────────────────
     //
-    // Por que redirect 302 e não proxy:
-    //   • proxy (mesmo domínio): Chrome trata como navegação → sem botão "ABRIR"
-    //   • redirect 302 → GitHub CDN (domínio externo): Chrome trata como download
-    //     externo → mostra botão "ABRIR" na notificação → 1 toque → PackageInstaller
+    // FLUXO CORRETO (testado, funciona sem nova guia):
+    //   Flutter: downloadApkBlob() faz fetch() same-origin → Blob → <a download>
+    //   Worker:  serve APK do R2 com Content-Type correto, SEM redirect
     //
-    // Por que window.location.href e não <a download>:
-    //   • <a download> cross-origin é ignorado pelo Chrome → abre 2 guias
-    //   • window.location.href mesma aba + redirect = sem nova guia ✅
+    // Por que NÃO usar redirect 302 para GitHub:
+    //   • redirect cross-origin → Chrome Android abre nova guia ❌
+    //
+    // Por que proxy R2 funciona com fetch+Blob:
+    //   • fetch() same-origin → browser não abre nova guia ✅
+    //   • blob:// URL é same-origin → <a download> é respeitado ✅
+    //   • Chrome mostra "ABRIR" na notificação ao terminar ✅
     if (path === "/app/download" || path === "/download/apk" ||
         path === "/app/ShareWallet.apk" || path === "/ShareWallet.apk") {
-      const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
-      return Response.redirect(GITHUB_APK, 302);
+      const APK_KEY = "ShareWallet-v1.0.5.apk";
+      try {
+        const obj = await env.APK_BUCKET.get(APK_KEY);
+        if (!obj) {
+          const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
+          return Response.redirect(GITHUB_APK, 302);
+        }
+        const headers = new Headers();
+        headers.set("Content-Type", "application/vnd.android.package-archive");
+        headers.set("Content-Disposition", 'attachment; filename="ShareWallet.apk"');
+        if (obj.size) headers.set("Content-Length", String(obj.size));
+        headers.set("Cache-Control", "no-store");
+        headers.set("Access-Control-Allow-Origin", "*");
+        return new Response(obj.body, { status: 200, headers });
+      } catch (_) {
+        const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
+        return Response.redirect(GITHUB_APK, 302);
+      }
     }
     // ─────────────────────────────────────────────────────────────────────────
 
