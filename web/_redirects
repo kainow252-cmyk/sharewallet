@@ -1,1 +1,6 @@
-/* /index.html 200
+# Páginas estáticas — DEVEM vir ANTES do catch-all SPA
+/app/install      /app/install.html   200
+/app/install.html /app/install.html   200
+
+# SPA catch-all — DEVE ser a última regra
+/*  /index.html  200
