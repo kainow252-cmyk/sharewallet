@@ -648,26 +648,26 @@ class _BuyScreenState extends State<BuyScreen> {
       onPopInvokedWithResult: (didPop, _) {
         // não faz nada — impede saída acidental para o login
       },
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          title: const Row(
-            children: [
-              Icon(Icons.account_balance_wallet_rounded,
-                  color: AppColors.primary, size: 22),
-              SizedBox(width: 8),
-              Text('ShareWallet',
-                  style: TextStyle(fontWeight: FontWeight.w800)),
-            ],
-          ),
-        ),
-        body: _loadingProduct
-            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-            : _loadError != null
-                ? _buildError()
-                : _buildBody(),
-      ),
+      child: _loadingProduct
+          ? const _BuyLoadingSplash()
+          : Scaffold(
+              backgroundColor: AppColors.background,
+              appBar: AppBar(
+                automaticallyImplyLeading: false,
+                title: const Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet_rounded,
+                        color: AppColors.primary, size: 22),
+                    SizedBox(width: 8),
+                    Text('ShareWallet',
+                        style: TextStyle(fontWeight: FontWeight.w800)),
+                  ],
+                ),
+              ),
+              body: _loadError != null
+                  ? _buildError()
+                  : _buildBody(),
+            ),
     );
   }
 
@@ -4298,6 +4298,251 @@ class _DocUploadStepState extends State<_DocUploadStep> {
           const SizedBox(height: 20),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _BuyLoadingSplash — Tela de carregamento dedicada ao comprador
+// Exibida APENAS quando o usuário acessa via link de produto (deep link).
+// Substitui o spinner genérico que mostrava tagline de "afiliados".
+// ─────────────────────────────────────────────────────────────────────────────
+class _BuyLoadingSplash extends StatefulWidget {
+  const _BuyLoadingSplash();
+
+  @override
+  State<_BuyLoadingSplash> createState() => _BuyLoadingSplashState();
+}
+
+class _BuyLoadingSplashState extends State<_BuyLoadingSplash>
+    with TickerProviderStateMixin {
+  late final AnimationController _logoCtrl;
+  late final AnimationController _dotsCtrl;
+  late final Animation<double> _logoFade;
+  late final Animation<double> _logoScale;
+  late final Animation<double> _dotsFade;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _logoCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _logoFade  = CurvedAnimation(parent: _logoCtrl, curve: Curves.easeOut);
+    _logoScale = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(parent: _logoCtrl, curve: Curves.easeOutBack),
+    );
+
+    _dotsCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _dotsFade = CurvedAnimation(parent: _dotsCtrl, curve: Curves.easeInOut);
+
+    _logoCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _logoCtrl.dispose();
+    _dotsCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7F5),
+      body: Center(
+        child: FadeTransition(
+          opacity: _logoFade,
+          child: ScaleTransition(
+            scale: _logoScale,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // -- Ícone / Logo --
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0D5C3D).withValues(alpha: 0.18),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.asset(
+                      'assets/images/sharewallet_logo.png',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF0D5C3D), Color(0xFF1A7A52)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.account_balance_wallet_rounded,
+                          color: Colors.white,
+                          size: 44,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // -- Nome do app --
+                RichText(
+                  text: const TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Share',
+                        style: TextStyle(
+                          color: Color(0xFF0D1F18),
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      TextSpan(
+                        text: 'Wallet',
+                        style: TextStyle(
+                          color: Color(0xFF0D5C3D),
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // -- Subtítulo neutro para o comprador --
+                const Text(
+                  'Preparando sua oferta...',
+                  style: TextStyle(
+                    color: Color(0xFF5A7468),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // -- Loading dots animado --
+                _AnimatedDots(animation: _dotsFade),
+
+                const SizedBox(height: 48),
+
+                // -- Selos de confiança --
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _TrustBadge(
+                        icon: Icons.lock_outline_rounded,
+                        label: 'Pagamento\nseguro'),
+                    const SizedBox(width: 24),
+                    _TrustBadge(
+                        icon: Icons.verified_outlined,
+                        label: 'Empresa\nverificada'),
+                    const SizedBox(width: 24),
+                    _TrustBadge(
+                        icon: Icons.support_agent_rounded,
+                        label: 'Suporte\n24h'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// -- Três pontos pulsantes animados --
+class _AnimatedDots extends StatelessWidget {
+  final Animation<double> animation;
+  const _AnimatedDots({required this.animation});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (_, __) {
+        final v = animation.value;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            final phase = (v + i / 3.0) % 1.0;
+            final scale = 0.6 + 0.4 * (phase < 0.5 ? phase * 2 : (1 - phase) * 2);
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Transform.scale(
+                scale: scale,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF0D5C3D).withValues(alpha: 0.3 + 0.7 * scale),
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+}
+
+// -- Ícone de confiança com label --
+class _TrustBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _TrustBadge({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D5C3D).withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: const Color(0xFF0D5C3D), size: 20),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Color(0xFF5A7468),
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+            height: 1.4,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -371,9 +371,23 @@
     </div>
 
     <p class="sw-brand">ShareWallet</p>
-    <p class="sw-tagline">Transforme conexões em receita</p>
+    <p class="sw-tagline" id="sw-tagline-el">Transforme conexões em receita</p>
     <span class="sw-copy">© 2025 ShareWallet</span>
   </div>
+  <script>
+    // Oculta a tagline de afiliados quando o acesso é via link de produto (comprador)
+    (function() {
+      var hash = window.location.hash || '';
+      var isProdutoLink = hash.indexOf('/produto/') !== -1;
+      if (isProdutoLink) {
+        var el = document.getElementById('sw-tagline-el');
+        if (el) {
+          el.textContent = 'Carregando sua oferta...';
+          el.style.opacity = '0.7';
+        }
+      }
+    })();
+  </script>
 
   <script>
     // Remove o splash nativo quando o Flutter terminar de renderizar o 1º frame.
