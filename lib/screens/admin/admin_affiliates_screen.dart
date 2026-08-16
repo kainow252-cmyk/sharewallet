@@ -1,7 +1,10 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/admin_service.dart';
+import '../../services/cf_api_service.dart';
 import '../../models/subscription_model.dart';
 import '../../theme/app_theme.dart';
 
@@ -139,12 +142,58 @@ class _AdminAffiliatesScreenState extends State<AdminAffiliatesScreen> {
                               _showEditSheet(context, svc, afiliados[i]),
                           onDelete: () =>
                               _confirmDelete(context, svc, afiliados[i]),
+                          onResetPassword: () =>
+                              _showResetPassword(context, afiliados[i]),
                         ),
                       ),
           ),
         ],
       ),
     );
+  }
+
+  // -- Reset senha -----------------------------------------------------------
+  Future<void> _showResetPassword(
+      BuildContext context, AdminAffiliate a) async {
+    // Gera senha forte
+    const upper   = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower   = 'abcdefghjkmnpqrstuvwxyz';
+    const digits  = '23456789';
+    const symbols = '@#\$!&*';
+    const all = upper + lower + digits + symbols;
+    final rng = Random.secure();
+    final chars = [
+      upper [rng.nextInt(upper.length)],
+      lower [rng.nextInt(lower.length)],
+      digits[rng.nextInt(digits.length)],
+      symbols[rng.nextInt(symbols.length)],
+      ...List.generate(8, (_) => all[rng.nextInt(all.length)]),
+    ]..shuffle(rng);
+    final newPassword = chars.join();
+
+    // Mostra diálogo de confirmação com a nova senha
+    if (!context.mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _ResetPasswordDialog(
+        afiliado: a,
+        newPassword: newPassword,
+      ),
+    );
+    if (confirm != true || !context.mounted) return;
+
+    // Aplica no Firebase via worker
+    final result = await CfApiService.adminResetPassword(a.id, newPassword);
+    if (!context.mounted) return;
+    final ok = result != null && result['success'] == true;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok
+          ? '✅ Senha de ${a.nome} atualizada com sucesso!'
+          : '❌ Erro ao atualizar senha. Tente novamente.'),
+      backgroundColor: ok ? AppColors.success : AppColors.error,
+      duration: const Duration(seconds: 4),
+    ));
   }
 
   // -- Toggle status ativo/suspenso -----------------------------------------
@@ -772,6 +821,7 @@ class _AffiliateCard extends StatelessWidget {
   final VoidCallback onDetails;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onResetPassword;
 
   const _AffiliateCard({
     required this.affiliate,
@@ -779,6 +829,7 @@ class _AffiliateCard extends StatelessWidget {
     required this.onDetails,
     required this.onEdit,
     required this.onDelete,
+    required this.onResetPassword,
   });
 
   @override
@@ -947,7 +998,7 @@ class _AffiliateCard extends StatelessWidget {
                       ),
                     ),
                   ],
-                  // Ações
+                  // Ações — linha 1: Detalhes + Nova Senha
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -964,6 +1015,30 @@ class _AffiliateCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      // 🔑 Nova Senha
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: onResetPassword,
+                          icon: const Icon(Icons.key_rounded, size: 15),
+                          label: const Text('Nova Senha'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF7C3AED),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 7),
+                            textStyle: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Ações — linha 2: ícones de ação
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
                       // Editar
                       IconButton(
                         onPressed: onEdit,
@@ -1678,6 +1753,174 @@ class _SubHistoryCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Diálogo de confirmação de nova senha ─────────────────────────────────────
+class _ResetPasswordDialog extends StatefulWidget {
+  final AdminAffiliate afiliado;
+  final String newPassword;
+  const _ResetPasswordDialog({required this.afiliado, required this.newPassword});
+
+  @override
+  State<_ResetPasswordDialog> createState() => _ResetPasswordDialogState();
+}
+
+class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
+  bool _visible = false;
+  bool _copied = false;
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.newPassword));
+    setState(() => _copied = true);
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) setState(() => _copied = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.key_rounded,
+                color: Color(0xFF7C3AED), size: 20),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text('Nova Senha',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Nome do afiliado
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.person_rounded,
+                    size: 14, color: AppColors.textHint),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(widget.afiliado.nome,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text('Nova senha gerada:',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(height: 6),
+          // Campo senha com toggle visibilidade + botão copiar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF7C3AED).withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _visible ? widget.newPassword : '••••••••••••',
+                    style: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: _visible ? 15 : 20,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF7C3AED),
+                        letterSpacing: _visible ? 2 : 4),
+                  ),
+                ),
+                // Toggle visibilidade
+                GestureDetector(
+                  onTap: () => setState(() => _visible = !_visible),
+                  child: Icon(
+                    _visible ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                    size: 18,
+                    color: AppColors.textHint,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Copiar
+                GestureDetector(
+                  onTap: _copy,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: _copied
+                        ? const Icon(Icons.check_rounded,
+                            key: ValueKey('check'), size: 18, color: AppColors.success)
+                        : const Icon(Icons.copy_rounded,
+                            key: ValueKey('copy'), size: 18, color: AppColors.textHint),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.warning.withValues(alpha: 0.2)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    size: 14, color: AppColors.warning),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Copie a senha antes de confirmar.\nApós aplicar, o usuário precisará usar esta nova senha.',
+                    style: TextStyle(
+                        fontSize: 11, color: AppColors.warning),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton.icon(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF7C3AED),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+          ),
+          icon: const Icon(Icons.check_rounded, size: 16),
+          label: const Text('Aplicar Senha'),
+        ),
+      ],
     );
   }
 }
