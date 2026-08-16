@@ -51,6 +51,13 @@ void openUrlInNewTab(String url) {
   html.window.open(url, '_blank');
 }
 
+/// Navega na MESMA aba para a URL — usado para downloads externos (APK).
+/// Diferente de open('_blank') que abre nova guia.
+/// O browser trata arquivos .apk como download automático.
+void navigateSameTab(String url) {
+  html.window.location.href = url;
+}
+
 void downloadFileWeb(String dataUri, String filename) {
   final anchor = html.AnchorElement(href: dataUri)
     ..setAttribute('download', filename)

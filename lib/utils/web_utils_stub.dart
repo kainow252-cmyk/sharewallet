@@ -21,6 +21,8 @@ void removeLocalStorageValue(String key) {}
 
 void openUrlInNewTab(String url) {}
 
+void navigateSameTab(String url) {}
+
 void downloadFileWeb(String dataUri, String filename) {}
 
 void openHtmlBlobInNewTab(String htmlContent) {}

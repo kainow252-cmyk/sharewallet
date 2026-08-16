@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../utils/web_utils.dart' as web_utils;
 import '../../services/app_config_service.dart';
 import '../../utils/web_utils.dart';
 import 'register_screen.dart';
@@ -592,20 +593,19 @@ class _CtaSection extends StatelessWidget {
   });
 
   Future<void> _handleInstall(BuildContext context) async {
-    // Download direto do APK — sem tela intermediária
+    // Navega na mesma aba/guia — o browser trata .apk como download direto
+    // Sem abrir nova guia (window.location.href no lugar de window.open)
+    if (kIsWeb) {
+      web_utils.navigateSameTab(_apkDirectDownloadUrl);
+      return;
+    }
+    // Fallback nativo (não deve chegar aqui pois botão só aparece no web)
     try {
       await launchUrl(
         Uri.parse(_apkDirectDownloadUrl),
         mode: LaunchMode.externalApplication,
       );
-    } catch (_) {
-      if (context.mounted) {
-        await launchUrl(
-          Uri.parse(_apkDirectDownloadUrl),
-          mode: LaunchMode.platformDefault,
-        );
-      }
-    }
+    } catch (_) {}
   }
 
   @override
