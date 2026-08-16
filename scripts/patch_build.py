@@ -196,6 +196,29 @@ def copy_redirects():
         print(f'SKIP: web/_redirects não encontrado')
 
 
+def copy_apk_to_download():
+    """Copia o APK release para build/web/download/ para servir pelo Cloudflare Pages."""
+    apk_src = os.path.join(ROOT_DIR, 'build', 'app', 'outputs', 'flutter-apk', 'app-release.apk')
+    download_dir = os.path.join(BUILD_DIR, 'download')
+    apk_dst = os.path.join(download_dir, 'ShareWallet.apk')
+    install_src = os.path.join(WEB_DIR, 'install.html')
+    install_dst = os.path.join(BUILD_DIR, 'install.html')
+
+    if os.path.exists(apk_src):
+        os.makedirs(download_dir, exist_ok=True)
+        shutil.copy2(apk_src, apk_dst)
+        size_mb = os.path.getsize(apk_dst) / (1024 * 1024)
+        print(f'OK: ShareWallet.apk copiado para build/web/download/ ({size_mb:.1f} MB)')
+    else:
+        print(f'SKIP: APK não encontrado em {apk_src}')
+
+    if os.path.exists(install_src):
+        shutil.copy2(install_src, install_dst)
+        print(f'OK: install.html copiado para build/web/')
+    else:
+        print(f'SKIP: web/install.html não encontrado')
+
+
 def copy_pwa_install():
     """Copia pwa_install.js (banner instalar/atualizar PWA) para o build."""
     src = os.path.join(WEB_DIR, 'pwa_install.js')
@@ -302,4 +325,5 @@ if __name__ == '__main__':
     copy_admin_manifest()
     deploy_version_sw()
     inject_app_icon()
+    copy_apk_to_download()
     print('Patches aplicados com sucesso.')
