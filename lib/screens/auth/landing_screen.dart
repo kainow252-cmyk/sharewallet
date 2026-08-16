@@ -9,13 +9,13 @@ import 'register_screen.dart';
 // ── APK Install constants ────────────────────────────────────────────────────
 // APK hospedado no GitHub Releases — link permanente, sem limite de tamanho
 const _apkFallbackUrl =
-    'https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.1/ShareWallet.apk';
+    'https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.2/ShareWallet.apk';
 
 const _androidIntentUrl =
     'intent://app.sharewallet.com.br/#Intent;'
     'scheme=https;'
     'package=com.affiliatewallet.wallet;'
-    'S.browser_fallback_url=https%3A%2F%2Fgithub.com%2Fkainow252-cmyk%2Fsharewallet%2Freleases%2Fdownload%2Fv1.0.1%2FShareWallet.apk;'
+    'S.browser_fallback_url=https%3A%2F%2Fgithub.com%2Fkainow252-cmyk%2Fsharewallet%2Freleases%2Fdownload%2Fv1.0.2%2FShareWallet.apk;'
     'end';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
