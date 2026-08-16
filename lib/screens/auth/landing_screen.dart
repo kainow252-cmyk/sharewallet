@@ -8,10 +8,13 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-// URL termina em .apk → Chrome Android usa o nome da URL como filename.
-// Worker serve com Content-Disposition: attachment; filename="ShareWallet.apk"
-// → Chrome exibe botão "Abrir" na notificação ao terminar → toca uma vez → instala.
-const _apkUrl = 'https://payment.sharewallet.com.br/app/ShareWallet.apk';
+// GitHub Releases CDN (objects.githubusercontent.com) — dominio externo:
+//   → Chrome Android trata como download externo
+//   → Mostra botao "ABRIR" na notificacao ao terminar
+//   → Toca "ABRIR" → PackageInstaller abre direto → instalar
+// IMPORTANTE: usar <a download> para nao abrir nova guia.
+const _apkUrl =
+    'https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk';
 const _apkFilename = 'ShareWallet.apk';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
