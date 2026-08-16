@@ -30,3 +30,6 @@ void notifyFlutterReady() {}
 
 /// Stub — mobile nativo nunca é WebView
 bool isNativeApp() => false;
+
+/// Stub — mobile/desktop não tem hash de URL
+String getWindowHash() => '';

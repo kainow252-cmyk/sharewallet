@@ -70,6 +70,19 @@ bool isNativeApp() {
   }
 }
 
+/// Retorna o hash atual da URL (sem o '#').
+/// Ex: URL = /app/#/produto/p_123?ref=ABC → retorna '/produto/p_123?ref=ABC'
+/// Usado como fallback quando o sessionStorage está vazio.
+String getWindowHash() {
+  try {
+    final hash = html.window.location.hash;
+    if (hash.length > 1) return hash.substring(1); // remove '#'
+    return '';
+  } catch (_) {
+    return '';
+  }
+}
+
 /// Dispara o evento 'flutter-first-frame' no window para remover o splash nativo.
 /// Deve ser chamado quando o primeiro frame do app estiver visível.
 void notifyFlutterReady() {

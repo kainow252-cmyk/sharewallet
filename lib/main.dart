@@ -112,8 +112,15 @@ void main() async {
 
   if (kIsWeb) {
     try {
-      // Lê do sessionStorage o valor gravado pelo script no index.html
-      final fragment = getSessionStorageValue('flutter_initial_route');
+      // Fonte 1: sessionStorage gravado pelo script do index.html ANTES do Flutter
+      String? fragment = getSessionStorageValue('flutter_initial_route');
+
+      // Fonte 2 (fallback): lê diretamente o hash atual da URL
+      // Garante funcionamento mesmo quando o sessionStorage foi limpo pelo SW
+      if (fragment == null || fragment.isEmpty) {
+        final hash = getWindowHash(); // ex: "/produto/p_xxx?ref=CODE"
+        if (hash.isNotEmpty) fragment = hash;
+      }
 
       if (fragment != null && fragment.startsWith('/produto/')) {
         final withoutPrefix = fragment.replaceFirst('/produto/', '');
@@ -124,11 +131,11 @@ void main() async {
           // Remove '@' inicial se vier como ?ref=@CODE (link com arroba)
           initialAffiliateCode = (query['ref'] ?? '').replaceAll(RegExp(r'^@+'), '');
         }
-        // Limpa após ler para não reutilizar em reloads futuros
+        // Limpa sessionStorage após ler para não reutilizar em reloads futuros
         removeSessionStorageValue('flutter_initial_route');
       }
     } catch (e) {
-      debugPrint('[DeepLink] Erro ao ler sessionStorage: $e');
+      debugPrint('[DeepLink] Erro ao ler route: $e');
     }
   }
 
