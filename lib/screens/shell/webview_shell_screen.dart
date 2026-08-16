@@ -181,10 +181,20 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
           onProgress: (p) {
             if (mounted) setState(() => _loadProgress = p);
           },
-          onPageStarted: (_) {
+          onPageStarted: (_) async {
             // Só mostra splash no carregamento INICIAL (checkingBiometric/loading)
             // Navegações internas após ready só atualizam o progress bar do topo
             if (mounted) setState(() => _loadProgress = 0);
+            // Injeta flag IMEDIATAMENTE ao iniciar a página — antes do onPageFinished.
+            // Isso garante que isNativeApp() retorne true nos primeiros frames do Flutter Web.
+            try {
+              await _ctrl.runJavaScript(
+                'window.ShareWalletNativeApp = true;'
+                'document.documentElement.classList.add("sw-native-app");',
+              );
+            } catch (_) {
+              // Ignora se o contexto JS ainda não estiver pronto
+            }
           },
           onPageFinished: (url) async {
             // Injeta flag JS para o site detectar APK (em toda navegação)

@@ -7,17 +7,10 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-// APK hospedado no GitHub Releases — link permanente, sem limite de tamanho
-// Página de instalação no site — design limpo, botão único, instruções claras
-const _apkFallbackUrl =
+// Página de instalação no site — hospeda install.html com botão para GitHub Releases
+// GitHub Releases — APK hospedado sem limite de tamanho (>25MB Cloudflare limit)
+const _apkInstallPageUrl =
     'https://payment.sharewallet.com.br/app/install';
-
-const _androidIntentUrl =
-    'intent://app.sharewallet.com.br/#Intent;'
-    'scheme=https;'
-    'package=com.affiliatewallet.wallet;'
-    'S.browser_fallback_url=https%3A%2F%2Fpayment.sharewallet.com.br%2Fapp%2Finstall;'
-    'end';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.
@@ -73,21 +66,12 @@ class _LandingScreenState extends State<LandingScreen>
 
     _runSequence();
 
-    // ── Detecta APK WebView — reavalia após o 1º frame ───────────────────────
+    // ── Detecta APK WebView — polling multi-tentativa até 3s ────────────────
+    // O UA 'ShareWalletApp/1.0' já vem no primeiro request, mas o WebView
+    // pode demorar para disponibilizar navigator.userAgent para o Dart.
+    // Polling em 5 pontos cobre todos os cenários de timing.
     if (kIsWeb) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final native = isNativeApp();
-        if (mounted && native != _isNative) {
-          setState(() => _isNative = native);
-        }
-        // Re-verifica após 1s — UA pode ser injetado levemente depois
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          if (mounted) {
-            final native2 = isNativeApp();
-            if (native2 != _isNative) setState(() => _isNative = native2);
-          }
-        });
-      });
+      _startNativeDetectionPolling();
     }
 
     // ── Remove o HTML splash quando a LandingScreen estiver visível ──────────
@@ -98,6 +82,22 @@ class _LandingScreenState extends State<LandingScreen>
     if (kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Future.delayed(const Duration(milliseconds: 700), notifyFlutterReady);
+      });
+    }
+  }
+
+  // Polling de detecção nativa: verifica em 0ms, 300ms, 800ms, 1500ms e 3000ms.
+  // Necessário porque o WebView injeta o UA antes da navegação, mas o Dart
+  // pode não ter acesso a navigator.userAgent imediatamente no initState.
+  void _startNativeDetectionPolling() {
+    const delays = [0, 300, 800, 1500, 3000];
+    for (final ms in delays) {
+      Future.delayed(Duration(milliseconds: ms), () {
+        if (!mounted) return;
+        final native = isNativeApp();
+        if (native != _isNative) {
+          setState(() => _isNative = native);
+        }
       });
     }
   }
@@ -593,18 +593,21 @@ class _CtaSection extends StatelessWidget {
   });
 
   Future<void> _handleInstall(BuildContext context) async {
-    final uri = Uri.parse(_androidIntentUrl);
+    // Vai direto para a página de instalação no site (payment.sharewallet.com.br/app/install)
+    // que tem o botão de download do APK no GitHub Releases.
+    // Sem Intent intermediário — evita abrir Chrome Custom Tab com a landing page errada.
     try {
-      final launched =
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched && context.mounted) {
-        await launchUrl(Uri.parse(_apkFallbackUrl),
-            mode: LaunchMode.externalApplication);
-      }
+      await launchUrl(
+        Uri.parse(_apkInstallPageUrl),
+        mode: LaunchMode.externalApplication,
+      );
     } catch (_) {
+      // Fallback: tenta abrir no browser padrão
       if (context.mounted) {
-        await launchUrl(Uri.parse(_apkFallbackUrl),
-            mode: LaunchMode.externalApplication);
+        await launchUrl(
+          Uri.parse(_apkInstallPageUrl),
+          mode: LaunchMode.platformDefault,
+        );
       }
     }
   }
