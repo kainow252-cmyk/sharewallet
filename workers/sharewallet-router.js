@@ -166,8 +166,9 @@ var worker_default = {
         headers: { "User-Agent": "Mozilla/5.0" }
       });
       const headers = new Headers();
+      // SEM Content-Disposition:attachment — com apenas o MIME type correto,
+      // o Chrome Android abre o instalador automaticamente ao terminar o download
       headers.set("Content-Type", "application/vnd.android.package-archive");
-      headers.set("Content-Disposition", "attachment; filename=ShareWallet.apk");
       headers.set("Cache-Control", "no-cache");
       headers.set("Access-Control-Allow-Origin", "*");
       const cl = apkResp.headers.get("Content-Length");
