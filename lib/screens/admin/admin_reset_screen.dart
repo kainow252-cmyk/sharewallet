@@ -1,13 +1,15 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../services/admin_service.dart';
+import '../../services/cf_api_service.dart';
 import '../../theme/app_theme.dart';
 
 /// Tela de reset/limpeza de dados — apaga vendas, assinaturas ou saques do D1.
-/// Cada ação exige confirmação em dois passos: primeiro toque abre diálogo de
-/// aviso; o usuário precisa digitar "CONFIRMAR" para prosseguir.
+/// Também permite gestão de senhas dos afiliados (gerar nova senha forte).
 class AdminResetScreen extends StatelessWidget {
   const AdminResetScreen({super.key});
 
@@ -18,9 +20,32 @@ class AdminResetScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
         children: [
-          // -- Aviso principal ------------------------------------------------
+
+          // ── GESTÃO DE SENHAS (nova seção) ──────────────────────────────────
+          const _PasswordManagementCard(),
+
+          const SizedBox(height: 20),
+
+          // Divider separador
+          Row(
+            children: [
+              Expanded(child: Divider(color: AppColors.error.withValues(alpha: 0.3), thickness: 1)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text('ZONA DE PERIGO',
+                    style: TextStyle(
+                        color: AppColors.error.withValues(alpha: 0.6),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2)),
+              ),
+              Expanded(child: Divider(color: AppColors.error.withValues(alpha: 0.3), thickness: 1)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // -- Aviso zona de perigo -------------------------------------------
           Container(
-            margin: const EdgeInsets.only(bottom: 20),
+            margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: const Color(0xFF3A0000),
@@ -43,7 +68,7 @@ class AdminResetScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Zona de Perigo',
+                      Text('Atenção',
                           style: TextStyle(
                               color: AppColors.error,
                               fontWeight: FontWeight.w800,
@@ -574,6 +599,621 @@ class _ResetCardState extends State<_ResetCard> {
     );
   }
 }
+
+// =============================================================================
+// GESTÃO DE SENHAS DOS AFILIADOS
+// Permite ao admin gerar nova senha forte para qualquer afiliado sem precisar
+// do e-mail de reset — usa Firebase Identity Toolkit accounts:update via API.
+// =============================================================================
+
+class _PasswordManagementCard extends StatefulWidget {
+  const _PasswordManagementCard();
+
+  @override
+  State<_PasswordManagementCard> createState() => _PasswordManagementCardState();
+}
+
+class _PasswordManagementCardState extends State<_PasswordManagementCard> {
+  static const _green = Color(0xFF00E5B4);
+  static const _blue  = Color(0xFF1565C0);
+
+  bool _expanded  = false;
+  bool _loading   = false;
+  String _search  = '';
+  List<Map<String, dynamic>> _users = [];
+  String? _loadError;
+
+  // Estado por usuário: uid → senha gerada ou null
+  final Map<String, String?> _generatedPasswords = {};
+  final Map<String, bool>    _resettingUid       = {};
+  final Map<String, bool>    _successUid         = {};
+
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Gera senha forte aleatória ────────────────────────────────────────────
+  static String _generatePassword({int length = 12}) {
+    const upper   = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower   = 'abcdefghjkmnpqrstuvwxyz';
+    const digits  = '23456789';
+    const symbols = '@#\$!&*';
+    const all = upper + lower + digits + symbols;
+    final rng = Random.secure();
+    // Garante pelo menos 1 de cada tipo
+    final chars = [
+      upper [rng.nextInt(upper.length)],
+      lower [rng.nextInt(lower.length)],
+      digits[rng.nextInt(digits.length)],
+      symbols[rng.nextInt(symbols.length)],
+      ...List.generate(length - 4, (_) => all[rng.nextInt(all.length)]),
+    ]..shuffle(rng);
+    return chars.join();
+  }
+
+  // ── Carrega lista de usuários ─────────────────────────────────────────────
+  Future<void> _load() async {
+    setState(() { _loading = true; _loadError = null; });
+    try {
+      final users = await CfApiService.adminListUsers();
+      if (mounted) {
+        setState(() {
+          _users    = users;
+          _loading  = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loadError = 'Erro ao carregar usuários: $e';
+          _loading   = false;
+        });
+      }
+    }
+  }
+
+  // ── Gera e aplica nova senha ──────────────────────────────────────────────
+  Future<void> _resetPassword(Map<String, dynamic> user) async {
+    final uid   = user['firebase_uid'] as String? ?? '';
+    final nome  = user['nome']  as String? ?? 'Afiliado';
+    final email = user['email'] as String? ?? '';
+    if (uid.isEmpty) return;
+
+    final nova = _generatePassword();
+
+    // Mostra diálogo de confirmação com a nova senha
+    final confirmed = await _showPasswordConfirm(nome, email, nova);
+    if (!confirmed || !mounted) return;
+
+    setState(() { _resettingUid[uid] = true; _successUid[uid] = false; });
+
+    try {
+      final res = await CfApiService.adminResetPassword(uid, nova);
+      if (!mounted) return;
+
+      final ok = res != null && (res['success'] == true || res['result'] is Map);
+
+      setState(() {
+        _resettingUid[uid]         = false;
+        _successUid[uid]           = ok;
+        _generatedPasswords[uid]   = ok ? nova : null;
+      });
+
+      if (ok) {
+        // Copia automaticamente para o clipboard
+        await Clipboard.setData(ClipboardData(text: nova));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('✅ Senha de $nome redefinida! Copiada para área de transferência.'),
+            backgroundColor: _green.withValues(alpha: 0.9),
+            duration: const Duration(seconds: 4),
+          ));
+        }
+      } else {
+        final msg = res?['error'] ?? 'Falha desconhecida';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('❌ Erro: $msg'),
+            backgroundColor: AppColors.error,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() { _resettingUid[uid] = false; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('❌ Erro inesperado: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    }
+  }
+
+  // ── Diálogo confirmar nova senha ──────────────────────────────────────────
+  Future<bool> _showPasswordConfirm(
+      String nome, String email, String novaSenha) async {
+    bool visible = false;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF0A1628),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: _green.withValues(alpha: 0.3), width: 1.5),
+          ),
+          title: Row(children: [
+            Icon(Icons.lock_reset_rounded, color: _green, size: 22),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('Redefinir Senha',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+            ),
+          ]),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Info do afiliado
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(nome,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text(email, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text('Nova senha gerada:',
+                  style: TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              // Senha com toggle de visibilidade
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _green.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _green.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        visible ? novaSenha : '•' * novaSenha.length,
+                        style: TextStyle(
+                          color: _green,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          letterSpacing: visible ? 1.5 : 3,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setDlg(() => visible = !visible),
+                      child: Icon(
+                        visible ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                        color: _green.withValues(alpha: 0.7),
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: novaSenha));
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                            content: Text('Copiado!'),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                      },
+                      child: Icon(Icons.copy_rounded, color: _green.withValues(alpha: 0.7), size: 18),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                ),
+                child: const Text(
+                  '⚠️ Anote esta senha antes de confirmar.\n'
+                  'Após aplicar, o usuário precisará usar a nova senha para entrar.',
+                  style: TextStyle(color: Colors.amber, fontSize: 11, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Cancelar', style: TextStyle(color: Colors.white.withValues(alpha: 0.5))),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(ctx, true),
+              icon: const Icon(Icons.check_rounded, size: 16),
+              label: const Text('Aplicar Senha'),
+              style: FilledButton.styleFrom(
+                backgroundColor: _green,
+                foregroundColor: const Color(0xFF0A1628),
+              ),
+            ),
+          ],
+        );
+      }),
+    );
+    return result == true;
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _users.where((u) {
+      if (_search.isEmpty) return true;
+      final s = _search.toLowerCase();
+      return (u['nome']           as String? ?? '').toLowerCase().contains(s)
+          || (u['email']          as String? ?? '').toLowerCase().contains(s)
+          || (u['affiliate_code'] as String? ?? '').toLowerCase().contains(s);
+    }).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1F38),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _green.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        children: [
+          // ── Header ─────────────────────────────────────────────────────────
+          InkWell(
+            onTap: () {
+              setState(() => _expanded = !_expanded);
+              if (_expanded && _users.isEmpty && !_loading) _load();
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: _green.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(Icons.lock_reset_rounded, color: _green, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Gestão de Senhas',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                        SizedBox(height: 2),
+                        Text('Gerar nova senha forte para qualquer afiliado.',
+                            style: TextStyle(color: Colors.white54, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    color: Colors.white38,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Conteúdo expandido ─────────────────────────────────────────────
+          if (_expanded) ...[
+            Divider(height: 1, color: _green.withValues(alpha: 0.15)),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                children: [
+                  // Barra de busca + botão reload
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchCtrl,
+                          onChanged: (v) => setState(() => _search = v),
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'Buscar por nome, e-mail ou código...',
+                            hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+                            prefixIcon: const Icon(Icons.search_rounded, color: Colors.white38, size: 18),
+                            filled: true,
+                            fillColor: Colors.white.withValues(alpha: 0.05),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: _green.withValues(alpha: 0.5)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: _loading ? null : _load,
+                        icon: _loading
+                            ? const SizedBox(width: 18, height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: _green))
+                            : const Icon(Icons.refresh_rounded, color: _green),
+                        tooltip: 'Recarregar lista',
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Estado: loading / erro / lista
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(color: _green, strokeWidth: 2.5),
+                            SizedBox(height: 10),
+                            Text('Carregando usuários...', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (_loadError != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(_loadError!, style: const TextStyle(color: AppColors.error, fontSize: 12))),
+                          TextButton(onPressed: _load, child: const Text('Tentar', style: TextStyle(color: _green, fontSize: 12))),
+                        ],
+                      ),
+                    )
+                  else if (_users.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Column(
+                        children: [
+                          Icon(Icons.people_outline_rounded, color: Colors.white24, size: 40),
+                          const SizedBox(height: 8),
+                          const Text('Nenhum afiliado com UID Firebase encontrado.',
+                              style: TextStyle(color: Colors.white38, fontSize: 12)),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: _load,
+                            icon: const Icon(Icons.refresh_rounded, size: 16),
+                            label: const Text('Carregar', style: TextStyle(fontSize: 12)),
+                            style: OutlinedButton.styleFrom(foregroundColor: _green,
+                                side: BorderSide(color: _green.withValues(alpha: 0.4))),
+                          ),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    // Contador
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${filtered.length} de ${_users.length} afiliados',
+                        style: const TextStyle(color: Colors.white38, fontSize: 11),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Lista de afiliados
+                    ...filtered.map((user) {
+                      final uid   = user['firebase_uid'] as String? ?? '';
+                      final nome  = user['nome']  as String? ?? '—';
+                      final email = user['email'] as String? ?? '—';
+                      final code  = user['affiliate_code'] as String? ?? '—';
+                      final status = user['status'] as String? ?? '';
+                      final isResetting = _resettingUid[uid] == true;
+                      final isSuccess   = _successUid[uid]   == true;
+                      final genPass     = _generatedPasswords[uid];
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isSuccess
+                              ? _green.withValues(alpha: 0.06)
+                              : Colors.white.withValues(alpha: 0.03),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSuccess
+                                ? _green.withValues(alpha: 0.25)
+                                : Colors.white.withValues(alpha: 0.06),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                // Avatar letra
+                                Container(
+                                  width: 32, height: 32,
+                                  decoration: BoxDecoration(
+                                    color: _green.withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      nome.isNotEmpty ? nome[0].toUpperCase() : '?',
+                                      style: const TextStyle(color: _green, fontWeight: FontWeight.w800, fontSize: 13),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(nome,
+                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                                                overflow: TextOverflow.ellipsis),
+                                          ),
+                                          // Badge status
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: status == 'ativo'
+                                                  ? Colors.green.withValues(alpha: 0.15)
+                                                  : Colors.orange.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              status,
+                                              style: TextStyle(
+                                                color: status == 'ativo' ? Colors.green : Colors.orange,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Text(email,
+                                          style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                          overflow: TextOverflow.ellipsis),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            // Código + botão gerar senha
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _blue.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Cód: $code',
+                                    style: const TextStyle(color: Color(0xFF64B5F6), fontSize: 10, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                const Spacer(),
+                                // Botão gerar nova senha
+                                SizedBox(
+                                  height: 30,
+                                  child: isResetting
+                                      ? const Padding(
+                                          padding: EdgeInsets.symmetric(horizontal: 12),
+                                          child: SizedBox(width: 16, height: 16,
+                                            child: CircularProgressIndicator(strokeWidth: 2, color: _green)),
+                                        )
+                                      : FilledButton.icon(
+                                          onPressed: () => _resetPassword(user),
+                                          icon: const Icon(Icons.key_rounded, size: 13),
+                                          label: const Text('Nova Senha', style: TextStyle(fontSize: 11)),
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor: _green,
+                                            foregroundColor: const Color(0xFF0A1628),
+                                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                          ),
+                                        ),
+                                ),
+                              ],
+                            ),
+
+                            // Mostra senha gerada (se houver)
+                            if (genPass != null) ...[
+                              const SizedBox(height: 6),
+                              GestureDetector(
+                                onTap: () {
+                                  Clipboard.setData(ClipboardData(text: genPass));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Senha copiada!'), duration: Duration(seconds: 1)),
+                                  );
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: _green.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(5),
+                                    border: Border.all(color: _green.withValues(alpha: 0.2)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle_rounded, color: _green, size: 13),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        genPass,
+                                        style: const TextStyle(
+                                          color: _green, fontSize: 12, fontWeight: FontWeight.w700,
+                                          fontFamily: 'monospace', letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      const Icon(Icons.copy_rounded, color: _green, size: 13),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Card específico para resetar o token Woovi (AppID)

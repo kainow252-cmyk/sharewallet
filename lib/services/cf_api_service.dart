@@ -147,6 +147,53 @@ class CfApiService {
     return raw;
   }
 
+  // -- GESTÃO DE SENHAS (admin) ----------------------------------------------
+
+  /// Lista afiliados com firebase_uid para gestão de senhas.
+  static Future<List<Map<String, dynamic>>> adminListUsers() async {
+    final uri = Uri.parse('$_base/api/admin/list-users');
+    try {
+      final res = await http.get(
+        uri,
+        headers: {'X-Admin-Secret': _resetSecret},
+      ).timeout(_timeout);
+      final body = jsonDecode(res.body);
+      if (body is Map && body['result'] is Map) {
+        final result = body['result'] as Map;
+        if (result['users'] is List) {
+          return List<Map<String, dynamic>>.from(
+            (result['users'] as List).map((e) => Map<String, dynamic>.from(e as Map)),
+          );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[CfApi] adminListUsers error: $e');
+    }
+    return [];
+  }
+
+  /// Redefine a senha de um afiliado via Firebase Admin (sem precisar do usuário).
+  static Future<Map<String, dynamic>?> adminResetPassword(
+      String uid, String newPassword) async {
+    final uri = Uri.parse('$_base/api/admin/reset-password');
+    try {
+      final res = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Secret': _resetSecret,
+        },
+        body: jsonEncode({'uid': uid, 'password': newPassword}),
+      ).timeout(const Duration(seconds: 15));
+      final body = jsonDecode(res.body);
+      if (body is Map) return Map<String, dynamic>.from(body);
+      return null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[CfApi] adminResetPassword error: $e');
+      return null;
+    }
+  }
+
   // -- WITHDRAWAL CONFIG (limites globais de saque) --------------------------
 
   static Future<Map<String, dynamic>> getWithdrawalConfig() async {
