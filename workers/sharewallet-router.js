@@ -161,19 +161,11 @@ var worker_default = {
     }
     // Proxy APK do GitHub Releases — mesmo dominio = sem nova guia no Chrome
     if (path === "/app/download" || path === "/download/apk") {
+      // Redirect 302 direto para o GitHub CDN — sem proxy de 62MB pelo Worker.
+      // O GitHub CDN serve o APK com MIME type correto, o Android reconhece
+      // e abre o instalador automaticamente ao terminar o download.
       const APK_URL = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
-      const apkResp = await fetch(APK_URL, {
-        headers: { "User-Agent": "Mozilla/5.0" }
-      });
-      const headers = new Headers();
-      // SEM Content-Disposition:attachment — com apenas o MIME type correto,
-      // o Chrome Android abre o instalador automaticamente ao terminar o download
-      headers.set("Content-Type", "application/vnd.android.package-archive");
-      headers.set("Cache-Control", "no-cache");
-      headers.set("Access-Control-Allow-Origin", "*");
-      const cl = apkResp.headers.get("Content-Length");
-      if (cl) headers.set("Content-Length", cl);
-      return new Response(apkResp.body, { status: 200, headers });
+      return Response.redirect(APK_URL, 302);
     }
 
     // /app/install — serve install.html do Cloudflare Pages (mesmo que /install/index.html)
