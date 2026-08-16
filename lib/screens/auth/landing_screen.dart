@@ -595,9 +595,10 @@ class _CtaSection extends StatelessWidget {
   });
 
   Future<void> _handleInstall(BuildContext context) async {
-    // fetch() + Blob URL — download 100% client-side, SEM nova guia.
-    // Chrome Mobile: window.location.href para domínio externo abre nova guia.
-    // Solução: fetch no mesmo domínio → blob:// URL → <a download> → download direto.
+    // <a href download> direto → popup nativo do Chrome imediato.
+    // Worker /app/download: mesmo domínio + Content-Disposition: attachment
+    // Chrome exibe "Baixar ShareWallet.apk?" na hora, download na barra de
+    // notificações, e quando termina oferece "Abrir" para instalar.
     if (kIsWeb) {
       await web_utils.downloadApkBlob(
           _apkDirectDownloadUrl, 'ShareWallet.apk');
