@@ -23,6 +23,9 @@ void openUrlInNewTab(String url) {}
 
 void navigateSameTab(String url) {}
 
+/// Stub — mobile nativo usa launchUrl direto, não Blob API
+Future<void> downloadApkBlob(String url, String filename) async {}
+
 void downloadFileWeb(String dataUri, String filename) {}
 
 void openHtmlBlobInNewTab(String htmlContent) {}

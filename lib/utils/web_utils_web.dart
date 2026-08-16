@@ -58,6 +58,48 @@ void navigateSameTab(String url) {
   html.window.location.href = url;
 }
 
+/// Baixa um APK via fetch() + Blob URL — 100% client-side, sem nova guia.
+///
+/// Fluxo:
+///   1. fetch(url) no mesmo domínio → sem nova guia, sem CORS problem
+///   2. response.blob() → cria objeto Blob local na memória do browser
+///   3. URL.createObjectURL(blob) → cria URL do tipo blob:// (same-origin)
+///   4. Cria <a download> e dispara .click() → Chrome inicia download nativo
+///   5. URL.revokeObjectURL() após 60s → libera memória
+///
+/// Funciona mesmo em Chrome Mobile onde window.location.href = url externo
+/// causa abertura de nova guia ao invés de download direto.
+Future<void> downloadApkBlob(String url, String filename) async {
+  try {
+    // 1. Busca o APK via fetch (mesmo domínio = sem nova guia)
+    final resp = await html.window.fetch(url);
+    // ignore: avoid_dynamic_calls
+    if ((resp as dynamic).ok != true) {
+      // Fallback: navega na mesma aba se fetch falhar
+      html.window.location.href = url;
+      return;
+    }
+    // 2. Converte para Blob
+    // ignore: avoid_dynamic_calls
+    final blob = await (resp as dynamic).blob() as html.Blob;
+    // 3. Cria URL blob://
+    final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+    // 4. Dispara download via <a download>
+    final anchor = html.AnchorElement(href: blobUrl)
+      ..setAttribute('download', filename)
+      ..style.display = 'none';
+    html.document.body?.append(anchor);
+    anchor.click();
+    anchor.remove();
+    // 5. Revoga após 60s (tempo para o download iniciar)
+    Future.delayed(const Duration(seconds: 60),
+        () => html.Url.revokeObjectUrl(blobUrl));
+  } catch (_) {
+    // Fallback final: navega na mesma aba
+    html.window.location.href = url;
+  }
+}
+
 void downloadFileWeb(String dataUri, String filename) {
   final anchor = html.AnchorElement(href: dataUri)
     ..setAttribute('download', filename)

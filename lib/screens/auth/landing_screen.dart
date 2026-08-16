@@ -595,13 +595,15 @@ class _CtaSection extends StatelessWidget {
   });
 
   Future<void> _handleInstall(BuildContext context) async {
-    // Navega na mesma aba/guia — o browser trata .apk como download direto
-    // Sem abrir nova guia (window.location.href no lugar de window.open)
+    // fetch() + Blob URL — download 100% client-side, SEM nova guia.
+    // Chrome Mobile: window.location.href para domínio externo abre nova guia.
+    // Solução: fetch no mesmo domínio → blob:// URL → <a download> → download direto.
     if (kIsWeb) {
-      web_utils.navigateSameTab(_apkDirectDownloadUrl);
+      await web_utils.downloadApkBlob(
+          _apkDirectDownloadUrl, 'ShareWallet.apk');
       return;
     }
-    // Fallback nativo (não deve chegar aqui pois botão só aparece no web)
+    // Fallback nativo (não deve chegar aqui — botão só aparece no web)
     try {
       await launchUrl(
         Uri.parse(_apkDirectDownloadUrl),
