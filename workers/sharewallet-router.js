@@ -159,6 +159,23 @@ var worker_default = {
     if (path === "/" || path === "") {
       return Response.redirect(url.origin + "/app/", 302);
     }
+    // Download direto do APK — proxy do GitHub Releases no proprio dominio
+    // Assim o Chrome nao abre nova guia (mesmo dominio = download direto)
+    if (path === "/app/download" || path === "/download/apk") {
+      const APK_URL = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
+      const apkResp = await fetch(APK_URL, {
+        headers: { "User-Agent": "Mozilla/5.0" }
+      });
+      const headers = new Headers();
+      headers.set("Content-Type", "application/vnd.android.package-archive");
+      headers.set("Content-Disposition", "attachment; filename=ShareWallet.apk");
+      headers.set("Cache-Control", "no-cache");
+      headers.set("Access-Control-Allow-Origin", "*");
+      // Passa Content-Length se disponivel
+      const cl = apkResp.headers.get("Content-Length");
+      if (cl) headers.set("Content-Length", cl);
+      return new Response(apkResp.body, { status: 200, headers });
+    }
     if (path === "/app" || path.startsWith("/app/")) {
       let pagesPath;
       if (path === "/app" || path === "/app/") {

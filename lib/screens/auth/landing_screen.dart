@@ -8,9 +8,11 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-// Download direto do APK no GitHub Releases — sem tela intermediária
+// Download direto do APK via Worker no próprio domínio
+// Worker faz proxy do GitHub Releases com Content-Disposition: attachment
+// Mesmo domínio = Chrome NÃO abre nova guia = download direto
 const _apkDirectDownloadUrl =
-    'https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk';
+    'https://payment.sharewallet.com.br/app/download';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.
