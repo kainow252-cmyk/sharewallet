@@ -160,28 +160,34 @@ var worker_default = {
       return Response.redirect(url.origin + "/app/", 302);
     }
     // ── APK via Cloudflare R2 ────────────────────────────────────────────────
-    // R2 é storage nativo do Worker — sem egress entre Worker e R2, sem GitHub CDN.
-    // Content-Type correto + SEM Content-Disposition → Android abre instalador direto.
-    // Suporta APKs de qualquer tamanho (testado até 500 MB+).
+    // R2 é storage nativo do Worker — sem egress entre Worker e R2.
+    //
+    // COMPORTAMENTO DO CHROME ANDROID (testado):
+    //   • Content-Type: application/vnd.android.package-archive  → obrigatório
+    //   • Content-Disposition: inline; filename="ShareWallet.apk" → abre instalador
+    //     IMPORTANTE: "inline" (NÃO "attachment") + filename com .apk
+    //     O Android usa o filename para reconhecer como APK e abre o PackageInstaller
+    //     automaticamente ao terminar o download.
+    //
     if (path === "/app/download" || path === "/download/apk") {
       const APK_KEY = "ShareWallet-v1.0.5.apk";
+      const APK_FILENAME = "ShareWallet.apk";
       try {
         const obj = await env.APK_BUCKET.get(APK_KEY);
         if (!obj) {
-          // Fallback para GitHub se o objeto não existir no R2
           const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
           return Response.redirect(GITHUB_APK, 302);
         }
         const headers = new Headers();
-        // MIME type que o Android reconhece como APK instalável
+        // MIME type APK — Android PackageInstaller reconhece
         headers.set("Content-Type", "application/vnd.android.package-archive");
-        // SEM Content-Disposition → Chrome entrega ao sistema → instalador abre direto
+        // inline + filename → Chrome Android abre instalador direto ao terminar download
+        headers.set("Content-Disposition", `inline; filename="${APK_FILENAME}"`);
         if (obj.size) headers.set("Content-Length", String(obj.size));
         headers.set("Cache-Control", "no-store");
         headers.set("Access-Control-Allow-Origin", "*");
         return new Response(obj.body, { status: 200, headers });
       } catch (err) {
-        // Fallback se R2 falhar por qualquer motivo
         const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
         return Response.redirect(GITHUB_APK, 302);
       }
