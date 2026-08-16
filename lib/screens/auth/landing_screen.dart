@@ -8,8 +8,8 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-// Worker proxy no mesmo domínio — window.location.href sem nova guia
-const _apkUrl = 'https://payment.sharewallet.com.br/app/download';
+// Página de instalação — mesmo domínio, mesma aba, sem nova guia
+const _apkUrl = 'https://payment.sharewallet.com.br/app/install';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.
