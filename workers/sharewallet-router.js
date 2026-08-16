@@ -159,35 +159,34 @@ var worker_default = {
     if (path === "/" || path === "") {
       return Response.redirect(url.origin + "/app/", 302);
     }
-    // Proxy streaming do APK — mesmo domínio = sem nova aba no Chrome Android.
-    // Worker faz pipe direto do GitHub CDN para o browser, sobrescrevendo os headers:
-    //   ✅ Content-Type: application/vnd.android.package-archive  → Android reconhece como APK
-    //   ✅ SEM Content-Disposition: attachment                     → Android abre instalador direto
-    //   ✅ Content-Length preservado                               → barra de progresso no Chrome
+    // ── APK via Cloudflare R2 ────────────────────────────────────────────────
+    // R2 é storage nativo do Worker — sem egress entre Worker e R2, sem GitHub CDN.
+    // Content-Type correto + SEM Content-Disposition → Android abre instalador direto.
+    // Suporta APKs de qualquer tamanho (testado até 500 MB+).
     if (path === "/app/download" || path === "/download/apk") {
-      const APK_URL = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
+      const APK_KEY = "ShareWallet-v1.0.5.apk";
       try {
-        const upstream = await fetch(APK_URL, {
-          headers: { "User-Agent": "Mozilla/5.0 (CloudflareWorker)" },
-          redirect: "follow",
-        });
-        if (!upstream.ok) {
-          return new Response("APK unavailable", { status: 502 });
+        const obj = await env.APK_BUCKET.get(APK_KEY);
+        if (!obj) {
+          // Fallback para GitHub se o objeto não existir no R2
+          const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
+          return Response.redirect(GITHUB_APK, 302);
         }
         const headers = new Headers();
-        // MIME type que o Android reconhece como instalador
+        // MIME type que o Android reconhece como APK instalável
         headers.set("Content-Type", "application/vnd.android.package-archive");
-        // SEM Content-Disposition → Chrome entrega ao sistema como APK, não salva silenciosamente
-        const cl = upstream.headers.get("Content-Length");
-        if (cl) headers.set("Content-Length", cl);
+        // SEM Content-Disposition → Chrome entrega ao sistema → instalador abre direto
+        if (obj.size) headers.set("Content-Length", String(obj.size));
         headers.set("Cache-Control", "no-store");
         headers.set("Access-Control-Allow-Origin", "*");
-        return new Response(upstream.body, { status: 200, headers });
-      } catch (_) {
-        // Fallback: redireciona se o proxy falhar (timeout, Worker CPU limit)
-        return Response.redirect(APK_URL, 302);
+        return new Response(obj.body, { status: 200, headers });
+      } catch (err) {
+        // Fallback se R2 falhar por qualquer motivo
+        const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
+        return Response.redirect(GITHUB_APK, 302);
       }
     }
+    // ────────────────────────────────────────────────────────────────────────
 
     // /app/install — serve install.html do Cloudflare Pages (mesmo que /install/index.html)
     // O STATIC_PATHS no bloco /app/* abaixo já cuida disso — sem interceptar aqui

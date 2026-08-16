@@ -1,0 +1,9 @@
+name            = "sharewallet-router"
+main            = "workers/sharewallet-router.js"
+compatibility_date = "2024-01-01"
+account_id      = "371198b60c10634b9d636c1e58dcf0f2"
+
+# R2 Binding — APK storage (sem limite de tamanho, sem egress entre Worker e R2)
+[[r2_buckets]]
+binding  = "APK_BUCKET"       # nome que o Worker usa: env.APK_BUCKET
+bucket_name = "sharewallet-apk"
