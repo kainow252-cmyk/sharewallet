@@ -6,7 +6,9 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // Link direto do Play Store para download
-const _playStoreUrl = 'https://play.google.com/store/apps/details?id=com.affiliatewallet.wallet';
+// APK direto via Worker R2 — funciona agora, antes do Play Store ser publicado
+// Trocar por Play Store URL depois que o app for aprovado e publicado
+const _playStoreUrl = 'https://payment.sharewallet.com.br/app/download';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.
@@ -675,7 +677,7 @@ class _CtaSectionState extends State<_CtaSection> {
                 icon: Icon(Icons.android_rounded,
                     size: 17 * s, color: const Color(0xFF00E5B4)),
                 label: Text(
-                  'Baixar no Google Play',
+                  'Baixar para Android (.apk)',
                   style: TextStyle(
                     fontFamily: 'Roboto',
                     fontSize: 13 * s,
