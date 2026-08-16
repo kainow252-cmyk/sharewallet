@@ -185,22 +185,30 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
             // Só mostra splash no carregamento INICIAL (checkingBiometric/loading)
             // Navegações internas após ready só atualizam o progress bar do topo
             if (mounted) setState(() => _loadProgress = 0);
-            // Injeta flag IMEDIATAMENTE ao iniciar a página — antes do onPageFinished.
-            // Isso garante que isNativeApp() retorne true nos primeiros frames do Flutter Web.
+            // Injeta flags IMEDIATAMENTE ao iniciar a página.
+            // localStorage['sw_native']='1' é o método mais confiável:
+            // persiste entre recarregamentos e independe de timing do UA.
             try {
               await _ctrl.runJavaScript(
-                'window.ShareWalletNativeApp = true;'
-                'document.documentElement.classList.add("sw-native-app");',
+                'try{'
+                '  window.ShareWalletNativeApp=true;'
+                '  document.documentElement.classList.add("sw-native-app");'
+                '  localStorage.setItem("sw_native","1");'
+                '}catch(e){}',
               );
             } catch (_) {
               // Ignora se o contexto JS ainda não estiver pronto
             }
           },
           onPageFinished: (url) async {
-            // Injeta flag JS para o site detectar APK (em toda navegação)
+            // Injeta flags para o site detectar APK (em toda navegação)
+            // localStorage['sw_native']='1' é o mais confiável — persiste entre recargas
             await _ctrl.runJavaScript(
-              'window.ShareWalletNativeApp = true;'
-              'document.documentElement.classList.add("sw-native-app");'
+              'try{'
+              '  window.ShareWalletNativeApp=true;'
+              '  document.documentElement.classList.add("sw-native-app");'
+              '  localStorage.setItem("sw_native","1");'
+              '}catch(e){}'
             );
 
             // Injeta helper JS para o site abrir câmera/galeria via native

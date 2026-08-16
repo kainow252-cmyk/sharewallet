@@ -61,16 +61,19 @@ void downloadFileWeb(String dataUri, String filename) {
 }
 
 /// Retorna true se o Flutter Web está rodando dentro do APK WebView.
-/// Detecta via:
-///   1. User-Agent 'ShareWalletApp/1.0' injetado pelo WebView shell (mais confiável)
-///   2. window.ShareWalletNativeApp = true injetado via JS após onPageFinished
-///   3. Classe CSS 'sw-native-app' no documentElement (também injetada pelo shell)
+/// Detecta via 4 métodos independentes — qualquer um basta:
+///   1. User-Agent 'ShareWalletApp/' injetado pelo WebView shell
+///   2. window.ShareWalletNativeApp = true injetado via JS pelo shell
+///   3. Classe CSS 'sw-native-app' no documentElement (injetada pelo shell)
+///   4. localStorage['sw_native'] == '1' gravado pelo shell no onPageStarted
+///      → MAIS CONFIÁVEL: persiste entre recargas, independe de timing
 bool isNativeApp() {
   try {
-    // 1. User-Agent (mais confiável — definido antes da navegação)
+    // 4. localStorage (gravado pelo shell nativo — mais confiável, independe de timing)
+    if (html.window.localStorage['sw_native'] == '1') return true;
+    // 1. User-Agent
     if (html.window.navigator.userAgent.contains('ShareWalletApp/')) return true;
-    // 2. Flag JS injetada pelo shell após onPageFinished
-    // Lê via JS eval: window.ShareWalletNativeApp
+    // 2. Flag JS injetada pelo shell
     final nativeFlag = (html.window as dynamic).ShareWalletNativeApp;
     if (nativeFlag == true) return true;
     // 3. Classe CSS no documentElement
