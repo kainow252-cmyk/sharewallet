@@ -8,10 +8,10 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-// Aponta direto para o Worker proxy — streaming do APK sem Content-Disposition.
-// O Android recebe application/vnd.android.package-archive e abre instalador direto.
-// Sem página intermediária, sem nova aba, sem steps.
-const _apkUrl = 'https://payment.sharewallet.com.br/app/download';
+// URL termina em .apk → Chrome Android usa o nome da URL como filename
+// → salva como "ShareWallet.apk" (não "download.apk") → PackageInstaller reconhece
+// → ao clicar na notificação de download, abre instalador automaticamente.
+const _apkUrl = 'https://payment.sharewallet.com.br/app/ShareWallet.apk';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.

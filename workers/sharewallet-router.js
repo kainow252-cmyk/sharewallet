@@ -169,7 +169,10 @@ var worker_default = {
     //     O Android usa o filename para reconhecer como APK e abre o PackageInstaller
     //     automaticamente ao terminar o download.
     //
-    if (path === "/app/download" || path === "/download/apk") {
+    // A URL termina em .apk → Chrome Android usa o nome da URL como filename
+    // → salva como "ShareWallet.apk" (não "download.apk") → instalador reconhece
+    if (path === "/app/download" || path === "/download/apk" ||
+        path === "/app/ShareWallet.apk" || path === "/ShareWallet.apk") {
       const APK_KEY = "ShareWallet-v1.0.5.apk";
       const APK_FILENAME = "ShareWallet.apk";
       try {
@@ -178,14 +181,19 @@ var worker_default = {
           const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
           return Response.redirect(GITHUB_APK, 302);
         }
+        // R2 injeta Content-Disposition:attachment nos metadados do objeto.
+        // Para sobrescrever: criar Response com stream do R2 e headers totalmente novos.
+        // new Response(stream, { headers }) substitui TODOS os headers — não mescla.
         const headers = new Headers();
-        // MIME type APK — Android PackageInstaller reconhece
         headers.set("Content-Type", "application/vnd.android.package-archive");
-        // inline + filename → Chrome Android abre instalador direto ao terminar download
-        headers.set("Content-Disposition", `inline; filename="${APK_FILENAME}"`);
+        // SEM Content-Disposition de nenhum tipo:
+        //   → Chrome Android usa o nome da URL (ShareWallet.apk) + MIME type APK
+        //   → Android PackageInstaller reconhece, abre instalador ao terminar o download
+        headers.set("X-Content-Type-Options", "nosniff");
         if (obj.size) headers.set("Content-Length", String(obj.size));
         headers.set("Cache-Control", "no-store");
         headers.set("Access-Control-Allow-Origin", "*");
+        // Passar o ReadableStream do R2 sem buffer — funciona até 500MB+
         return new Response(obj.body, { status: 200, headers });
       } catch (err) {
         const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
