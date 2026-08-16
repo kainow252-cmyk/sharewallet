@@ -7,10 +7,9 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-// Página de instalação no site — hospeda install.html com botão para GitHub Releases
-// GitHub Releases — APK hospedado sem limite de tamanho (>25MB Cloudflare limit)
-const _apkInstallPageUrl =
-    'https://payment.sharewallet.com.br/app/install';
+// Download direto do APK no GitHub Releases — sem tela intermediária
+const _apkDirectDownloadUrl =
+    'https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.
@@ -593,19 +592,16 @@ class _CtaSection extends StatelessWidget {
   });
 
   Future<void> _handleInstall(BuildContext context) async {
-    // Vai direto para a página de instalação no site (payment.sharewallet.com.br/app/install)
-    // que tem o botão de download do APK no GitHub Releases.
-    // Sem Intent intermediário — evita abrir Chrome Custom Tab com a landing page errada.
+    // Download direto do APK — sem tela intermediária
     try {
       await launchUrl(
-        Uri.parse(_apkInstallPageUrl),
+        Uri.parse(_apkDirectDownloadUrl),
         mode: LaunchMode.externalApplication,
       );
     } catch (_) {
-      // Fallback: tenta abrir no browser padrão
       if (context.mounted) {
         await launchUrl(
-          Uri.parse(_apkInstallPageUrl),
+          Uri.parse(_apkDirectDownloadUrl),
           mode: LaunchMode.platformDefault,
         );
       }
