@@ -1193,10 +1193,9 @@ class _NascimentoPicker extends StatelessWidget {
     final errorText = validator();
     final hasError = errorText != null;
 
-    // ── Helper: célula dropdown premium ──────────────────────────────────────
+    // ── Helper: célula dropdown — mesma altura dos TextFormField (vertical:14) ─
     Widget dropCell({
       required String hint,
-      required String subLabel,
       required int? selectedValue,
       required List<int> values,
       required String Function(int) itemLabel,
@@ -1210,93 +1209,74 @@ class _NascimentoPicker extends StatelessWidget {
 
       return Expanded(
         flex: flex,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Mini-rótulo acima do campo
-            Text(
-              subLabel,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: showErr
-                    ? AppColors.error
-                    : filled
-                        ? AppColors.primary
-                        : AppColors.textHint,
-                letterSpacing: 0.3,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          height: 52, // mesma altura visual dos TextFormField com vertical:14
+          decoration: BoxDecoration(
+            color: filled
+                ? AppColors.primary.withValues(alpha: 0.04)
+                : AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: showErr
+                  ? AppColors.error
+                  : filled
+                      ? AppColors.primary.withValues(alpha: 0.5)
+                      : AppColors.cardBorder,
+              width: filled ? 1.5 : 1.0,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: DropdownButton<int>(
+            value: selectedValue,
+            isExpanded: true,
+            underline: const SizedBox.shrink(),
+            dropdownColor: Colors.white,
+            menuMaxHeight: 300,
+            hint: Text(
+              hint,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textHint,
               ),
             ),
-            const SizedBox(height: 4),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              decoration: BoxDecoration(
-                color: filled
-                    ? AppColors.primary.withValues(alpha: 0.04)
-                    : AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: showErr
-                      ? AppColors.error
-                      : filled
-                          ? AppColors.primary.withValues(alpha: 0.5)
-                          : AppColors.cardBorder,
-                  width: filled ? 1.5 : 1.0,
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-              child: DropdownButton<int>(
-                value: selectedValue,
-                isExpanded: true,
-                underline: const SizedBox.shrink(),
-                dropdownColor: Colors.white,
-                menuMaxHeight: 300,
-                hint: Text(
-                  hint,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textHint,
-                  ),
-                ),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: filled ? AppColors.textPrimary : AppColors.textHint,
-                ),
-                icon: Icon(
-                  Icons.expand_more_rounded,
-                  size: 20,
-                  color: filled ? AppColors.primary : AppColors.textHint,
-                ),
-                selectedItemBuilder: (ctx) => values
-                    .map((v) => Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            selectedLabel(v),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ))
-                    .toList(),
-                items: values
-                    .map((v) => DropdownMenuItem(
-                          value: v,
-                          child: Text(
-                            itemLabel(v),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ))
-                    .toList(),
-                onChanged: onChanged,
-              ),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: filled ? AppColors.textPrimary : AppColors.textHint,
             ),
-          ],
+            icon: Icon(
+              Icons.expand_more_rounded,
+              size: 20,
+              color: filled ? AppColors.primary : AppColors.textHint,
+            ),
+            selectedItemBuilder: (ctx) => values
+                .map((v) => Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        selectedLabel(v),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ))
+                .toList(),
+            items: values
+                .map((v) => DropdownMenuItem(
+                      value: v,
+                      child: Text(
+                        itemLabel(v),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ))
+                .toList(),
+            onChanged: onChanged,
+          ),
         ),
       );
     }
@@ -1323,12 +1303,11 @@ class _NascimentoPicker extends StatelessWidget {
 
         // ── 3 dropdowns: DIA → MÊS → ANO (padrão brasileiro) ───────────────
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // ── DIA (menor) ─────────────────────────────────────────────────
             dropCell(
-              hint: '--',
-              subLabel: 'DIA',
+              hint: 'Dia',
               selectedValue: diaValido,
               values: dias,
               itemLabel:    (d) => d.toString().padLeft(2, '0'),
@@ -1340,7 +1319,6 @@ class _NascimentoPicker extends StatelessWidget {
             // ── MÊS (maior — nome por extenso) ──────────────────────────────
             dropCell(
               hint: 'Mês',
-              subLabel: 'MÊS',
               selectedValue: mesSelecionado,
               values: List.generate(12, (i) => i + 1),
               itemLabel:    (m) => _meses[m - 1],
@@ -1352,7 +1330,6 @@ class _NascimentoPicker extends StatelessWidget {
             // ── ANO (médio) ──────────────────────────────────────────────────
             dropCell(
               hint: 'Ano',
-              subLabel: 'ANO',
               selectedValue: anoSelecionado,
               values: anos,
               itemLabel:    (a) => '$a',
@@ -2693,7 +2670,25 @@ class _ProductLandingPageState extends State<_ProductLandingPage> {
                           width: double.infinity,
                           // sem height fixo → ajusta proporcionalmente
                           fit: BoxFit.fitWidth,
-                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          headers: const {
+                            'Referer': 'https://payment.sharewallet.com.br/',
+                            'Origin': 'https://payment.sharewallet.com.br',
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                  // Fallback: tenta exibir via HTML img (contorna CORS do i.ibb.co)
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      width: double.infinity,
+                      height: 180,
+                      color: Colors.white.withValues(alpha: 0.08),
+                      child: const Center(
+                        child: Icon(Icons.broken_image_rounded,
+                            color: Colors.white38, size: 48),
+                      ),
+                    ),
+                  );
+                },
                           loadingBuilder: (ctx, child, progress) {
                             if (progress == null) return child;
                             return Container(
