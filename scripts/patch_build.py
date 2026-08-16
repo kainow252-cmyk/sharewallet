@@ -202,7 +202,10 @@ def copy_apk_to_download():
     download_dir = os.path.join(BUILD_DIR, 'download')
     apk_dst = os.path.join(download_dir, 'ShareWallet.apk')
     install_src = os.path.join(os.path.dirname(__file__), '..', 'web', 'install.html')
-    install_dst = os.path.join(os.path.dirname(__file__), '..', 'build', 'web', 'install.html')
+    # Coloca em build/web/install/index.html para que o Cloudflare Pages sirva
+    # como /install/ sem conflito com o catch-all SPA /* /index.html
+    install_dir = os.path.join(os.path.dirname(__file__), '..', 'build', 'web', 'install')
+    install_dst = os.path.join(install_dir, 'index.html')
 
     if os.path.exists(apk_src):
         os.makedirs(download_dir, exist_ok=True)
@@ -213,8 +216,9 @@ def copy_apk_to_download():
         print(f'SKIP: APK não encontrado em {apk_src}')
 
     if os.path.exists(install_src):
+        os.makedirs(install_dir, exist_ok=True)
         shutil.copy2(install_src, install_dst)
-        print(f'OK: install.html copiado para build/web/')
+        print(f'OK: install.html copiado para build/web/install/index.html')
     else:
         print(f'SKIP: web/install.html não encontrado')
 

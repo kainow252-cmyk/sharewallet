@@ -1,11 +1,2 @@
-# Páginas estáticas — DEVEM vir ANTES do catch-all SPA
-# Sintaxe Cloudflare Pages: arquivo estático tem prioridade se existir
-/install          /install.html   200
-/app/install      /install.html   200
-/app/install.html /install.html   200
-
-# SPA Flutter — catch-all só para paths dentro de /app/
-/app/*  /index.html  200
-
-# Raiz redireciona para /app/
-/  /app/  302
+/app/install   /install/   302
+/app/*         /index.html  200
