@@ -8,7 +8,9 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-const _apkUrl = 'https://payment.sharewallet.com.br/app/download';
+// URL direta do GitHub Releases — Chrome Mobile trata como download+instalar
+const _apkUrl =
+    'https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.
