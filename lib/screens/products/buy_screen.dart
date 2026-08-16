@@ -1145,7 +1145,7 @@ class _BuyScreenState extends State<BuyScreen> {
       );
 }
 
-// --- Picker de Data de Nascimento (Ano → Mês → Dia) --------------------------
+// --- Picker de Data de Nascimento (Dia → Mês → Ano) — ordem padrão BR --------
 class _NascimentoPicker extends StatelessWidget {
   final int? anoSelecionado;
   final int? mesSelecionado;
@@ -1165,9 +1165,11 @@ class _NascimentoPicker extends StatelessWidget {
     required this.validator,
   });
 
+  // Meses em português — índice 0 = Janeiro
   static const _meses = [
-    'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
-    'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
+    'Janeiro', 'Fevereiro', 'Março',    'Abril',
+    'Maio',    'Junho',     'Julho',     'Agosto',
+    'Setembro','Outubro',   'Novembro',  'Dezembro',
   ];
 
   int _diasNoMes(int? ano, int? mes) {
@@ -1178,55 +1180,123 @@ class _NascimentoPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final anoAtual = DateTime.now().year;
-    final anos = List.generate(100, (i) => anoAtual - i); // atual → 100 anos atrás
+    // Faixa razoável: 1920 até (anoAtual - 5)
+    final anos = List.generate((anoAtual - 5) - 1920 + 1, (i) => anoAtual - 5 - i);
     final totalDias = _diasNoMes(anoSelecionado, mesSelecionado);
     final dias = List.generate(totalDias, (i) => i + 1);
 
-    // Se dia selecionado passou do limite do mês, força null no pai
+    // Se dia selecionado excede o mês atual, descarta
     final diaValido = (diaSelecionado != null && diaSelecionado! <= totalDias)
         ? diaSelecionado
         : null;
 
     final errorText = validator();
+    final hasError = errorText != null;
 
-    // Helper local para construir cada célula de dropdown
+    // ── Helper: célula dropdown premium ──────────────────────────────────────
     Widget dropCell({
-      required String label,
+      required String hint,
+      required String subLabel,
       required int? selectedValue,
       required List<int> values,
       required String Function(int) itemLabel,
+      required String Function(int) selectedLabel,
       required ValueChanged<int?> onChanged,
+      required int flex,
     }) {
-      return Container(
-        decoration: BoxDecoration(
-          color: AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: errorText != null && selectedValue == null
-                ? AppColors.error
-                : AppColors.cardBorder,
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: DropdownButton<int>(
-          value: selectedValue,
-          isExpanded: true,
-          underline: const SizedBox.shrink(),
-          hint: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textHint)),
-          style: const TextStyle(
-            fontSize: 14,
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w500,
-          ),
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textSecondary),
-          menuMaxHeight: 280,
-          items: values
-              .map((v) => DropdownMenuItem(
-                    value: v,
-                    child: Text(itemLabel(v), style: const TextStyle(fontSize: 14)),
-                  ))
-              .toList(),
-          onChanged: onChanged,
+      final isEmpty  = selectedValue == null;
+      final showErr  = hasError && isEmpty;
+      final filled   = !isEmpty;
+
+      return Expanded(
+        flex: flex,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Mini-rótulo acima do campo
+            Text(
+              subLabel,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: showErr
+                    ? AppColors.error
+                    : filled
+                        ? AppColors.primary
+                        : AppColors.textHint,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 4),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              decoration: BoxDecoration(
+                color: filled
+                    ? AppColors.primary.withValues(alpha: 0.04)
+                    : AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: showErr
+                      ? AppColors.error
+                      : filled
+                          ? AppColors.primary.withValues(alpha: 0.5)
+                          : AppColors.cardBorder,
+                  width: filled ? 1.5 : 1.0,
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+              child: DropdownButton<int>(
+                value: selectedValue,
+                isExpanded: true,
+                underline: const SizedBox.shrink(),
+                dropdownColor: Colors.white,
+                menuMaxHeight: 300,
+                hint: Text(
+                  hint,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textHint,
+                  ),
+                ),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: filled ? AppColors.textPrimary : AppColors.textHint,
+                ),
+                icon: Icon(
+                  Icons.expand_more_rounded,
+                  size: 20,
+                  color: filled ? AppColors.primary : AppColors.textHint,
+                ),
+                selectedItemBuilder: (ctx) => values
+                    .map((v) => Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            selectedLabel(v),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ))
+                    .toList(),
+                items: values
+                    .map((v) => DropdownMenuItem(
+                          value: v,
+                          child: Text(
+                            itemLabel(v),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ))
+                    .toList(),
+                onChanged: onChanged,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -1234,67 +1304,82 @@ class _NascimentoPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Rótulo da seção
+        // ── Rótulo principal ────────────────────────────────────────────────
         Row(
           children: [
-            Icon(Icons.cake_rounded, color: AppColors.primary, size: 20),
-            const SizedBox(width: 8),
-            Text(
+            Icon(Icons.cake_rounded, color: AppColors.primary, size: 18),
+            const SizedBox(width: 6),
+            const Text(
               'Data de Nascimento *',
-              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        // 3 dropdowns em linha
+        const SizedBox(height: 10),
+
+        // ── 3 dropdowns: DIA → MÊS → ANO (padrão brasileiro) ───────────────
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── ANO ──────────────────────────────────────
-            Expanded(
-              flex: 5,
-              child: dropCell(
-                label: 'Ano',
-                selectedValue: anoSelecionado,
-                values: anos,
-                itemLabel: (a) => '$a',
-                onChanged: onAnoChanged,
-              ),
+            // ── DIA (menor) ─────────────────────────────────────────────────
+            dropCell(
+              hint: '--',
+              subLabel: 'DIA',
+              selectedValue: diaValido,
+              values: dias,
+              itemLabel:    (d) => d.toString().padLeft(2, '0'),
+              selectedLabel:(d) => d.toString().padLeft(2, '0'),
+              onChanged: onDiaChanged,
+              flex: 2,
             ),
             const SizedBox(width: 8),
-            // ── MÊS ──────────────────────────────────────
-            Expanded(
+            // ── MÊS (maior — nome por extenso) ──────────────────────────────
+            dropCell(
+              hint: 'Mês',
+              subLabel: 'MÊS',
+              selectedValue: mesSelecionado,
+              values: List.generate(12, (i) => i + 1),
+              itemLabel:    (m) => _meses[m - 1],
+              selectedLabel:(m) => _meses[m - 1].substring(0, 3), // abrev. qdo selecionado
+              onChanged: onMesChanged,
               flex: 4,
-              child: dropCell(
-                label: 'Mês',
-                selectedValue: mesSelecionado,
-                values: List.generate(12, (i) => i + 1),
-                itemLabel: (m) => '${m.toString().padLeft(2, '0')} ${_meses[m - 1]}',
-                onChanged: onMesChanged,
-              ),
             ),
             const SizedBox(width: 8),
-            // ── DIA ──────────────────────────────────────
-            Expanded(
+            // ── ANO (médio) ──────────────────────────────────────────────────
+            dropCell(
+              hint: 'Ano',
+              subLabel: 'ANO',
+              selectedValue: anoSelecionado,
+              values: anos,
+              itemLabel:    (a) => '$a',
+              selectedLabel:(a) => '$a',
+              onChanged: onAnoChanged,
               flex: 3,
-              child: dropCell(
-                label: 'Dia',
-                selectedValue: diaValido,
-                values: dias,
-                itemLabel: (d) => d.toString().padLeft(2, '0'),
-                onChanged: onDiaChanged,
-              ),
             ),
           ],
         ),
-        // Mensagem de erro (se incompleto e form submetido)
-        if (errorText != null) ...[
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.only(left: 12),
-            child: Text(
-              errorText,
-              style: const TextStyle(color: AppColors.error, fontSize: 11),
-            ),
+
+        // ── Mensagem de erro ────────────────────────────────────────────────
+        if (hasError) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(Icons.error_outline_rounded,
+                  size: 13, color: AppColors.error),
+              const SizedBox(width: 4),
+              Text(
+                errorText,
+                style: const TextStyle(
+                  color: AppColors.error,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ],
       ],
