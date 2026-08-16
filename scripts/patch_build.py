@@ -185,6 +185,17 @@ def copy_headers():
         print(f'SKIP: web/_headers não encontrado')
 
 
+def copy_redirects():
+    """Copia _redirects para build/web — necessário para SPA routing no Cloudflare Pages."""
+    src = os.path.join(WEB_DIR, '_redirects')
+    dst = os.path.join(BUILD_DIR, '_redirects')
+    if os.path.exists(src):
+        shutil.copy2(src, dst)
+        print(f'OK: _redirects copiado para build/web/')
+    else:
+        print(f'SKIP: web/_redirects não encontrado')
+
+
 def copy_pwa_install():
     """Copia pwa_install.js (banner instalar/atualizar PWA) para o build."""
     src = os.path.join(WEB_DIR, 'pwa_install.js')
@@ -286,6 +297,7 @@ if __name__ == '__main__':
     patch_index_redirect()
     deploy_kill_switch_sw()
     copy_headers()
+    copy_redirects()
     copy_pwa_install()
     copy_admin_manifest()
     deploy_version_sw()
