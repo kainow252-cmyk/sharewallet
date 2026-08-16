@@ -3,26 +3,162 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ShareWallet</title>
+<title>Instalar ShareWallet</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;background:#0A1628;display:flex;align-items:center;justify-content:center;font-family:Roboto,sans-serif}
-.box{text-align:center;padding:32px 24px}
-img{width:80px;height:80px;border-radius:20px;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto}
-h1{color:#fff;font-size:22px;font-weight:900;margin-bottom:6px}
-p{color:rgba(255,255,255,.45);font-size:13px;margin-bottom:32px}
-a{display:block;background:#00E5B4;color:#0A1628;font-size:17px;font-weight:900;padding:18px 32px;border-radius:16px;text-decoration:none;letter-spacing:0.2px}
-a:active{opacity:.85}
+html,body{min-height:100%;background:#0A1628;font-family:-apple-system,Roboto,sans-serif;color:#fff}
+.screen{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:32px 24px;text-align:center}
+.screen.active{display:flex}
+.logo{width:72px;height:72px;border-radius:18px;margin-bottom:20px}
+.logo-placeholder{width:72px;height:72px;border-radius:18px;background:#00E5B4;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 20px}
+h1{font-size:22px;font-weight:900;margin-bottom:6px}
+.sub{color:rgba(255,255,255,.45);font-size:13px;margin-bottom:28px}
+
+/* Botão principal */
+.btn{display:block;width:100%;max-width:320px;background:#00E5B4;color:#0A1628;font-size:17px;font-weight:900;padding:18px 24px;border-radius:16px;text-decoration:none;border:none;cursor:pointer;letter-spacing:.2px;margin-bottom:12px}
+.btn:active{opacity:.85}
+.btn.secondary{background:transparent;color:#00E5B4;border:1.5px solid rgba(0,229,180,.35);font-size:15px;padding:14px 24px}
+
+/* Tela de permissão */
+.steps{width:100%;max-width:340px;margin-bottom:28px}
+.step{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;background:rgba(255,255,255,.05);border-radius:14px;margin-bottom:10px;text-align:left}
+.step-num{min-width:28px;height:28px;border-radius:50%;background:#00E5B4;color:#0A1628;font-weight:900;font-size:14px;display:flex;align-items:center;justify-content:center}
+.step-text{font-size:14px;line-height:1.5;color:rgba(255,255,255,.85)}
+.step-text b{color:#fff}
+
+/* Progress */
+.progress-wrap{width:100%;max-width:320px;margin-bottom:20px}
+.progress-bar{height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden}
+.progress-fill{height:100%;background:#00E5B4;border-radius:99px;width:0%;transition:width .3s}
+.progress-label{font-size:13px;color:rgba(255,255,255,.5);margin-top:8px}
+
+/* Badge de alerta */
+.alert{background:rgba(255,184,0,.1);border:1px solid rgba(255,184,0,.3);border-radius:12px;padding:12px 16px;margin-bottom:24px;width:100%;max-width:320px}
+.alert p{font-size:13px;color:rgba(255,220,100,.9);line-height:1.5}
 </style>
 </head>
 <body>
-<div class="box">
-  <img src="/app/icons/Icon-192.png" onerror="this.style.display='none'">
+
+<!-- TELA 1: Download direto (padrão) -->
+<div id="s-download" class="screen active">
+  <img class="logo" src="/app/icons/Icon-192.png" onerror="this.style.display='none'">
   <h1>ShareWallet</h1>
-  <p>v1.0.5 · Android · ~60 MB</p>
-  <a href="https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk">
-    ⬇ Baixar e Instalar
-  </a>
+  <p class="sub">v1.0.5 · Android · 62 MB</p>
+  <button class="btn" onclick="startDownload()">⬇ Baixar e Instalar</button>
 </div>
+
+<!-- TELA 2: Permissão necessária -->
+<div id="s-permission" class="screen">
+  <div class="logo-placeholder">🔐</div>
+  <h1>Um passo rápido</h1>
+  <p class="sub">Libere a instalação de apps externos</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">Nas <b>Configurações do Chrome</b>, toque em<br><b>"Permitir desta fonte"</b></div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">Ative a chave e volte aqui</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">Toque em <b>Baixar e Instalar</b> abaixo</div>
+    </div>
+  </div>
+  <button class="btn" onclick="startDownload()">⬇ Baixar e Instalar</button>
+  <a class="btn secondary" href="intent://com.android.settings.APPLICATION_DETAILS_SETTINGS#Intent;scheme=package;package=com.android.chrome;end">⚙ Abrir Configurações do Chrome</a>
+</div>
+
+<!-- TELA 3: Downloading -->
+<div id="s-downloading" class="screen">
+  <div class="logo-placeholder">📥</div>
+  <h1>Baixando…</h1>
+  <p class="sub">Não feche esta tela</p>
+  <div class="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
+    <div class="progress-label" id="prog-label">Aguardando…</div>
+  </div>
+  <div class="alert">
+    <p>⚡ Quando terminar, <b>toque na notificação</b> do arquivo baixado para instalar</p>
+  </div>
+</div>
+
+<!-- TELA 4: Concluído -->
+<div id="s-done" class="screen">
+  <div class="logo-placeholder">✅</div>
+  <h1>Download concluído!</h1>
+  <p class="sub">Toque na notificação para instalar</p>
+  <div class="alert" style="margin-bottom:24px">
+    <p>📲 Puxe a <b>barra de notificações</b> e toque em <b>ShareWallet.apk</b></p>
+  </div>
+  <button class="btn" onclick="startDownload()">🔄 Baixar novamente</button>
+</div>
+
+<script>
+const APK = 'https://payment.sharewallet.com.br/app/ShareWallet.apk';
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// Detecta se já baixou antes — se sim, pula direto pro download
+const alreadyGranted = localStorage.getItem('sw_install_granted') === '1';
+
+function startDownload() {
+  localStorage.setItem('sw_install_granted', '1');
+  show('s-downloading');
+
+  // Dispara download via fetch com ReadableStream para mostrar progresso real
+  fetch(APK)
+    .then(resp => {
+      const total = parseInt(resp.headers.get('Content-Length') || '62584568');
+      const reader = resp.body.getReader();
+      let received = 0;
+      const chunks = [];
+
+      function pump() {
+        return reader.read().then(({ done, value }) => {
+          if (done) {
+            // Montar Blob e criar link de download
+            const blob = new Blob(chunks, { type: 'application/vnd.android.package-archive' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ShareWallet.apk';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+            show('s-done');
+            return;
+          }
+          chunks.push(value);
+          received += value.length;
+          const pct = Math.min(99, Math.round(received / total * 100));
+          document.getElementById('prog-fill').style.width = pct + '%';
+          document.getElementById('prog-label').textContent =
+            (received / 1048576).toFixed(1) + ' MB de ' + (total / 1048576).toFixed(0) + ' MB';
+          return pump();
+        });
+      }
+      return pump();
+    })
+    .catch(() => {
+      // Fallback: navegação direta se fetch falhar
+      window.location.href = APK;
+      show('s-done');
+    });
+}
+
+// Inicialização
+if (alreadyGranted) {
+  show('s-download');
+} else {
+  // Detectar se é Android
+  const isAndroid = /android/i.test(navigator.userAgent);
+  show(isAndroid ? 's-download' : 's-download');
+}
+</script>
 </body>
 </html>
