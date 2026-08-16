@@ -8,13 +8,11 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-// GitHub Releases CDN (objects.githubusercontent.com) — dominio externo:
-//   → Chrome Android trata como download externo
-//   → Mostra botao "ABRIR" na notificacao ao terminar
-//   → Toca "ABRIR" → PackageInstaller abre direto → instalar
-// IMPORTANTE: usar <a download> para nao abrir nova guia.
-const _apkUrl =
-    'https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk';
+// Worker /app/download faz redirect 302 → GitHub CDN.
+// window.location.href (mesma aba) + redirect 302 = Chrome segue sem abrir nova guia
+// + GitHub CDN serve com Content-Disposition:attachment correto
+// + botao "ABRIR" aparece na notificacao ao terminar.
+const _apkUrl = 'https://payment.sharewallet.com.br/app/download';
 const _apkFilename = 'ShareWallet.apk';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
@@ -599,11 +597,10 @@ class _CtaSection extends StatelessWidget {
 
   Future<void> _handleInstall(BuildContext context) async {
     if (kIsWeb) {
-      // <a download> com mesmo domínio:
-      // → Chrome Android mostra popup "Baixar ShareWallet.apk?" imediato
-      // → Notificação aparece com progresso
-      // → Ao terminar: botão "Abrir" na notificação → toca 1x → PackageInstaller
-      web_utils.downloadApkBlob(_apkUrl, _apkFilename);
+      // window.location.href = mesma aba, sem popup, sem nova guia
+      // Worker /app/download retorna 302 → GitHub CDN
+      // Chrome segue redirect, baixa do GitHub, mostra "ABRIR" na notificacao
+      web_utils.navigateSameTab(_apkUrl);
       return;
     }
     try {

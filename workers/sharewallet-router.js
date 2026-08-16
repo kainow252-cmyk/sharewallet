@@ -159,46 +159,23 @@ var worker_default = {
     if (path === "/" || path === "") {
       return Response.redirect(url.origin + "/app/", 302);
     }
-    // ── APK via Cloudflare R2 ────────────────────────────────────────────────
-    // R2 é storage nativo do Worker — sem egress entre Worker e R2.
+    // ── Download APK ─────────────────────────────────────────────────────────
+    // window.location.href (mesma aba) → Worker → redirect 302 → GitHub CDN.
     //
-    // COMPORTAMENTO DO CHROME ANDROID (testado):
-    //   • Content-Type: application/vnd.android.package-archive  → obrigatório
-    //   • Content-Disposition: inline; filename="ShareWallet.apk" → abre instalador
-    //     IMPORTANTE: "inline" (NÃO "attachment") + filename com .apk
-    //     O Android usa o filename para reconhecer como APK e abre o PackageInstaller
-    //     automaticamente ao terminar o download.
+    // Por que redirect 302 e não proxy:
+    //   • proxy (mesmo domínio): Chrome trata como navegação → sem botão "ABRIR"
+    //   • redirect 302 → GitHub CDN (domínio externo): Chrome trata como download
+    //     externo → mostra botão "ABRIR" na notificação → 1 toque → PackageInstaller
     //
-    // A URL termina em .apk → Chrome Android usa o nome da URL como filename
-    // → salva como "ShareWallet.apk" (não "download.apk") → instalador reconhece
+    // Por que window.location.href e não <a download>:
+    //   • <a download> cross-origin é ignorado pelo Chrome → abre 2 guias
+    //   • window.location.href mesma aba + redirect = sem nova guia ✅
     if (path === "/app/download" || path === "/download/apk" ||
         path === "/app/ShareWallet.apk" || path === "/ShareWallet.apk") {
-      const APK_KEY = "ShareWallet-v1.0.5.apk";
-      const APK_FILENAME = "ShareWallet.apk";
-      try {
-        const obj = await env.APK_BUCKET.get(APK_KEY);
-        if (!obj) {
-          const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
-          return Response.redirect(GITHUB_APK, 302);
-        }
-        const headers = new Headers();
-        headers.set("Content-Type", "application/vnd.android.package-archive");
-        // attachment + filename correto:
-        //   → Chrome Android trata como download (não navegação)
-        //   → Salva como "ShareWallet.apk"
-        //   → Ao terminar: notificação mostra botão "ABRIR" → 1 toque → PackageInstaller
-        headers.set("Content-Disposition", 'attachment; filename="ShareWallet.apk"');
-        headers.set("X-Content-Type-Options", "nosniff");
-        if (obj.size) headers.set("Content-Length", String(obj.size));
-        headers.set("Cache-Control", "no-store");
-        headers.set("Access-Control-Allow-Origin", "*");
-        return new Response(obj.body, { status: 200, headers });
-      } catch (err) {
-        const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
-        return Response.redirect(GITHUB_APK, 302);
-      }
+      const GITHUB_APK = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
+      return Response.redirect(GITHUB_APK, 302);
     }
-    // ────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
 
     // /app/install — serve install.html do Cloudflare Pages (mesmo que /install/index.html)
     // O STATIC_PATHS no bloco /app/* abaixo já cuida disso — sem interceptar aqui
