@@ -8,10 +8,11 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-// URL termina em .apk → Chrome Android usa o nome da URL como filename
-// → salva como "ShareWallet.apk" (não "download.apk") → PackageInstaller reconhece
-// → ao clicar na notificação de download, abre instalador automaticamente.
+// URL termina em .apk → Chrome Android usa o nome da URL como filename.
+// Worker serve com Content-Disposition: attachment; filename="ShareWallet.apk"
+// → Chrome exibe botão "Abrir" na notificação ao terminar → toca uma vez → instala.
 const _apkUrl = 'https://payment.sharewallet.com.br/app/ShareWallet.apk';
+const _apkFilename = 'ShareWallet.apk';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.
@@ -595,9 +596,11 @@ class _CtaSection extends StatelessWidget {
 
   Future<void> _handleInstall(BuildContext context) async {
     if (kIsWeb) {
-      // Mesma aba + Worker faz proxy streaming com Content-Type APK sem Content-Disposition
-      // → Chrome Android baixa e entrega ao sistema → instalador abre automaticamente
-      web_utils.navigateSameTab(_apkUrl);
+      // <a download> com mesmo domínio:
+      // → Chrome Android mostra popup "Baixar ShareWallet.apk?" imediato
+      // → Notificação aparece com progresso
+      // → Ao terminar: botão "Abrir" na notificação → toca 1x → PackageInstaller
+      web_utils.downloadApkBlob(_apkUrl, _apkFilename);
       return;
     }
     try {
