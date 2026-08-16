@@ -8,7 +8,10 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-const _apkUrl = 'https://payment.sharewallet.com.br/app/install';
+// Aponta direto para o Worker proxy — streaming do APK sem Content-Disposition.
+// O Android recebe application/vnd.android.package-archive e abre instalador direto.
+// Sem página intermediária, sem nova aba, sem steps.
+const _apkUrl = 'https://payment.sharewallet.com.br/app/download';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.
@@ -592,7 +595,8 @@ class _CtaSection extends StatelessWidget {
 
   Future<void> _handleInstall(BuildContext context) async {
     if (kIsWeb) {
-      // Mesma aba → Worker retorna APK com Content-Disposition:attachment → Chrome baixa direto
+      // Mesma aba + Worker faz proxy streaming com Content-Type APK sem Content-Disposition
+      // → Chrome Android baixa e entrega ao sistema → instalador abre automaticamente
       web_utils.navigateSameTab(_apkUrl);
       return;
     }

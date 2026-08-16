@@ -159,13 +159,34 @@ var worker_default = {
     if (path === "/" || path === "") {
       return Response.redirect(url.origin + "/app/", 302);
     }
-    // Proxy APK do GitHub Releases — mesmo dominio = sem nova guia no Chrome
+    // Proxy streaming do APK — mesmo domínio = sem nova aba no Chrome Android.
+    // Worker faz pipe direto do GitHub CDN para o browser, sobrescrevendo os headers:
+    //   ✅ Content-Type: application/vnd.android.package-archive  → Android reconhece como APK
+    //   ✅ SEM Content-Disposition: attachment                     → Android abre instalador direto
+    //   ✅ Content-Length preservado                               → barra de progresso no Chrome
     if (path === "/app/download" || path === "/download/apk") {
-      // Redirect 302 direto para o GitHub CDN — sem proxy de 62MB pelo Worker.
-      // O GitHub CDN serve o APK com MIME type correto, o Android reconhece
-      // e abre o instalador automaticamente ao terminar o download.
       const APK_URL = "https://github.com/kainow252-cmyk/sharewallet/releases/download/v1.0.5/ShareWallet-v1.0.5.apk";
-      return Response.redirect(APK_URL, 302);
+      try {
+        const upstream = await fetch(APK_URL, {
+          headers: { "User-Agent": "Mozilla/5.0 (CloudflareWorker)" },
+          redirect: "follow",
+        });
+        if (!upstream.ok) {
+          return new Response("APK unavailable", { status: 502 });
+        }
+        const headers = new Headers();
+        // MIME type que o Android reconhece como instalador
+        headers.set("Content-Type", "application/vnd.android.package-archive");
+        // SEM Content-Disposition → Chrome entrega ao sistema como APK, não salva silenciosamente
+        const cl = upstream.headers.get("Content-Length");
+        if (cl) headers.set("Content-Length", cl);
+        headers.set("Cache-Control", "no-store");
+        headers.set("Access-Control-Allow-Origin", "*");
+        return new Response(upstream.body, { status: 200, headers });
+      } catch (_) {
+        // Fallback: redireciona se o proxy falhar (timeout, Worker CPU limit)
+        return Response.redirect(APK_URL, 302);
+      }
     }
 
     // /app/install — serve install.html do Cloudflare Pages (mesmo que /install/index.html)
@@ -179,9 +200,8 @@ var worker_default = {
         if (pagesPath.startsWith("/fonts/")) {
           pagesPath = "/assets" + pagesPath;
         }
-        // Paths estáticos conhecidos (sem extensão mas não são rotas SPA)
-        const STATIC_PATHS = ["/install", "/install/"];
-        if (!pagesPath.includes(".") && pagesPath !== "/" && !STATIC_PATHS.includes(pagesPath)) {
+        // /install não existe mais — tudo sem extensão vira SPA
+        if (!pagesPath.includes(".") && pagesPath !== "/") {
           pagesPath = "/index.html";
         }
       }
