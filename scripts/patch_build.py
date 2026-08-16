@@ -198,11 +198,11 @@ def copy_redirects():
 
 def copy_apk_to_download():
     """Copia o APK release para build/web/download/ para servir pelo Cloudflare Pages."""
-    apk_src = os.path.join(ROOT_DIR, 'build', 'app', 'outputs', 'flutter-apk', 'app-release.apk')
+    apk_src = os.path.join(os.path.dirname(__file__), '..', 'build', 'app', 'outputs', 'flutter-apk', 'app-release.apk')
     download_dir = os.path.join(BUILD_DIR, 'download')
     apk_dst = os.path.join(download_dir, 'ShareWallet.apk')
-    install_src = os.path.join(WEB_DIR, 'install.html')
-    install_dst = os.path.join(BUILD_DIR, 'install.html')
+    install_src = os.path.join(os.path.dirname(__file__), '..', 'web', 'install.html')
+    install_dst = os.path.join(os.path.dirname(__file__), '..', 'build', 'web', 'install.html')
 
     if os.path.exists(apk_src):
         os.makedirs(download_dir, exist_ok=True)
