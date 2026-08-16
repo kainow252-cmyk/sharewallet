@@ -32,6 +32,9 @@ class LandingScreen extends StatefulWidget {
 
 class _LandingScreenState extends State<LandingScreen>
     with TickerProviderStateMixin {
+  // Detecta APK WebView — reavaliado após o primeiro frame (UA pode chegar depois)
+  bool _isNative = false;
+
   late AnimationController _heroCtrl;
   late AnimationController _cardsCtrl;
   late AnimationController _ctaCtrl;
@@ -69,6 +72,23 @@ class _LandingScreenState extends State<LandingScreen>
     );
 
     _runSequence();
+
+    // ── Detecta APK WebView — reavalia após o 1º frame ───────────────────────
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final native = isNativeApp();
+        if (mounted && native != _isNative) {
+          setState(() => _isNative = native);
+        }
+        // Re-verifica após 1s — UA pode ser injetado levemente depois
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (mounted) {
+            final native2 = isNativeApp();
+            if (native2 != _isNative) setState(() => _isNative = native2);
+          }
+        });
+      });
+    }
 
     // ── Remove o HTML splash quando a LandingScreen estiver visível ──────────
     // Aguarda 700ms após o 1º frame: cobre a animação hero (600ms) + margem.
@@ -159,6 +179,7 @@ class _LandingScreenState extends State<LandingScreen>
                       scale: _ctaScale,
                       child: _CtaSection(
                         s: s,
+                        isNative: _isNative,
                         showCadastro: context
                             .watch<AppConfigService>()
                             .loginConfig
@@ -561,12 +582,14 @@ class _CtaSection extends StatelessWidget {
   final VoidCallback onLogin;
   final double s;
   final bool showCadastro;
+  final bool isNative;
 
   const _CtaSection({
     required this.onCadastro,
     required this.onLogin,
     required this.s,
     this.showCadastro = true,
+    this.isNative = false,
   });
 
   Future<void> _handleInstall(BuildContext context) async {
@@ -648,7 +671,7 @@ class _CtaSection extends StatelessWidget {
         ),
 
         // Botão APK: só no site — esconde quando rodando dentro do APK WebView
-        if (kIsWeb && !isNativeApp()) ...[
+        if (kIsWeb && !isNative) ...[
           SizedBox(height: 8 * s),
           SizedBox(
             width: double.infinity,
