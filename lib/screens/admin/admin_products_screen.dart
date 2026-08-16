@@ -6,6 +6,14 @@ import '../../services/admin_service.dart';
 import '../../models/product_model.dart';
 import '../../theme/app_theme.dart';
 
+/// Proxy de imagem para contornar CORS de domínios externos (i.ibb.co, etc.)
+String _proxyImageUrl(String? url) {
+  if (url == null || url.isEmpty) return '';
+  if (url.startsWith('data:')) return url;
+  if (url.contains('sharewallet.com.br') || url.contains('sharewallet-app.pages.dev')) return url;
+  return 'https://api.sharewallet.com.br/api/image-proxy?url=${Uri.encodeComponent(url)}';
+}
+
 class AdminProductsScreen extends StatefulWidget {
   const AdminProductsScreen({super.key});
 
@@ -773,7 +781,7 @@ class _ProductFormSheetState extends State<_ProductFormSheet> {
                                 ),
                               )
                             : Image.network(
-                                _imagemUrl.text.trim(),
+                                _proxyImageUrl(_imagemUrl.text.trim()),
                                 // sem height fixo → proporcional à imagem
                                 width: double.infinity,
                                 fit: BoxFit.fitWidth,

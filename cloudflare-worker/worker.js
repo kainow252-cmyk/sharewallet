@@ -2419,5 +2419,118 @@ async function _handleRequest(request, env) {
       }
     }
 
+    // ── /api/image-proxy — proxy de imagens externas (contorna CORS) ─────────
+    // Uso: GET /api/image-proxy?url=https://i.ibb.co/...
+    // O Flutter Web não consegue carregar imagens de i.ibb.co diretamente por CORS.
+    // Este proxy busca a imagem server-side e a serve com headers CORS corretos.
+    if (path === '/api/image-proxy' && method === 'GET') {
+      const imageUrl = url.searchParams.get('url');
+      if (!imageUrl) return err('Parâmetro "url" obrigatório', 400);
+      // Validar domínios permitidos (segurança)
+      const allowedDomains = ['i.ibb.co', 'ibb.co', 'imgur.com', 'i.imgur.com',
+        'firebasestorage.googleapis.com', 'storage.googleapis.com',
+        'res.cloudinary.com', 'images.unsplash.com', 'cdn.sharewallet.com.br'];
+      let domainOk = false;
+      try {
+        const imgDomain = new URL(imageUrl).hostname;
+        domainOk = allowedDomains.some(d => imgDomain === d || imgDomain.endsWith('.' + d));
+      } catch (_) {}
+      if (!domainOk) return err('Domínio não permitido para proxy', 403);
+      try {
+        const upstream = await fetch(imageUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; ShareWallet/1.0)',
+            'Referer': 'https://sharewallet.com.br/',
+          },
+          cf: { cacheEverything: true, cacheTtl: 3600 }, // cache 1h no CF
+        });
+        if (!upstream.ok) return err(`Imagem não encontrada: ${upstream.status}`, upstream.status);
+        const contentType = upstream.headers.get('Content-Type') || 'image/jpeg';
+        const body = await upstream.arrayBuffer();
+        return new Response(body, {
+          status: 200,
+          headers: {
+            ...CORS,
+            'Content-Type': contentType,
+            'Cache-Control': 'public, max-age=3600',
+            'X-Image-Proxy': 'worker',
+          },
+        });
+      } catch (e) {
+        return err(`Erro ao buscar imagem: ${e.message}`, 500);
+      }
+    }
+
+    // ── /api/sale-docs — documentos de vendas (upload e consulta) ────────────
+    // POST /api/sale-docs — cria/salva documentos de uma venda
+    if (path === '/api/sale-docs' && method === 'POST') {
+      try {
+        const body = await request.json();
+        const { sale_id, product_id, affiliate_code, cliente_nome, cliente_email, docs_data } = body;
+        if (!sale_id) return err('sale_id obrigatório', 400);
+        const docsJson = JSON.stringify(docs_data || {});
+        const id = `doc_${Date.now()}`;
+        // Criar tabela se não existir
+        await DB.prepare(`CREATE TABLE IF NOT EXISTS sale_docs (
+          id TEXT PRIMARY KEY,
+          sale_id TEXT NOT NULL,
+          product_id TEXT,
+          affiliate_code TEXT,
+          cliente_nome TEXT,
+          cliente_email TEXT,
+          docs_data TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        )`).run().catch(() => null);
+        await DB.prepare(
+          `INSERT OR REPLACE INTO sale_docs (id, sale_id, product_id, affiliate_code, cliente_nome, cliente_email, docs_data)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        ).bind(id, sale_id, product_id || '', affiliate_code || '', cliente_nome || '', cliente_email || '', docsJson).run();
+        return ok({ id, sale_id, created: true });
+      } catch (e) {
+        return err(`Erro ao salvar documentos: ${e.message}`, 500);
+      }
+    }
+
+    // GET /api/sale-docs/:saleId — busca documentos por sale_id
+    const saleDocMatch = path.match(/^\/api\/sale-docs\/([^/]+)$/);
+    if (saleDocMatch && method === 'GET') {
+      const saleId = saleDocMatch[1];
+      try {
+        await DB.prepare(`CREATE TABLE IF NOT EXISTS sale_docs (
+          id TEXT PRIMARY KEY, sale_id TEXT NOT NULL, product_id TEXT,
+          affiliate_code TEXT, cliente_nome TEXT, cliente_email TEXT,
+          docs_data TEXT, created_at TEXT DEFAULT (datetime('now'))
+        )`).run().catch(() => null);
+        const row = await DB.prepare(`SELECT * FROM sale_docs WHERE sale_id=? ORDER BY created_at DESC LIMIT 1`).bind(saleId).first();
+        if (!row) return ok(null);
+        // Parse docs_data JSON
+        try { row.docs_data = JSON.parse(row.docs_data || '{}'); } catch (_) {}
+        return ok(row);
+      } catch (e) {
+        return err(`Erro ao buscar documentos: ${e.message}`, 500);
+      }
+    }
+
+    // GET /api/sale-docs/by-affiliate/:code — busca todos os docs por afiliado
+    const saleDocsByAff = path.match(/^\/api\/sale-docs\/by-affiliate\/([^/]+)$/);
+    if (saleDocsByAff && method === 'GET') {
+      const code = saleDocsByAff[1];
+      try {
+        await DB.prepare(`CREATE TABLE IF NOT EXISTS sale_docs (
+          id TEXT PRIMARY KEY, sale_id TEXT NOT NULL, product_id TEXT,
+          affiliate_code TEXT, cliente_nome TEXT, cliente_email TEXT,
+          docs_data TEXT, created_at TEXT DEFAULT (datetime('now'))
+        )`).run().catch(() => null);
+        const rows = await DB.prepare(`SELECT * FROM sale_docs WHERE affiliate_code=? ORDER BY created_at DESC`).bind(code).all();
+        const results = (rows.results || []).map(r => {
+          try { r.docs_data = JSON.parse(r.docs_data || '{}'); } catch (_) {}
+          return r;
+        });
+        return ok({ result: results });
+      } catch (e) {
+        return err(`Erro ao buscar documentos por afiliado: ${e.message}`, 500);
+      }
+    }
+
     return err('Rota não encontrada: ' + path, 404);
 }

@@ -33,6 +33,19 @@ const _kBairro   = 'buyer_bairro';
 const _kCidade   = 'buyer_cidade';
 const _kEstado   = 'buyer_estado';
 
+/// Converte URL de imagem para passar pelo proxy do Worker (contorna CORS).
+/// Imagens hospedadas em i.ibb.co, imgur, etc., bloqueiam Flutter Web por CORS.
+/// O Worker em api.sharewallet.com.br/api/image-proxy serve com headers CORS corretos.
+String _proxyImageUrl(String? url) {
+  if (url == null || url.isEmpty) return '';
+  // Se já é data: URI (base64), usar diretamente
+  if (url.startsWith('data:')) return url;
+  // Se já é do nosso domínio, não precisa de proxy
+  if (url.contains('sharewallet.com.br') || url.contains('sharewallet-app.pages.dev')) return url;
+  // Para outros domínios externos, usar proxy do Worker
+  return 'https://api.sharewallet.com.br/api/image-proxy?url=${Uri.encodeComponent(url)}';
+}
+
 /// Tela pública acessada pelo COMPRADOR via link rastreável do afiliado.
 /// Não exige login. URL: /#/produto/:id?ref=AFFILIATE_CODE
 class BuyScreen extends StatefulWidget {
@@ -1942,7 +1955,7 @@ class _PurchaseSuccessScreenState extends State<_PurchaseSuccessScreen>
                       fit: StackFit.expand,
                       children: [
                         Image.network(
-                          widget.product.imagemUrl!,
+                          _proxyImageUrl(widget.product.imagemUrl),
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             color: Colors.black87,
@@ -2666,16 +2679,11 @@ class _ProductLandingPageState extends State<_ProductLandingPage> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(16),
                         child: Image.network(
-                          product.imagemUrl!,
+                          _proxyImageUrl(product.imagemUrl),
                           width: double.infinity,
                           // sem height fixo → ajusta proporcionalmente
                           fit: BoxFit.fitWidth,
-                          headers: const {
-                            'Referer': 'https://payment.sharewallet.com.br/',
-                            'Origin': 'https://payment.sharewallet.com.br',
-                          },
                           errorBuilder: (context, error, stackTrace) {
-                  // Fallback: tenta exibir via HTML img (contorna CORS do i.ibb.co)
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
