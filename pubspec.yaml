@@ -1,7 +1,7 @@
 name: affiliate_wallet
 description: ShareWallet - plataforma de afiliados com carteira digital e pagamentos via Pix
 publish_to: 'none'
-version: 1.0.6+7
+version: 1.0.6+8
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
