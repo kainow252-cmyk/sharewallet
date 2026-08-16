@@ -55,7 +55,10 @@ void openUrlInNewTab(String url) {
 /// Diferente de open('_blank') que abre nova guia.
 /// O browser trata arquivos .apk como download automático.
 void navigateSameTab(String url) {
-  html.window.location.href = url;
+  // window.open(url, '_self') força mesma aba mesmo com redirect 302 cross-origin.
+  // location.href falha quando o redirect vai para domínio externo (GitHub) —
+  // Chrome Android abre nova guia. '_self' explicito resolve isso.
+  html.window.open(url, '_self');
 }
 
 /// Inicia download de APK via <a href download> direto — popup nativo imediato.
