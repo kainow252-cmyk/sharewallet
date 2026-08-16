@@ -8,8 +8,9 @@ import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
 // ── APK Install constants ────────────────────────────────────────────────────
-const _apkDirectDownloadUrl =
-    'https://payment.sharewallet.com.br/app/download';
+// Página de instalação: dispara download automático + botão "Instalar agora"
+const _apkInstallPageUrl =
+    'https://payment.sharewallet.com.br/app/install';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.
@@ -592,13 +593,14 @@ class _CtaSection extends StatelessWidget {
   });
 
   Future<void> _handleInstall(BuildContext context) async {
+    // Abre a página /app/install: dispara download + botão "Instalar agora"
+    // A página detecta conclusão do download e oferece instalação com 1 toque
     if (kIsWeb) {
-      // Clicou → baixa direto. Sem telas intermediárias.
-      await web_utils.downloadApkBlob(_apkDirectDownloadUrl, 'ShareWallet.apk');
+      web_utils.openUrlInNewTab(_apkInstallPageUrl);
       return;
     }
     try {
-      await launchUrl(Uri.parse(_apkDirectDownloadUrl),
+      await launchUrl(Uri.parse(_apkInstallPageUrl),
           mode: LaunchMode.externalApplication);
     } catch (_) {}
   }
