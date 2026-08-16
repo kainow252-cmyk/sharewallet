@@ -30,6 +30,10 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _biometricLoading = false;
   bool _biometricAvailable = false;
   bool _biometricEnabled = false;
+  // "Lembrar-me" — persiste preferência no SharedPreferences
+  bool _rememberMe = true;
+  // Flag para indicar que biometria está sendo tentada automaticamente
+  bool _autoLoginAttempted = false;
 
   @override
   void initState() {
@@ -49,9 +53,50 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // APK WebView: escuta 'sw-biometric-login' despachado pelo shell Flutter
     // após autenticação biométrica bem-sucedida no lado nativo.
+    // Também exibe o botão de biometria quando rodando dentro do APK WebView.
     if (kIsWeb && isNativeApp()) {
       _registerBiometricLoginListener();
+      _registerBiometricErrorListener();
+      // No APK WebView a biometria é gerenciada pelo shell nativo.
+      // Marca como disponível para mostrar o botão na UI.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _biometricAvailable = true);
+      });
     }
+  }
+
+  /// Solicita biometria ao shell nativo via JS (APK WebView).
+  /// O shell Flutter captura o evento 'sw-request-biometric', autentica com
+  /// digital/Face ID e devolve as credenciais via 'sw-biometric-login'.
+  void _requestNativeBiometric() {
+    if (!mounted) return;
+    setState(() => _biometricLoading = true);
+    try {
+      // Dispara CustomEvent para o shell nativo iniciar biometria
+      jsBridge.callNativeBiometric();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _biometricLoading = false);
+        _showError('Biometria não disponível neste dispositivo.');
+      }
+    }
+    // Loading é resetado quando 'sw-biometric-login' chega via _loginFromBiometricBridge
+    // ou após timeout de 10s
+    Future.delayed(const Duration(seconds: 10), () {
+      if (mounted && _biometricLoading) {
+        setState(() => _biometricLoading = false);
+      }
+    });
+  }
+
+  /// Escuta 'sw-biometric-error' para mostrar feedback de falha ao usuário.
+  void _registerBiometricErrorListener() {
+    jsBridge.registerBiometricErrorListener((msg) {
+      if (mounted) {
+        setState(() => _biometricLoading = false);
+        _showError(msg.isNotEmpty ? msg : 'Falha na autenticação biométrica.');
+      }
+    });
   }
 
   /// Registra o listener JS que recebe credenciais do shell após biometria.
@@ -94,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _checkBiometric() async {
-    if (kIsWeb) return;
+    if (kIsWeb) return; // APK WebView usa bridge JS, não BiometricService local
     final available = await BiometricService.isAvailable();
     final enabled   = await BiometricService.isEnabled();
     if (!mounted) return;
@@ -103,7 +148,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _biometricEnabled   = enabled;
     });
     // Se biometria está habilitada E há credenciais → tenta login automático
-    if (enabled && available) {
+    if (enabled && available && !_autoLoginAttempted) {
+      _autoLoginAttempted = true;
       await Future.delayed(const Duration(milliseconds: 600));
       if (mounted) _loginWithBiometric(silent: true);
     }
@@ -950,8 +996,41 @@ class _LoginScreenState extends State<LoginScreen> {
                                 icon: Icons.login_rounded,
                               ),
 
-                              // Botão biometria (digital/face) — só mobile com biometria disponível
-                              if (!kIsWeb && _biometricAvailable) ...[  
+                              // ── Lembrar-me (só web direto, não APK WebView)
+                              if (kIsWeb && !isNativeApp()) ...[  
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: Checkbox(
+                                        value: _rememberMe,
+                                        activeColor: AppColors.primary,
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(4)),
+                                        onChanged: (v) =>
+                                            setState(() => _rememberMe = v ?? true),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    GestureDetector(
+                                      onTap: () => setState(
+                                          () => _rememberMe = !_rememberMe),
+                                      child: const Text(
+                                        'Lembrar-me neste dispositivo',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+
+                              // ── Botão biometria: nativo (APK) ou APK WebView
+                              if (_biometricAvailable) ...[  
                                 const SizedBox(height: 12),
                                 SizedBox(
                                   width: double.infinity,
@@ -967,24 +1046,35 @@ class _LoginScreenState extends State<LoginScreen> {
                                         : const Icon(Icons.fingerprint_rounded,
                                             size: 24, color: AppColors.primary),
                                     label: Text(
-                                      _biometricEnabled
-                                          ? 'Entrar com digital'
-                                          : 'Usar digital (configure após login)',
+                                      // APK WebView: biometria controlada pelo shell
+                                      kIsWeb && isNativeApp()
+                                          ? 'Entrar com digital / Face ID'
+                                          : (_biometricEnabled
+                                              ? 'Entrar com digital'
+                                              : 'Configurar digital após login'),
                                       style: const TextStyle(
                                           color: AppColors.primary,
                                           fontWeight: FontWeight.w600),
                                     ),
                                     style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      padding:
+                                          const EdgeInsets.symmetric(vertical: 14),
                                       side: const BorderSide(
                                           color: AppColors.primary, width: 1.5),
                                       shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(12)),
                                     ),
-                                    onPressed: _biometricLoading || auth.isLoading ||
-                                        _loginLoading || !_biometricEnabled
+                                    onPressed: _biometricLoading ||
+                                            auth.isLoading ||
+                                            _loginLoading
                                         ? null
-                                        : () => _loginWithBiometric(),
+                                        // APK WebView: dispara evento para o shell
+                                        : (kIsWeb && isNativeApp())
+                                            ? _requestNativeBiometric
+                                            // Nativo: só se biometria habilitada
+                                            : (!_biometricEnabled
+                                                ? null
+                                                : () => _loginWithBiometric()),
                                   ),
                                 ),
                               ],

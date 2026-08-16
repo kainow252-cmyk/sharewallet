@@ -1,32 +1,62 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
-import 'dart:js' as js;
+// Migrado de dart:js (deprecated) para dart:js_interop + dart:js_interop_unsafe.
+// dart:js_interop é a API moderna e estável para interop JS no Flutter Web.
+// globalContext.callMethod('eval', ...) substitui window.eval() — não disponível
+// no package:web 1.1.1 como método direto.
+
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 import 'package:flutter/foundation.dart';
+
+// ── Helper: eval JS seguro ─────────────────────────────────────────────────
+
+/// Executa código JavaScript via globalThis.eval().
+/// Substitui web.window.eval() que não existe no package:web 1.1.1.
+void _jsEval(String code) {
+  try {
+    globalContext.callMethod('eval'.toJS, code.toJS);
+  } catch (e) {
+    if (kDebugMode) debugPrint('[JsBridgeHelper] eval error: $e');
+  }
+}
+
+/// Define uma propriedade no globalThis (window).
+void _setGlobal(String name, JSAny? value) {
+  globalContext.setProperty(name.toJS, value);
+}
 
 // ── Foto de perfil ────────────────────────────────────────────────────────────
 
 void Function(String dataUrl, String mimeType)? _photoCallback;
+JSFunction? _dartPhotoCallbackRef;
 
 /// Registra listener JS 'sw-photo-selected' despachado pelo shell nativo.
 /// [onPhoto] é chamado com (dataUrl base64, mimeType) quando a foto chega.
-void registerPhotoEventListener(void Function(String dataUrl, String mimeType) onPhoto) {
+void registerPhotoEventListener(
+    void Function(String dataUrl, String mimeType) onPhoto) {
   _photoCallback = onPhoto;
 
-  js.context['_swPhotoCallback'] = js.allowInterop((dynamic detail) {
-    try {
-      final dataUrl = detail['dataUrl']?.toString() ?? '';
-      final mime    = detail['mimeType']?.toString() ?? 'image/jpeg';
-      if (dataUrl.isNotEmpty) {
-        _photoCallback?.call(dataUrl, mime);
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('[JsBridgeHelper] photo callback err: $e');
-    }
-  });
+  // Registra a função Dart que será chamada pelo JS
+  _dartPhotoCallbackRef = (JSString dataUrl, JSString mime) {
+    final du = dataUrl.toDart;
+    final m = mime.toDart;
+    if (du.isNotEmpty) _photoCallback?.call(du, m);
+  }.toJS;
 
-  js.context.callMethod('eval', [
-    '''
+  _setGlobal('_dartPhotoCallback', _dartPhotoCallbackRef);
+
+  // Injeta handler global e event listener
+  _jsEval(r'''
     (function() {
+      window._swPhotoCallback = function(detail) {
+        if (window._dartPhotoCallback) {
+          window._dartPhotoCallback(
+            detail.dataUrl || '',
+            detail.mimeType || 'image/jpeg'
+          );
+        }
+      };
       if (window._swPhotoListenerRegistered) return;
       window._swPhotoListenerRegistered = true;
       window.addEventListener('sw-photo-selected', function(e) {
@@ -35,47 +65,49 @@ void registerPhotoEventListener(void Function(String dataUrl, String mimeType) o
         }
       });
     })();
-    '''
-  ]);
+  ''');
 }
 
 /// Remove o listener JS de foto e limpa o callback.
 void unregisterPhotoEventListener() {
   _photoCallback = null;
-  try {
-    js.context.callMethod('eval', [
-      '''
-      window._swPhotoListenerRegistered = false;
-      delete window._swPhotoCallback;
-      '''
-    ]);
-  } catch (_) {}
+  _dartPhotoCallbackRef = null;
+  _jsEval(r'''
+    window._swPhotoListenerRegistered = false;
+    delete window._swPhotoCallback;
+    delete window._dartPhotoCallback;
+  ''');
 }
 
-// ── Biometria ─────────────────────────────────────────────────────────────────
+// ── Biometria: login ──────────────────────────────────────────────────────────
 
 void Function(String email, String password)? _bioCallback;
+JSFunction? _dartBioCallbackRef;
 
 /// Registra listener JS 'sw-biometric-login' despachado pelo shell nativo.
 /// [onLogin] é chamado com (email, password) após biometria bem-sucedida.
-void registerBiometricLoginListener(void Function(String email, String password) onLogin) {
+void registerBiometricLoginListener(
+    void Function(String email, String password) onLogin) {
   _bioCallback = onLogin;
 
-  js.context['_swBiometricLoginCallback'] = js.allowInterop((dynamic detail) {
-    try {
-      final email    = detail['email']?.toString() ?? '';
-      final password = detail['password']?.toString() ?? '';
-      if (email.isNotEmpty && password.isNotEmpty) {
-        _bioCallback?.call(email, password);
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('[JsBridgeHelper] bio callback err: $e');
-    }
-  });
+  _dartBioCallbackRef = (JSString email, JSString password) {
+    final e = email.toDart;
+    final p = password.toDart;
+    if (e.isNotEmpty && p.isNotEmpty) _bioCallback?.call(e, p);
+  }.toJS;
 
-  js.context.callMethod('eval', [
-    '''
+  _setGlobal('_dartBioCallback', _dartBioCallbackRef);
+
+  _jsEval(r'''
     (function() {
+      window._swBiometricLoginCallback = function(detail) {
+        if (window._dartBioCallback) {
+          window._dartBioCallback(
+            detail.email    || '',
+            detail.password || ''
+          );
+        }
+      };
       if (window._swBioListenerRegistered) return;
       window._swBioListenerRegistered = true;
       window.addEventListener('sw-biometric-login', function(e) {
@@ -84,8 +116,7 @@ void registerBiometricLoginListener(void Function(String email, String password)
         }
       });
     })();
-    '''
-  ]);
+  ''');
 
   if (kDebugMode) debugPrint('[JsBridgeHelper] sw-biometric-login listener registrado');
 }
@@ -93,32 +124,60 @@ void registerBiometricLoginListener(void Function(String email, String password)
 /// Remove o listener JS de biometria e limpa o callback.
 void unregisterBiometricLoginListener() {
   _bioCallback = null;
-  try {
-    js.context.callMethod('eval', [
-      '''
-      window._swBioListenerRegistered = false;
-      delete window._swBiometricLoginCallback;
-      '''
-    ]);
-  } catch (_) {}
+  _dartBioCallbackRef = null;
+  _jsEval(r'''
+    window._swBioListenerRegistered = false;
+    delete window._swBiometricLoginCallback;
+    delete window._dartBioCallback;
+  ''');
+}
+
+// ── Biometria: erro ────────────────────────────────────────────────────────────
+
+void Function(String msg)? _bioErrorCallback;
+JSFunction? _dartBioErrorCallbackRef;
+
+/// Registra listener JS 'sw-biometric-error' para receber erros do shell.
+void registerBiometricErrorListener(void Function(String msg) onError) {
+  _bioErrorCallback = onError;
+
+  _dartBioErrorCallbackRef = (JSString msg) {
+    _bioErrorCallback?.call(msg.toDart);
+  }.toJS;
+
+  _setGlobal('_dartBioErrorCallback', _dartBioErrorCallbackRef);
+
+  _jsEval(r'''
+    (function() {
+      window._swBiometricErrorCallback = function(detail) {
+        if (window._dartBioErrorCallback) {
+          window._dartBioErrorCallback(detail.msg || '');
+        }
+      };
+      if (window._swBioErrorListenerRegistered) return;
+      window._swBioErrorListenerRegistered = true;
+      window.addEventListener('sw-biometric-error', function(e) {
+        if (window._swBiometricErrorCallback && e.detail) {
+          window._swBiometricErrorCallback(e.detail);
+        }
+      });
+    })();
+  ''');
 }
 
 // ── Picker nativo ─────────────────────────────────────────────────────────────
 
+/// Dispara evento 'sw-request-biometric' para o shell nativo iniciar biometria.
+void callNativeBiometric() {
+  _jsEval("window.dispatchEvent(new CustomEvent('sw-request-biometric'));");
+}
+
 /// Chama a função JS `openNativeCamera()` injetada pelo shell.
 void callNativeCamera() {
-  try {
-    js.context.callMethod('openNativeCamera', []);
-  } catch (e) {
-    if (kDebugMode) debugPrint('[JsBridgeHelper] callNativeCamera err: $e');
-  }
+  _jsEval('if(window.openNativeCamera) window.openNativeCamera();');
 }
 
 /// Chama a função JS `openNativeGallery()` injetada pelo shell.
 void callNativeGallery() {
-  try {
-    js.context.callMethod('openNativeGallery', []);
-  } catch (e) {
-    if (kDebugMode) debugPrint('[JsBridgeHelper] callNativeGallery err: $e');
-  }
+  _jsEval('if(window.openNativeGallery) window.openNativeGallery();');
 }

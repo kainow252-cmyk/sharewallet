@@ -22,3 +22,9 @@ void callNativeCamera() {}
 
 /// Chama openNativeGallery() no contexto JS do WebView shell.
 void callNativeGallery() {}
+
+/// Dispara evento 'sw-request-biometric' para o shell nativo iniciar biometria.
+void callNativeBiometric() {}
+
+/// Registra listener de erros de biometria do shell.
+void registerBiometricErrorListener(void Function(String msg) onError) {}

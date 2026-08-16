@@ -55,6 +55,9 @@ dependencies:
   # WebView shell (APK abre o site igual PWA)
   webview_flutter: 4.13.0
 
+  # JS interop moderno (transitive via flutter_web_plugins, declarado explicitamente)
+  web: 1.1.1
+
 
 
 dev_dependencies:

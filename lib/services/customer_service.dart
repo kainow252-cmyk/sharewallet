@@ -9,7 +9,6 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/customer_model.dart';
 import 'firebase_customer_service.dart';
-import 'firebase_auth_service.dart';
 import '../utils/web_utils.dart';
 
 class CustomerService extends ChangeNotifier {

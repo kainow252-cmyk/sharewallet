@@ -196,6 +196,10 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
             // Injeta helper JS para o site abrir câmera/galeria via native
             await _injectPhotoHelper();
 
+            // Injeta listener para pedidos de biometria vindos do site
+            // (botão de digital na LoginScreen web dispara sw-request-biometric)
+            await _injectBiometricRequestListener();
+
             // Se tem credenciais de biometria → faz login automático
             if (_pendingBiometricCredentials != null) {
               await _injectBiometricLogin(_pendingBiometricCredentials!);
@@ -272,6 +276,26 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
     await _ctrl.runJavaScript(js);
   }
 
+  // ── 5b. Injeta listener de 'sw-request-biometric' no site ────────────────
+  // O site (LoginScreen web) dispara este evento quando o usuário toca no botão
+  // de digital. O shell escuta, autentica com biometria nativa e devolve
+  // as credenciais via 'sw-biometric-login'.
+  Future<void> _injectBiometricRequestListener() async {
+    const js = '''
+(function() {
+  if (window._swBiometricRequestRegistered) return;
+  window._swBiometricRequestRegistered = true;
+  window.addEventListener('sw-request-biometric', function() {
+    // Pede ao shell Flutter para iniciar biometria
+    ShareWalletNative.postMessage(JSON.stringify({action: 'requestBiometric'}));
+    console.log('[ShareWalletNative] Biometric request recebido do site');
+  });
+  console.log('[ShareWalletNative] sw-request-biometric listener registrado');
+})();
+''';
+    await _ctrl.runJavaScript(js);
+  }
+
   // ── 6. Injeta login automático via biometria ──────────────────────────────
   Future<void> _injectBiometricLogin(
       ({String email, String password}) creds) async {
@@ -310,9 +334,43 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
             ? ImageSource.camera
             : ImageSource.gallery;
         await _pickAndSendPhoto(source);
+
+      } else if (action == 'requestBiometric') {
+        // Site pediu biometria via botão na LoginScreen
+        await _handleBiometricRequest();
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[WebViewShell] JS message error: $e');
+    }
+  }
+
+  /// Lida com pedido de biometria disparado pelo site.
+  /// Autentica com digital/Face ID e devolve credenciais ao site.
+  Future<void> _handleBiometricRequest() async {
+    if (!_biometricEnabled) {
+      // Biometria não configurada — informa o site
+      await _ctrl.runJavaScript(
+        "window.dispatchEvent(new CustomEvent('sw-biometric-error', "
+        "{detail:{msg:'Biometria não configurada. Faça login com e-mail e senha primeiro.'}}));",
+      );
+      return;
+    }
+    try {
+      final creds = await BiometricService.loginWithBiometric();
+      if (creds != null) {
+        await _injectBiometricLogin(
+            (email: creds.email, password: creds.password));
+      } else {
+        await _ctrl.runJavaScript(
+          "window.dispatchEvent(new CustomEvent('sw-biometric-error', "
+          "{detail:{msg:'Autenticação biométrica falhou.'}}));",
+        );
+      }
+    } catch (e) {
+      await _ctrl.runJavaScript(
+        "window.dispatchEvent(new CustomEvent('sw-biometric-error', "
+        "{detail:{msg:'Erro na biometria.'}}));",
+      );
     }
   }
 

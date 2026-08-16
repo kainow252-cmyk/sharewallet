@@ -275,7 +275,7 @@ class MercadoPagoService extends ChangeNotifier {
         snap = await collection
             .doc('mercadopago')
             .get(const GetOptions(source: Source.cache));
-        if (snap != null && snap.exists) {
+        if (snap.exists) {
           if (kDebugMode) debugPrint('[MP] Config carregada do cache local');
         } else {
           snap = null;
@@ -292,6 +292,7 @@ class MercadoPagoService extends ChangeNotifier {
             .timeout(const Duration(seconds: 10));
       }
 
+      // ignore: unnecessary_null_comparison — snap.exists é suficiente, mas mantemos null check por segurança defensiva
       if (snap != null && snap.exists) {
         _config = MpConfig.fromFirestore(snap.data()!);
         _isConfigLoaded = true;

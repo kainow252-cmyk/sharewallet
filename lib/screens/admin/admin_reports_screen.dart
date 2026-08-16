@@ -164,21 +164,21 @@ $htmlTable
     final buf = StringBuffer();
     buf.write('<table><tr>');
     for (final h in ['Nome','Email','Código','Status','Comissões','Saldo','Assinaturas','Cadastro']) {
-      buf.write('<th>\$h</th>');
+      buf.write('<th>$h</th>');
     }
     buf.write('</tr>');
     for (final a in rows) {
       final sc = a.status == 'ativo' ? 'green' : 'amber';
       buf.write('<tr>'
-        '<td>\${a.nome}</td>'
-        '<td>\${a.email}</td>'
-        '<td>\${a.affiliateCode}</td>'
-        '<td><span class="badge badge-\$sc">\${a.status}</span></td>'
-        '<td>R\$ \${a.totalComissoes.toStringAsFixed(2)}</td>'
-        '<td>R\$ \${a.saldoDisponivel.toStringAsFixed(2)}</td>'
-        '<td>\${a.totalAssinaturas}</td>'
-        '<td>\${_dateFmt.format(a.createdAt)}</td>'
-        '</tr>');
+          '<td>${a.nome}</td>'
+          '<td>${a.email}</td>'
+          '<td>${a.affiliateCode}</td>'
+          '<td><span class="badge badge-$sc">${a.status}</span></td>'
+          '<td>R\$ ${a.totalComissoes.toStringAsFixed(2)}</td>'
+          '<td>R\$ ${a.saldoDisponivel.toStringAsFixed(2)}</td>'
+          '<td>${a.totalAssinaturas}</td>'
+          '<td>${_dateFmt.format(a.createdAt)}</td>'
+          '</tr>');
     }
     buf.write('</table>');
     return buf.toString();
@@ -188,20 +188,20 @@ $htmlTable
     final buf = StringBuffer();
     buf.write('<table><tr>');
     for (final h in ['Afiliado','Código','Valor','Chave PIX','Status','Solicitado','Tx ID']) {
-      buf.write('<th>\$h</th>');
+      buf.write('<th>$h</th>');
     }
     buf.write('</tr>');
     for (final w in rows) {
       final sc = w.status == 'aprovado' ? 'green' : w.status == 'recusado' ? 'red' : 'amber';
       buf.write('<tr>'
-        '<td>\${w.affiliateNome}</td>'
-        '<td>\${w.affiliateCode}</td>'
-        '<td><strong>R\$ \${w.valor.toStringAsFixed(2)}</strong></td>'
-        '<td>\${w.pixKey}</td>'
-        '<td><span class="badge badge-\$sc">\${w.statusLabel}</span></td>'
-        '<td>\${_dateFmt.format(w.solicitadoEm)}</td>'
-        '<td>\${w.txId ?? ""}</td>'
-        '</tr>');
+          '<td>${w.affiliateNome}</td>'
+          '<td>${w.affiliateCode}</td>'
+          '<td><strong>R\$ ${w.valor.toStringAsFixed(2)}</strong></td>'
+          '<td>${w.pixKey}</td>'
+          '<td><span class="badge badge-$sc">${w.statusLabel}</span></td>'
+          '<td>${_dateFmt.format(w.solicitadoEm)}</td>'
+          '<td>${w.txId ?? ""}</td>'
+          '</tr>');
     }
     buf.write('</table>');
     return buf.toString();
@@ -211,7 +211,7 @@ $htmlTable
     final buf = StringBuffer();
     buf.write('<table><tr>');
     for (final h in ['Produto','Afiliado','Código','Tipo','Valor','Comissão','Status','Início','Próx. Cobr.']) {
-      buf.write('<th>\$h</th>');
+      buf.write('<th>$h</th>');
     }
     buf.write('</tr>');
     for (final s in rows) {
@@ -219,17 +219,18 @@ $htmlTable
                  s.status == SubscriptionStatus.cancelada ? 'red' : 'amber';
       final tc = s.chargeType == ChargeType.pixRecorrente ? 'blue' : 'amber';
       final tipo = s.chargeType == ChargeType.pixRecorrente ? 'Mensal' : 'Único';
+      final diaStr = s.chargeType == ChargeType.pixRecorrente ? 'Dia ${s.diaCobranca}' : 'N/A';
       buf.write('<tr>'
-        '<td>\${s.productNome}</td>'
-        '<td>\${s.affiliateNome ?? s.affiliateCode}</td>'
-        '<td>\${s.affiliateCode}</td>'
-        '<td><span class="badge badge-\$tc">\$tipo</span></td>'
-        '<td>R\$ \${s.valor.toStringAsFixed(2)}</td>'
-        '<td>R\$ \${s.valorComissao.toStringAsFixed(2)} (\${s.comissaoPercent}%)</td>'
-        '<td><span class="badge badge-\$sc">\${s.statusLabel}</span></td>'
-        '<td>\${_dateFmt.format(s.dataInicio)}</td>'
-        '<td>\${s.chargeType == ChargeType.pixRecorrente ? "Dia \${s.diaCobranca}" : "N/A"}</td>'
-        '</tr>');
+          '<td>${s.productNome}</td>'
+          '<td>${s.affiliateNome ?? s.affiliateCode}</td>'
+          '<td>${s.affiliateCode}</td>'
+          '<td><span class="badge badge-$tc">$tipo</span></td>'
+          '<td>R\$ ${s.valor.toStringAsFixed(2)}</td>'
+          '<td>R\$ ${s.valorComissao.toStringAsFixed(2)} (${s.comissaoPercent}%)</td>'
+          '<td><span class="badge badge-$sc">${s.statusLabel}</span></td>'
+          '<td>${_dateFmt.format(s.dataInicio)}</td>'
+          '<td>$diaStr</td>'
+          '</tr>');
     }
     buf.write('</table>');
     return buf.toString();
@@ -239,7 +240,7 @@ $htmlTable
     final buf = StringBuffer();
     buf.write('<table><tr>');
     for (final h in ['Data','Cliente','Produto','Afiliado','Tipo','Valor','Comissão','Status','Payment ID']) {
-      buf.write('<th>\$h</th>');
+      buf.write('<th>$h</th>');
     }
     buf.write('</tr>');
     final df = DateFormat('dd/MM/yyyy HH:mm');
@@ -248,17 +249,18 @@ $htmlTable
       final tc = v.chargeType == 'pixRecorrente' ? 'blue' : 'amber';
       final cliente = v.clienteNome.isNotEmpty ? v.clienteNome :
                       v.clienteEmail.isNotEmpty ? v.clienteEmail : 'N/A';
+      final afNome = v.affiliateNome.isNotEmpty ? v.affiliateNome : v.affiliateCode;
       buf.write('<tr>'
-        '<td>\${df.format(v.createdAt)}</td>'
-        '<td>\$cliente</td>'
-        '<td>\${v.productNome}</td>'
-        '<td>\${v.affiliateNome.isNotEmpty ? v.affiliateNome : v.affiliateCode}</td>'
-        '<td><span class="badge badge-\$tc">\${v.chargeTypeLabel}</span></td>'
-        '<td><strong>R\$ \${v.valor.toStringAsFixed(2)}</strong></td>'
-        '<td>R\$ \${v.comissao.toStringAsFixed(2)}</td>'
-        '<td><span class="badge badge-\$sc">\${v.statusLabel}</span></td>'
-        '<td style="font-size:10px;color:#999;">\${v.paymentId.isNotEmpty ? v.paymentId : "-"}</td>'
-        '</tr>');
+          '<td>${df.format(v.createdAt)}</td>'
+          '<td>$cliente</td>'
+          '<td>${v.productNome}</td>'
+          '<td>$afNome</td>'
+          '<td><span class="badge badge-$tc">${v.chargeTypeLabel}</span></td>'
+          '<td><strong>R\$ ${v.valor.toStringAsFixed(2)}</strong></td>'
+          '<td>R\$ ${v.comissao.toStringAsFixed(2)}</td>'
+          '<td><span class="badge badge-$sc">${v.statusLabel}</span></td>'
+          '<td style="font-size:10px;color:#999;">${v.paymentId.isNotEmpty ? v.paymentId : "-"}</td>'
+          '</tr>');
     }
     buf.write('</table>');
     return buf.toString();

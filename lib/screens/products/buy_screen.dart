@@ -114,7 +114,9 @@ class _BuyScreenState extends State<BuyScreen> {
 
   // -- Etapa de upload de documentos (antes do pagamento) -------------------
   bool _showDocUpload = false;
+  // ignore: unused_field — armazenado para uso futuro (envio ao backend)
   Map<String, String> _uploadedDocs = {}; // tipo -> base64
+  // ignore: unused_field — armazenado para uso futuro (rastreamento do doc)
   String? _saleDocId; // ID do registro salvo na API
 
   @override
