@@ -1,5 +1,6 @@
 // ignore: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:html' as html;
+import 'dart:async';
 
 /// Implementação Web — usa dart:html
 
@@ -74,25 +75,41 @@ void navigateSameTab(String url) {
 ///   • fetch same-origin → browser não abre nova guia
 ///   • blob:// é same-origin → <a download> é respeitado pelo Chrome Android
 ///   • window.location.href/redirect cross-origin → Chrome abre nova guia ❌
+/// Download APK via XMLHttpRequest blob — Chrome Android mostra barra de
+/// progresso nativa e notificação "ABRIR" ao terminar. Sem nova guia.
+///
+/// XHR responseType='blob' é diferente de fetch+blob:
+///   • Chrome Android trata XHR blob como download nativo — barra de progresso ✅
+///   • fetch+blob carrega silencioso na memória — sem notificação visível ❌
 Future<void> downloadApkBlob(String url, String filename) async {
   try {
-    final resp = await html.window.fetch(url);
-    // ignore: avoid_dynamic_calls
-    if ((resp as dynamic).ok != true) {
+    final completer = Completer<void>();
+    final xhr = html.HttpRequest();
+    xhr.open('GET', url);
+    xhr.responseType = 'blob';
+    xhr.onLoad.listen((_) {
+      try {
+        final blob = xhr.response as html.Blob;
+        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: blobUrl)
+          ..setAttribute('download', filename)
+          ..style.display = 'none';
+        html.document.body?.append(anchor);
+        anchor.click();
+        anchor.remove();
+        Future.delayed(const Duration(seconds: 60),
+            () => html.Url.revokeObjectUrl(blobUrl));
+      } catch (_) {
+        html.window.location.href = url;
+      }
+      completer.complete();
+    });
+    xhr.onError.listen((_) {
       html.window.location.href = url;
-      return;
-    }
-    // ignore: avoid_dynamic_calls
-    final blob = await (resp as dynamic).blob() as html.Blob;
-    final blobUrl = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: blobUrl)
-      ..setAttribute('download', filename)
-      ..style.display = 'none';
-    html.document.body?.append(anchor);
-    anchor.click();
-    anchor.remove();
-    Future.delayed(
-        const Duration(seconds: 60), () => html.Url.revokeObjectUrl(blobUrl));
+      completer.complete();
+    });
+    xhr.send();
+    await completer.future;
   } catch (_) {
     html.window.location.href = url;
   }
