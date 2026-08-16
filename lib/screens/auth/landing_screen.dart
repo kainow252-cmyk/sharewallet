@@ -1,18 +1,14 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../../utils/web_utils.dart' as web_utils;
 import '../../services/app_config_service.dart';
 import '../../utils/web_utils.dart';
 import 'register_screen.dart';
 
-// ── APK Install constants ────────────────────────────────────────────────────
-// Worker /app/download serve APK do R2 (mesmo domínio, sem redirect).
-// downloadApkBlob() faz fetch() same-origin → Blob → blob:// → <a download>
-// → sem nova guia → Chrome baixa → notificação com "ABRIR" → PackageInstaller.
-const _apkUrl = 'https://payment.sharewallet.com.br/app/download';
-const _apkFilename = 'ShareWallet.apk';
+// Endpoint do Worker: adiciona email como testador interno na Play Store
+const _joinBetaUrl = 'https://payment.sharewallet.com.br/app/join-beta';
 
 /// Landing Page — cabe tudo numa tela, sem scroll.
 /// LayoutBuilder escala proporcionalmente a partir de 680px de altura útil.
@@ -579,7 +575,7 @@ class _StatItem extends StatelessWidget {
 
 // ── CTA Section ───────────────────────────────────────────────────────────────
 
-class _CtaSection extends StatelessWidget {
+class _CtaSection extends StatefulWidget {
   final VoidCallback onCadastro;
   final VoidCallback onLogin;
   final double s;
@@ -594,29 +590,117 @@ class _CtaSection extends StatelessWidget {
     this.isNative = false,
   });
 
-  Future<void> _handleInstall(BuildContext context) async {
-    if (kIsWeb) {
-      // fetch same-origin → Blob → blob:// → <a download>
-      // Sem nova guia. Chrome baixa e mostra "ABRIR" na notificação.
-      web_utils.downloadApkBlob(_apkUrl, _apkFilename);
+  @override
+  State<_CtaSection> createState() => _CtaSectionState();
+}
+
+class _CtaSectionState extends State<_CtaSection>
+    with SingleTickerProviderStateMixin {
+
+  // ── estado do fluxo beta ───────────────────────────────────────────────────
+  // false  → mostra botão "Instalar App Android"
+  // true   → mostra campo de email
+  bool _showEmailField = false;
+
+  // 'idle' | 'loading' | 'success' | 'error'
+  String _status = 'idle';
+  String _errorMsg = '';
+
+  final _emailCtrl = TextEditingController();
+  final _emailFocus = FocusNode();
+  late final AnimationController _fieldAnim;
+  late final Animation<double> _fieldFade;
+  late final Animation<double> _fieldScale;
+
+  @override
+  void initState() {
+    super.initState();
+    _fieldAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _fieldFade  = CurvedAnimation(parent: _fieldAnim, curve: Curves.easeOut);
+    _fieldScale = Tween<double>(begin: 0.92, end: 1.0)
+        .animate(CurvedAnimation(parent: _fieldAnim, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _emailFocus.dispose();
+    _fieldAnim.dispose();
+    super.dispose();
+  }
+
+  // ── abre o campo de email com animação ────────────────────────────────────
+  void _openEmailField() {
+    setState(() => _showEmailField = true);
+    _fieldAnim.forward(from: 0);
+    Future.delayed(const Duration(milliseconds: 100),
+        () => _emailFocus.requestFocus());
+  }
+
+  // ── envia email para o Worker → Play Store ────────────────────────────────
+  Future<void> _submitEmail() async {
+    final email = _emailCtrl.text.trim();
+    final emailRx = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    if (!emailRx.hasMatch(email)) {
+      setState(() { _status = 'error'; _errorMsg = 'Email inválido'; });
       return;
     }
+
+    setState(() { _status = 'loading'; _errorMsg = ''; });
+
     try {
-      await launchUrl(Uri.parse(_apkUrl), mode: LaunchMode.externalApplication);
-    } catch (_) {}
+      final resp = await http.post(
+        Uri.parse(_joinBetaUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      ).timeout(const Duration(seconds: 20));
+
+      if (resp.statusCode == 200 || resp.statusCode == 201) {
+        setState(() => _status = 'success');
+      } else {
+        final body = jsonDecode(resp.body);
+        setState(() {
+          _status = 'error';
+          _errorMsg = body['error'] ?? 'Tente novamente.';
+        });
+      }
+    } catch (_) {
+      setState(() {
+        _status = 'error';
+        _errorMsg = 'Sem conexão. Tente novamente.';
+      });
+    }
+  }
+
+  // ── volta ao estado inicial ───────────────────────────────────────────────
+  void _resetEmailField() {
+    _fieldAnim.reverse().then((_) {
+      if (!mounted) return;
+      setState(() {
+        _showEmailField = false;
+        _status = 'idle';
+        _errorMsg = '';
+        _emailCtrl.clear();
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final s = widget.s;
+
     return Column(
       children: [
-        // Botão primário
-        if (showCadastro)
+        // ── Botão primário "Começar agora" ────────────────────────────────
+        if (widget.showCadastro)
           SizedBox(
             width: double.infinity,
             height: 48 * s,
             child: ElevatedButton.icon(
-              onPressed: onCadastro,
+              onPressed: widget.onCadastro,
               icon: Icon(Icons.rocket_launch_rounded, size: 17 * s),
               label: Text(
                 'Começar agora — é grátis',
@@ -639,14 +723,14 @@ class _CtaSection extends StatelessWidget {
             ),
           ),
 
-        if (showCadastro) SizedBox(height: 8 * s),
+        if (widget.showCadastro) SizedBox(height: 8 * s),
 
-        // Botão login
+        // ── Botão login ───────────────────────────────────────────────────
         SizedBox(
           width: double.infinity,
           height: 42 * s,
           child: OutlinedButton(
-            onPressed: onLogin,
+            onPressed: widget.onLogin,
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white70,
               side: BorderSide(
@@ -667,39 +751,64 @@ class _CtaSection extends StatelessWidget {
           ),
         ),
 
-        // Botão APK: só no site — esconde quando rodando dentro do APK WebView
-        if (kIsWeb && !isNative) ...[
+        // ── Bloco Android — só no site web, fora do APK WebView ──────────
+        if (kIsWeb && !widget.isNative) ...[
           SizedBox(height: 8 * s),
-          SizedBox(
-            width: double.infinity,
-            height: 42 * s,
-            child: OutlinedButton.icon(
-              onPressed: () => _handleInstall(context),
-              icon: Icon(Icons.android_rounded,
-                  size: 17 * s, color: const Color(0xFF00E5B4)),
-              label: Text(
-                'Instalar App Android',
-                style: TextStyle(
-                  fontFamily: 'Roboto',
-                  fontSize: 13 * s,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF00E5B4),
+
+          // Estado: sucesso — email enviado, convite a caminho
+          if (_status == 'success')
+            _BetaSuccessBox(s: s, onReset: _resetEmailField)
+
+          // Estado: campo de email expandido
+          else if (_showEmailField)
+            ScaleTransition(
+              scale: _fieldScale,
+              child: FadeTransition(
+                opacity: _fieldFade,
+                child: _EmailInputRow(
+                  s: s,
+                  controller: _emailCtrl,
+                  focusNode: _emailFocus,
+                  isLoading: _status == 'loading',
+                  errorMsg: _errorMsg,
+                  onSubmit: _submitEmail,
+                  onCancel: _resetEmailField,
                 ),
               ),
-              style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.zero,
-                side: BorderSide(
-                    color: const Color(0xFF00E5B4).withValues(alpha: 0.40),
-                    width: 1.1),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            )
+
+          // Estado: botão inicial "Baixar para Android"
+          else
+            SizedBox(
+              width: double.infinity,
+              height: 42 * s,
+              child: OutlinedButton.icon(
+                onPressed: _openEmailField,
+                icon: Icon(Icons.android_rounded,
+                    size: 17 * s, color: const Color(0xFF00E5B4)),
+                label: Text(
+                  'Baixar para Android',
+                  style: TextStyle(
+                    fontFamily: 'Roboto',
+                    fontSize: 13 * s,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF00E5B4),
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  side: BorderSide(
+                      color: const Color(0xFF00E5B4).withValues(alpha: 0.40),
+                      width: 1.1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
-          ),
         ],
 
-        if (showCadastro) ...[
+        if (widget.showCadastro) ...[
           SizedBox(height: 6 * s),
           Text(
             'Ao criar sua conta você concorda com nossos Termos de Uso.',
@@ -713,6 +822,236 @@ class _CtaSection extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+// ── Campo email + botão enviar ────────────────────────────────────────────────
+
+class _EmailInputRow extends StatelessWidget {
+  final double s;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool isLoading;
+  final String errorMsg;
+  final VoidCallback onSubmit;
+  final VoidCallback onCancel;
+
+  const _EmailInputRow({
+    required this.s,
+    required this.controller,
+    required this.focusNode,
+    required this.isLoading,
+    required this.errorMsg,
+    required this.onSubmit,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            // Campo email
+            Expanded(
+              child: SizedBox(
+                height: 42 * s,
+                child: TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => onSubmit(),
+                  style: TextStyle(
+                    fontFamily: 'Roboto',
+                    color: Colors.white,
+                    fontSize: 13 * s,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'seu@email.com',
+                    hintStyle: TextStyle(
+                      fontFamily: 'Roboto',
+                      color: Colors.white.withValues(alpha: 0.30),
+                      fontSize: 13 * s,
+                    ),
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 14 * s, vertical: 0),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.06),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                          color: const Color(0xFF00E5B4).withValues(alpha: 0.35),
+                          width: 1),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                          color: const Color(0xFF00E5B4).withValues(alpha: 0.35),
+                          width: 1),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: Color(0xFF00E5B4), width: 1.4),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: Color(0xFFFF5252), width: 1),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 8 * s),
+
+            // Botão enviar
+            SizedBox(
+              height: 42 * s,
+              child: ElevatedButton(
+                onPressed: isLoading ? null : onSubmit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00E5B4),
+                  foregroundColor: const Color(0xFF0A1628),
+                  elevation: 0,
+                  padding: EdgeInsets.symmetric(horizontal: 14 * s),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: isLoading
+                    ? SizedBox(
+                        width: 16 * s,
+                        height: 16 * s,
+                        child: const CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF0A1628),
+                        ),
+                      )
+                    : Text(
+                        'Enviar',
+                        style: TextStyle(
+                          fontFamily: 'Roboto',
+                          fontSize: 13 * s,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+              ),
+            ),
+
+            // Botão cancelar (X)
+            SizedBox(width: 4 * s),
+            GestureDetector(
+              onTap: onCancel,
+              child: Padding(
+                padding: EdgeInsets.all(6 * s),
+                child: Icon(
+                  Icons.close_rounded,
+                  color: Colors.white.withValues(alpha: 0.35),
+                  size: 18 * s,
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        // Mensagem de erro (se houver)
+        if (errorMsg.isNotEmpty) ...[
+          SizedBox(height: 5 * s),
+          Row(
+            children: [
+              Icon(Icons.error_outline_rounded,
+                  size: 12 * s, color: const Color(0xFFFF5252)),
+              SizedBox(width: 4 * s),
+              Text(
+                errorMsg,
+                style: TextStyle(
+                  fontFamily: 'Roboto',
+                  color: const Color(0xFFFF5252),
+                  fontSize: 10.5 * s,
+                ),
+              ),
+            ],
+          ),
+        ],
+
+        // Dica sutil
+        if (errorMsg.isEmpty) ...[
+          SizedBox(height: 5 * s),
+          Text(
+            'Você receberá o convite no seu Gmail.',
+            style: TextStyle(
+              fontFamily: 'Roboto',
+              color: Colors.white.withValues(alpha: 0.28),
+              fontSize: 10 * s,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Box de sucesso ────────────────────────────────────────────────────────────
+
+class _BetaSuccessBox extends StatelessWidget {
+  final double s;
+  final VoidCallback onReset;
+  const _BetaSuccessBox({required this.s, required this.onReset});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(vertical: 12 * s, horizontal: 14 * s),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00E5B4).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF00E5B4).withValues(alpha: 0.30),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.mark_email_read_rounded,
+              color: const Color(0xFF00E5B4), size: 22 * s),
+          SizedBox(width: 10 * s),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Convite enviado!',
+                  style: TextStyle(
+                    fontFamily: 'Roboto',
+                    color: const Color(0xFF00E5B4),
+                    fontSize: 13 * s,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: 2 * s),
+                Text(
+                  'Verifique seu Gmail em instantes.',
+                  style: TextStyle(
+                    fontFamily: 'Roboto',
+                    color: Colors.white.withValues(alpha: 0.50),
+                    fontSize: 10.5 * s,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: onReset,
+            child: Icon(Icons.close_rounded,
+                color: Colors.white.withValues(alpha: 0.25), size: 16 * s),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,7 +1,231 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// worker.js
+// ── Google Play Internal Testing — join-beta helper ───────────────────────────
+//
+// Gera um JWT assinado com RSASSA-PKCS1-v1_5 (RS256) usando a private key
+// da service account, troca por um access_token OAuth2, depois chama a API
+// do Google Play Developer para adicionar o email como testador interno.
+//
+// A private_key e o client_email são armazenados como Secrets no Worker
+// (variáveis de ambiente injetadas via wrangler secret put):
+//   PLAY_SA_EMAIL   = rotaposto-play@linen-jet-475102-s0.iam.gserviceaccount.com
+//   PLAY_SA_KEY     = -----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n
+//   PLAY_PACKAGE    = com.affiliatewallet.wallet
+//   PLAY_BETA_LINK  = (link de opt-in da Play Store — opcional)
+
+/** Converte string base64url para Uint8Array */
+function b64uDecode(str) {
+  // base64url → base64 padrão
+  str = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (str.length % 4) str += "=";
+  const bin = atob(str);
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+}
+
+/** Codifica Uint8Array/string para base64url sem padding */
+function b64uEncode(buf) {
+  const bytes = buf instanceof Uint8Array ? buf : new TextEncoder().encode(buf);
+  let bin = "";
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/**
+ * Importa a chave PEM RSA privada (PKCS#8) para uso com Web Crypto API.
+ * O Cloudflare Workers suporta SubtleCrypto com RS256.
+ */
+async function importRsaKey(pemKey) {
+  // Remove cabeçalho/rodapé PEM e espaços
+  const base64 = pemKey
+    .replace(/-----BEGIN PRIVATE KEY-----/, "")
+    .replace(/-----END PRIVATE KEY-----/, "")
+    .replace(/\\n/g, "")
+    .replace(/\n/g, "")
+    .trim();
+
+  const keyBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
+  return crypto.subtle.importKey(
+    "pkcs8",
+    keyBytes.buffer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+}
+
+/**
+ * Cria e assina um JWT para a service account do Google.
+ * Scope: https://www.googleapis.com/auth/androidpublisher
+ */
+async function createServiceAccountJwt(clientEmail, privateKeyPem) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: clientEmail,
+    scope: "https://www.googleapis.com/auth/androidpublisher",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  };
+
+  const headerB64  = b64uEncode(JSON.stringify(header));
+  const payloadB64 = b64uEncode(JSON.stringify(payload));
+  const signingInput = `${headerB64}.${payloadB64}`;
+
+  const key = await importRsaKey(privateKeyPem);
+  const sigBuf = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(signingInput)
+  );
+  const sigB64 = b64uEncode(new Uint8Array(sigBuf));
+
+  return `${signingInput}.${sigB64}`;
+}
+
+/**
+ * Troca o JWT por um Google OAuth2 access_token.
+ */
+async function getAccessToken(jwt) {
+  const resp = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }),
+  });
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw new Error(`OAuth2 token error ${resp.status}: ${txt}`);
+  }
+  const data = await resp.json();
+  return data.access_token;
+}
+
+/**
+ * Adiciona o email como testador interno no Google Play Developer API.
+ * GET atual → adiciona email → PUT de volta.
+ */
+async function addPlayTester(accessToken, packageName, email) {
+  const baseUrl = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/testers`;
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+
+  // GET lista atual de testadores
+  const getResp = await fetch(baseUrl, { headers });
+  let testers = [];
+  if (getResp.ok) {
+    const data = await getResp.json();
+    testers = data.testers || [];
+  }
+
+  // Verifica se já está na lista
+  const emailLower = email.toLowerCase();
+  const already = testers.some(t => t.toLowerCase() === emailLower);
+  if (already) {
+    return { alreadyTester: true };
+  }
+
+  // Adiciona email
+  testers.push(email);
+
+  // PUT lista atualizada
+  const putResp = await fetch(baseUrl, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ testers }),
+  });
+
+  if (!putResp.ok) {
+    const txt = await putResp.text();
+    throw new Error(`Play API PUT error ${putResp.status}: ${txt}`);
+  }
+
+  return { alreadyTester: false };
+}
+
+/**
+ * Handler do endpoint POST /app/join-beta
+ * Body JSON: { "email": "user@example.com" }
+ * Resposta 200: { "ok": true, "message": "..." }
+ * Resposta 4xx/5xx: { "error": "..." }
+ */
+async function handleJoinBeta(request, env) {
+  // CORS preflight
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+  }
+
+  if (request.method !== "POST") {
+    return jsonResp({ error: "Method not allowed" }, 405);
+  }
+
+  // Ler body
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResp({ error: "JSON inválido" }, 400);
+  }
+
+  const email = (body.email || "").trim().toLowerCase();
+  const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRx.test(email)) {
+    return jsonResp({ error: "Email inválido" }, 400);
+  }
+
+  // Credenciais da service account (Secrets do Worker)
+  const saEmail  = env.PLAY_SA_EMAIL;
+  const saKey    = env.PLAY_SA_KEY;
+  const pkgName  = env.PLAY_PACKAGE || "com.affiliatewallet.wallet";
+
+  if (!saEmail || !saKey) {
+    return jsonResp({ error: "Configuração incompleta no servidor" }, 500);
+  }
+
+  try {
+    const jwt         = await createServiceAccountJwt(saEmail, saKey);
+    const accessToken = await getAccessToken(jwt);
+    const result      = await addPlayTester(accessToken, pkgName, email);
+
+    const msg = result.alreadyTester
+      ? "Você já é testador! Verifique seu Gmail para o link de download."
+      : "Convite enviado! Verifique seu Gmail em instantes.";
+
+    return jsonResp({ ok: true, message: msg }, 200);
+
+  } catch (err) {
+    // Log interno — não expõe detalhes ao cliente
+    console.error("join-beta error:", err.message);
+    return jsonResp({
+      error: "Não foi possível enviar o convite. Tente novamente."
+    }, 500);
+  }
+}
+
+function jsonResp(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+// ── worker.js ─────────────────────────────────────────────────────────────────
 var PAGES_BASE = "https://sharewallet-app.pages.dev";
 var FIREBASE_APP = "https://affiliate-wallet-75853.firebaseapp.com";
 var IMMUTABLE_PATTERNS = [
@@ -138,11 +362,16 @@ var worker_default = {
         status: 204,
         headers: {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+          "Access-Control-Allow-Methods": "GET, HEAD, POST, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
           "Access-Control-Max-Age": "86400"
         }
       });
+    }
+
+    // ── Beta tester: adiciona email como testador interno na Play Store ───────
+    if (path === "/app/join-beta") {
+      return handleJoinBeta(request, env);
     }
     if (path.startsWith("/__/auth/")) {
       const firebaseUrl = FIREBASE_APP + path + url.search;
