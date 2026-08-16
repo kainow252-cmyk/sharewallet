@@ -338,15 +338,32 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
     if (aceito == true) {
-      await BiometricService.saveCredentials(email, senha);
-      if (mounted) {
-        setState(() => _biometricEnabled = true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Login por digital ativado! 👆'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+      if (kIsWeb && isNativeApp()) {
+        // APK WebView: delega salvamento ao shell nativo via JS bridge
+        // O shell chama BiometricService.saveCredentials() no Keystore Android
+        jsBridge.callNativeSaveBiometric(email, senha);
+        // Feedback imediato ao usuário — confirmação real vem via 'sw-biometric-saved'
+        if (mounted) {
+          setState(() => _biometricEnabled = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login por digital ativado! 👆'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      } else {
+        // PWA / desktop: salva diretamente via flutter_secure_storage
+        await BiometricService.saveCredentials(email, senha);
+        if (mounted) {
+          setState(() => _biometricEnabled = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login por digital ativado! 👆'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
       }
     }
   }

@@ -172,6 +172,30 @@ void callNativeBiometric() {
   _jsEval("window.dispatchEvent(new CustomEvent('sw-request-biometric'));");
 }
 
+/// Pede ao shell nativo para salvar credenciais no Keystore Android e ativar
+/// login biométrico. Disparado quando o usuário clica "Ativar" no dialog.
+void callNativeSaveBiometric(String email, String password) {
+  // Usa postMessage para passar credenciais ao shell Flutter (evita eval com dados sensíveis)
+  _jsEval(
+    "if(window.ShareWalletNative){"
+    "  window.ShareWalletNative.postMessage("
+    "    JSON.stringify({action:'saveBiometric',email:${_jsonString(email)},password:${_jsonString(password)}})"
+    "  );"
+    "}",
+  );
+}
+
+/// Serializa string para JSON seguro (evita injeção JS).
+String _jsonString(String s) {
+  // json.encode retorna aspas duplas ex: "\"foo@bar.com\""
+  final escaped = s
+      .replaceAll(r'\', r'\\')
+      .replaceAll('"', r'\"')
+      .replaceAll('\n', r'\n')
+      .replaceAll('\r', r'\r');
+  return '"$escaped"';
+}
+
 /// Chama a função JS `openNativeCamera()` injetada pelo shell.
 void callNativeCamera() {
   _jsEval('if(window.openNativeCamera) window.openNativeCamera();');

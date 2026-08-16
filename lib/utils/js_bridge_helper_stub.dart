@@ -26,5 +26,8 @@ void callNativeGallery() {}
 /// Dispara evento 'sw-request-biometric' para o shell nativo iniciar biometria.
 void callNativeBiometric() {}
 
+/// Pede ao shell nativo para salvar credenciais no Keystore Android.
+void callNativeSaveBiometric(String email, String password) {}
+
 /// Registra listener de erros de biometria do shell.
 void registerBiometricErrorListener(void Function(String msg) onError) {}

@@ -338,6 +338,12 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
       } else if (action == 'requestBiometric') {
         // Site pediu biometria via botão na LoginScreen
         await _handleBiometricRequest();
+
+      } else if (action == 'saveBiometric') {
+        // Site pediu para salvar credenciais no Keystore nativo
+        final email    = data['email']    as String? ?? '';
+        final password = data['password'] as String? ?? '';
+        await _handleSaveBiometric(email, password);
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[WebViewShell] JS message error: $e');
@@ -371,6 +377,25 @@ class _WebViewShellScreenState extends State<WebViewShellScreen>
         "window.dispatchEvent(new CustomEvent('sw-biometric-error', "
         "{detail:{msg:'Erro na biometria.'}}));",
       );
+    }
+  }
+
+  // ── 7b. Salva credenciais no Keystore e ativa biometria ───────────────────
+  /// Chamado quando o usuário toca "Ativar" no dialog de biometria da LoginScreen.
+  /// Salva email+senha no Keystore Android e confirma ao site via evento JS.
+  Future<void> _handleSaveBiometric(String email, String password) async {
+    if (email.isEmpty || password.isEmpty) return;
+    try {
+      await BiometricService.saveCredentials(email, password);
+      // Atualiza flag local para que o shell saiba que biometria está ativa
+      if (mounted) setState(() => _biometricEnabled = true);
+      // Confirma ao site que a biometria foi ativada com sucesso
+      await _ctrl.runJavaScript(
+        "window.dispatchEvent(new CustomEvent('sw-biometric-saved'));"
+      );
+      if (kDebugMode) debugPrint('[WebViewShell] Biometria salva para $email');
+    } catch (e) {
+      if (kDebugMode) debugPrint('[WebViewShell] saveBiometric error: $e');
     }
   }
 
