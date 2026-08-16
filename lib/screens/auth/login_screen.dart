@@ -35,9 +35,17 @@ class _LoginScreenState extends State<LoginScreen> {
   // Flag para indicar que biometria está sendo tentada automaticamente
   bool _autoLoginAttempted = false;
 
+  // Verdadeiro quando e-mail E senha estão preenchidos
+  bool get _fieldsHaveContent =>
+      _emailController.text.trim().isNotEmpty &&
+      _senhaController.text.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
+    // Listeners para rebuild quando os campos mudam (controla visibilidade biometria)
+    _emailController.addListener(_onFieldChanged);
+    _senhaController.addListener(_onFieldChanged);
     // Verifica redirect pendente do Google Sign-In (web).
     if (kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -155,8 +163,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _onFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _emailController.removeListener(_onFieldChanged);
+    _senhaController.removeListener(_onFieldChanged);
     _emailController.dispose();
     _senhaController.dispose();
     super.dispose();
@@ -1029,8 +1043,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ],
 
-                              // ── Botão biometria: nativo (APK) ou APK WebView
-                              if (_biometricAvailable) ...[  
+                              // ── Botão biometria: aparece só quando campos preenchidos
+                              if (_biometricAvailable && _fieldsHaveContent) ...[  
                                 const SizedBox(height: 12),
                                 SizedBox(
                                   width: double.infinity,
