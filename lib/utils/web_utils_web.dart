@@ -88,6 +88,36 @@ Future<void> downloadApkBlob(String url, String filename) async {
   }
 }
 
+/// Abre o gerenciador de downloads do Android via intent:// URI.
+/// Isso leva o usuário direto para a pasta de Downloads onde o APK foi salvo,
+/// permitindo tocar no arquivo para iniciar a instalação.
+void openAndroidDownloads() {
+  try {
+    // intent:// abre o app Arquivos/Downloads nativo do Android
+    // Funciona no Chrome Mobile — redireciona para o gerenciador de arquivos
+    html.window.location.href =
+        'intent://com.android.documentsui#Intent;'
+        'action=android.intent.action.MAIN;'
+        'category=android.intent.category.LAUNCHER;'
+        'package=com.android.documentsui;'
+        'end';
+  } catch (_) {
+    // Fallback: abre a pasta de downloads via content://
+    try {
+      html.window.location.href =
+          'intent://downloads#Intent;'
+          'action=android.intent.action.VIEW;'
+          'type=*/*;'
+          'end';
+    } catch (_) {
+      // Último fallback: abre a página de download direto
+      html.window.location.href = _apkDirectDownloadUrl;
+    }
+  }
+}
+
+const _apkDirectDownloadUrl = 'https://payment.sharewallet.com.br/app/download';
+
 void downloadFileWeb(String dataUri, String filename) {
   final anchor = html.AnchorElement(href: dataUri)
     ..setAttribute('download', filename)
