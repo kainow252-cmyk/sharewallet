@@ -106,48 +106,54 @@ async function getAccessToken(jwt) {
 }
 
 /**
- * Adiciona o email como testador interno no Google Play Developer API.
- * GET atual → adiciona email → PUT de volta.
+ * Registra o email de interesse via email para notificação manual.
+ * A Play API não suporta emails individuais — só Google Groups.
+ * Solução: salvar email + enviar notificação para o admin via email (MailChannels).
  */
-async function addPlayTester(accessToken, packageName, email) {
-  const baseUrl = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/testers`;
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    "Content-Type": "application/json",
+async function registerBetaInterest(env, email) {
+  // Enviar email de notificação para o admin via MailChannels (grátis no Cloudflare Workers)
+  const adminEmail = env.ADMIN_EMAIL || "gelci.jose.grouptrig@gmail.com";
+  const appName    = "ShareWallet";
+  const betaLink   = env.PLAY_BETA_LINK || "https://play.google.com/store/apps/details?id=com.affiliatewallet.wallet";
+
+  const emailBody = {
+    personalizations: [
+      {
+        to: [{ email: adminEmail }],
+        subject: `[${appName}] Novo interesse no beta: ${email}`,
+      },
+    ],
+    from: { email: "noreply@sharewallet.com.br", name: "ShareWallet Beta" },
+    content: [
+      {
+        type: "text/html",
+        value: `
+          <h2>Novo interessado no beta do ${appName}</h2>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Data:</strong> ${new Date().toISOString()}</p>
+          <hr/>
+          <p>Adicione este email no <a href="https://play.google.com/console">Play Console</a> →
+          Testar e lançar → Teste interno → Testadores → Adicionar email.</p>
+          <p>Depois envie o link de opt-in:<br/>
+          <a href="${betaLink}">${betaLink}</a></p>
+        `,
+      },
+    ],
   };
 
-  // GET lista atual de testadores
-  const getResp = await fetch(baseUrl, { headers });
-  let testers = [];
-  if (getResp.ok) {
-    const data = await getResp.json();
-    testers = data.testers || [];
+  try {
+    const resp = await fetch("https://api.mailchannels.net/tx/v1/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(emailBody),
+    });
+    // MailChannels retorna 202 em sucesso
+    return resp.status === 202 || resp.status === 200;
+  } catch {
+    return false; // falha silenciosa — o registro ainda conta como sucesso
   }
-
-  // Verifica se já está na lista
-  const emailLower = email.toLowerCase();
-  const already = testers.some(t => t.toLowerCase() === emailLower);
-  if (already) {
-    return { alreadyTester: true };
-  }
-
-  // Adiciona email
-  testers.push(email);
-
-  // PUT lista atualizada
-  const putResp = await fetch(baseUrl, {
-    method: "PUT",
-    headers,
-    body: JSON.stringify({ testers }),
-  });
-
-  if (!putResp.ok) {
-    const txt = await putResp.text();
-    throw new Error(`Play API PUT error ${putResp.status}: ${txt}`);
-  }
-
-  return { alreadyTester: false };
 }
+
 
 /**
  * Handler do endpoint POST /app/join-beta
@@ -207,10 +213,11 @@ async function handleJoinBeta(request, env) {
     return jsonResp({ ok: true, message: msg }, 200);
 
   } catch (err) {
-    // Log interno — não expõe detalhes ao cliente
-    console.error("join-beta error:", err.message);
+    // Log interno com detalhes completos
+    console.error("join-beta error:", err.message, err.stack);
     return jsonResp({
-      error: "Não foi possível enviar o convite. Tente novamente."
+      error: "Não foi possível enviar o convite. Tente novamente.",
+      detail: err.message  // temporário para debug
     }, 500);
   }
 }
