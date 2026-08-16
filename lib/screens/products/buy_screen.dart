@@ -195,14 +195,25 @@ class _BuyScreenState extends State<BuyScreen> {
   }
 
   // -- Carrega produto -------------------------------------------------------
-  Future<void> _loadProduct() async {
+  // Retry automático: tenta 3x com backoff para resistir ao cold start do Worker.
+  // CfApiService.getProducts() já tem timeout de 15s + 1 retry interno,
+  // então este loop cobre falhas residuais (ex: rede instável no primeiro load).
+  Future<void> _loadProduct({int attempt = 1}) async {
     setState(() { _loadingProduct = true; _loadError = null; });
     try {
       final ps = context.read<ProductService>();
-      await ps.loadProducts();
+      // Força recarga se lista vazia (primeiro acesso via deep link direto)
+      await ps.loadProducts(forceRefresh: ps.products.isEmpty);
       final found = ps.products.where((p) => p.id == widget.productId).firstOrNull;
       if (!mounted) return;
       if (found == null) {
+        // Produto não encontrado na lista — pode ser que o Worker ainda não tivesse
+        // acordado quando getProducts() foi chamado. Tenta mais 2 vezes.
+        if (attempt < 3) {
+          await Future.delayed(Duration(seconds: attempt * 2));
+          if (!mounted) return;
+          return _loadProduct(attempt: attempt + 1);
+        }
         setState(() { _loadError = 'Produto não encontrado.'; _loadingProduct = false; });
       } else {
         // Inicializa controllers para campos de texto personalizados
@@ -215,6 +226,11 @@ class _BuyScreenState extends State<BuyScreen> {
       }
     } catch (_) {
       if (!mounted) return;
+      if (attempt < 3) {
+        await Future.delayed(Duration(seconds: attempt * 2));
+        if (!mounted) return;
+        return _loadProduct(attempt: attempt + 1);
+      }
       setState(() { _loadError = 'Erro ao carregar produto. Tente novamente.'; _loadingProduct = false; });
     }
   }

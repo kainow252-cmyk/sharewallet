@@ -218,9 +218,31 @@ class CfApiService {
   // -- PRODUCTS --------------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> getProducts({bool all = false}) async {
-    final res = await _get(all ? '/api/products/all' : '/api/products');
-    if (res == null) return [];
-    return List<Map<String, dynamic>>.from(res);
+    // Timeout maior para getProducts: cold start do Cloudflare Worker + D1
+    // pode demorar até 8-10s após período de inatividade. 15s garante sucesso.
+    const productTimeout = Duration(seconds: 15);
+    final path = all ? '/api/products/all' : '/api/products';
+    final uri = Uri.parse('$_base$path');
+
+    // Tenta até 2 vezes (1 retry) para resistir a cold start intermitente
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final res = await http.get(uri).timeout(productTimeout);
+        final body = jsonDecode(res.body);
+        if (body['success'] == true) {
+          return List<Map<String, dynamic>>.from(body['result'] as List);
+        }
+        debugPrint('[CfApi] GET $path error: ${body['error']}');
+        return [];
+      } catch (e) {
+        debugPrint('[CfApi] GET $path attempt $attempt exception: $e');
+        if (attempt < 2) {
+          // Aguarda 2s antes do retry (deixa o worker "acordar")
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
+    }
+    return [];
   }
 
   static Future<Map<String, dynamic>?> saveProduct(Map<String, dynamic> data, {bool isNew = false}) async {
